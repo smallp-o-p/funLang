@@ -1,0 +1,21 @@
+configure_file(./lex_test1.txt ${CMAKE_CURRENT_BINARY_DIR})
+configure_file(./lex_test2.txt ${CMAKE_CURRENT_BINARY_DIR})
+configure_file(./lex_test3.txt ${CMAKE_CURRENT_BINARY_DIR})
+configure_file(./lex_test4.txt ${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/src/includes)
+
+add_executable(LexSingleChar EXCLUDE_FROM_ALL LexSingleCharTokensTest.cpp)
+add_executable(LexNums EXCLUDE_FROM_ALL LexNumLiteralsTest.cpp)
+add_executable(LexKeywords EXCLUDE_FROM_ALL LexKeywordTest.cpp)
+add_executable(LexStrings EXCLUDE_FROM_ALL LexStringTest.cpp)
+
+target_link_libraries(LexSingleChar PUBLIC Lex)
+target_link_libraries(LexNums PUBLIC Lex)
+target_link_libraries(LexKeywords PUBLIC Lex)
+target_link_libraries(LexStrings PUBLIC Lex)
+
+add_test(LexChar LexSingleChar)
+add_test(LexNums LexNums)
+add_test(LexKeywords LexKeywords)
+add_test(LexStrings LexStrings)
+add_custom_target(LexTests COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS LexSingleChar LexNums LexKeywords LexStrings)

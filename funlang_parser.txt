@@ -1,0 +1,96 @@
+parser grammar ExprParser;
+
+program
+    : functions EOF
+    ;
+    
+functions
+    : func functions
+    | func
+    ; 
+
+func : type proto compoundstmt;
+
+proto 
+    : ID '(' args ')'
+    ; 
+
+args 
+    : arg ',' args
+    | arg
+    ; 
+
+arg : type ID;
+
+compoundstmt 
+    : '{' simplelist '}'
+    ;
+simplelist
+    : simplestmt simplelist
+    | simplestmt
+    ;
+    
+simplestmt 
+    : declare
+    | expr
+    ;
+    
+declare
+    : type ID '=' expr
+    ;
+    
+expr 
+    : assign
+    | return
+    ; 
+
+return : 'return' expr ';'; 
+
+assign 
+    : eqExpr
+    | ID '=' expr
+    ;
+eqExpr 
+    : cmpExpr ('=='|'!=') cmpExpr
+    | cmpExpr
+    ; 
+cmpExpr
+    : addExpr ('<'|'<='|'>' | '>=') addExpr
+    | addExpr
+    ; 
+addExpr
+    : multdiv ('+'|'-') multdiv
+    | multdiv
+    ;
+multdiv
+    : unary ('*'|'/') unary
+    | unary
+    ;
+unary 
+    : ('++'|'--'| '!'| '-') primary
+    | primary
+    ;
+primary 
+    : ID
+    | INT 
+    | fnCall
+    | '(' expr ')'
+    ;
+    
+fnCall 
+    : ID '(' callArgs ')'
+    ;
+    
+callArgs 
+    : callArg ',' callArgs
+    | callArg
+    ;
+callArg : primary; 
+
+
+type : VOID 
+    | BOOL 
+    | CHAR 
+    | INTTYPE 
+    | FLOATTYPE 
+    ;

@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.1-3.8)
+project(funLang)
+
+set(CMAKE_CXX_STANDARD 17)
+include(CTest)
+find_package(LLVM REQUIRED CONFIG)
+
+message(STATUS "Found LLVM! ${LLVM_PACKAGE_VERSION}")
+add_subdirectory(src)
+set(Headers "${CMAKE_SOURCE_DIR}/src/includes")
