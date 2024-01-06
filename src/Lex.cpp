@@ -172,6 +172,10 @@ TokValCat isIdentifier() {
     return TokValCat{id_str, Tok::F64};
   } else if (id_str == "return") {
     return TokValCat{id_str, Tok::RETURN};
+  } else if (id_str == "true") {
+    return TokValCat{id_str, Tok::TRUE};
+  } else if (id_str == "false") {
+    return TokValCat{id_str, Tok::FALSE};
   }
   return TokValCat{id_str, Tok::IDENTIFIER};
 }

@@ -20,6 +20,8 @@ enum Token {
   STRING,
   STRINGLIT,
   CHAR,
+  TRUE,
+  FALSE,
   RETURN,
   EQCMP,
   NECMP,
@@ -42,7 +44,7 @@ enum Token {
 };
 }
 struct TokValCat {
-  std::string_view lexeme;
+  std::string lexeme;
   Tok::Token syntactic_category;
 };
 

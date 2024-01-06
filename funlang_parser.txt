@@ -33,6 +33,7 @@ simplelist
 simplestmt 
     : declare
     | expr
+    | return
     ;
     
 declare
@@ -41,7 +42,6 @@ declare
     
 expr 
     : assign
-    | return
     ; 
 
 return : 'return' expr ';'; 
@@ -72,7 +72,11 @@ unary
     ;
 primary 
     : ID
-    | INT 
+    | NUM
+    | POINTNUM
+    | 'true'
+    | 'false'
+    | STRINGLIT
     | fnCall
     | '(' expr ')'
     ;
@@ -82,11 +86,9 @@ fnCall
     ;
     
 callArgs 
-    : callArg ',' callArgs
-    | callArg
+    : primary ',' callArgs
+    | primary
     ;
-callArg : primary; 
-
 
 type : VOID 
     | BOOL 

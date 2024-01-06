@@ -6,7 +6,7 @@ int test3() {
   // identifier yay
   std::deque<Tok::Token> toks_to_recognize{
       Tok::VOID,       Tok::BOOL,       Tok::CHAR,       Tok::STRING,
-      Tok::INTTYPE,    Tok::INTTYPE,    Tok::FLOATTYPE,  Tok::FLOATTYPE,
+      Tok::I32,        Tok::I64,        Tok::F32,        Tok::F64,
       Tok::IDENTIFIER, Tok::IDENTIFIER, Tok::IDENTIFIER, Tok::IDENTIFIER,
       Tok::IDENTIFIER, Tok::IDENTIFIER,
   };
