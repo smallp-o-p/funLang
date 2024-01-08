@@ -32,6 +32,15 @@ TokValCat getTok() {
   std::cout << "Current token: " << tok.lexeme << std::endl;
   return tok;
 }
+/*
+ * Get next tok and check if it's what we want, don't eat it*/
+bool check(Tok::Token tok) {
+  currentTok = getTok();
+  if (currentTok.syntactic_category != tok) {
+    return false;
+  }
+  return true;
+}
 
 bool isDeclarableType(Tok::Token tok) {
   switch (tok) {
@@ -51,6 +60,8 @@ bool isDeclarableType(Tok::Token tok) {
 void pushTokInQueue() { push_backs.push_back(currentTok); }
 
 std::unique_ptr<typeNode> type() {
+  currentTok = getTok();
+  std::cout << "In type(), lexeme is: " << currentTok.lexeme << std::endl;
   std::unique_ptr<typeNode> typeptr =
       std::make_unique<typeNode>(currentTok.syntactic_category);
   if (typeptr->invalid()) {
@@ -59,14 +70,11 @@ std::unique_ptr<typeNode> type() {
 
     return nullptr;
   }
-
-  currentTok = getTok(); // eat type specifier
   std::cout << "Parsed type" << std::endl;
   return std::move(typeptr);
 }
 
 std::unique_ptr<funcNode> func() {
-  currentTok = getTok(); // this should be a type specifier
   std::unique_ptr<typeNode> type_ptr = type();
   if (!type_ptr) {
     return nullptr;
@@ -88,16 +96,14 @@ std::unique_ptr<funcNode> func() {
 }
 
 std::unique_ptr<protoNode> proto() {
-
-  currentTok = getTok(); // get identifier;
-  if (currentTok.syntactic_category != Tok::IDENTIFIER) {
-    reportError("Expected IDENTIFIER, received %s", currentTok.lexeme.c_str());
+  if (!check(Tok::IDENTIFIER)) {
+    reportError("Expected IDENTIFIER, received '%s'",
+                currentTok.lexeme.c_str());
     return nullptr;
   }
   std::string name_in_question = currentTok.lexeme;
 
-  currentTok = getTok(); // get '('
-  if (currentTok.syntactic_category != Tok::LPAREN) {
+  if (!check(Tok::LPAREN)) {
     reportError("Expected '(', received '%s'\n", currentTok.lexeme.c_str());
     return nullptr;
   }
@@ -109,12 +115,10 @@ std::unique_ptr<protoNode> proto() {
     return nullptr;
   }
 
-  currentTok = getTok();
-  if (currentTok.syntactic_category != Tok::RPAREN) {
+  if (!check(Tok::RPAREN)) {
     reportError("Expected ')', received '%s'\n", currentTok.lexeme.c_str());
     return nullptr;
   }
-
   currentTok = getTok(); // eat ')'
   return std::move(
       std::make_unique<protoNode>(name_in_question, std::move(args_ptr)));
@@ -128,8 +132,7 @@ std::unique_ptr<argsNode> args() {
     return nullptr;
   }
 
-  if (currentTok.syntactic_category == Tok::COMMA) {
-    currentTok = getNextTok(); // eat ','
+  if (check(Tok::COMMA)) {
     return std::move(
         std::make_unique<argsNode>(std::move(arg_ptr), std::move(args())));
   }
@@ -143,35 +146,27 @@ std::unique_ptr<argNode> arg() {
     return nullptr;
   }
 
-  currentTok = getTok(); // get identifier;
-  if (currentTok.syntactic_category != Tok::IDENTIFIER) {
+  if (!check(Tok::IDENTIFIER)) {
     reportError("Expected IDENTIFIER, received %s", currentTok.lexeme.c_str());
     return nullptr;
   }
   std::string name_in_question = currentTok.lexeme;
 
-  currentTok = getTok(); // eat identifier;
-
   return std::move(
       std::make_unique<argNode>(std::move(type_ptr), name_in_question));
 }
 std::unique_ptr<compoundStmtNode> compoundStmt() {
-  currentTok = getTok(); // get '{'
-  if (currentTok.syntactic_category != Tok::LCURLY) {
+  if (!check(Tok::LCURLY)) {
     reportError("Expected '{', received '%s'", currentTok.lexeme.c_str());
     return nullptr;
   }
-
-  currentTok = getTok(); // eat '{'
   std::unique_ptr<simpleListNode> simple_list_ptr = simpleList();
 
   if (!simple_list_ptr) {
     return nullptr;
   }
 
-  currentTok = getTok(); // get '}'
-
-  if (currentTok.syntactic_category != Tok::RCURLY) {
+  if (!check(Tok::RCURLY)) {
     reportError("Expected '}', received '%s'", currentTok.lexeme.c_str());
     return nullptr;
   }
@@ -193,7 +188,7 @@ std::unique_ptr<simpleListNode> simpleList() {
 }
 
 std::unique_ptr<simpleStmtNode> simpleStmt() {
-  if (currentTok.syntactic_category == Tok::RETURN) {
+  if (check(Tok::RETURN)) {
     std::unique_ptr<returnNode> ret_ptr = ret();
     if (!ret_ptr) {
       return nullptr;
@@ -219,18 +214,14 @@ std::unique_ptr<declareNode> declare() {
 
   std::unique_ptr<typeNode> type_ptr = type();
   if (!type()) {
-    pushTokInQueue();
     return nullptr;
   }
 
-  currentTok = getTok(); // get identifier;
-  if (currentTok.syntactic_category != Tok::IDENTIFIER) {
+  if (!check(Tok::IDENTIFIER)) {
     reportError("Expected IDENTIFIER, received %s", currentTok.lexeme.c_str());
     return nullptr;
   }
   std::string name_in_question = currentTok.lexeme;
-
-  currentTok = getTok(); // eat identifier;
 
   std::unique_ptr<exprNode> expr_ptr = expr();
   if (!expr_ptr) {
@@ -242,25 +233,22 @@ std::unique_ptr<declareNode> declare() {
 }
 
 std::unique_ptr<returnNode> ret() {
-  if (currentTok.syntactic_category != Tok::RETURN) {
+  if (!check(Tok::RETURN)) {
     reportError("Expected 'return', received '%s'", currentTok.lexeme.c_str());
     return nullptr;
   }
-
-  currentTok = getTok(); // eat return
 
   std::unique_ptr<exprNode> expr_ptr = expr();
 
   if (!expr_ptr) {
     return nullptr;
   }
-  if (currentTok.syntactic_category != Tok::SEMI) {
+
+  if (!check(Tok::SEMI)) {
     reportError("Expected ';', received '%s'", currentTok.lexeme.c_str());
     return nullptr;
   }
 
-  currentTok = getTok(); // eat ';'
-                         //
   return std::move(std::make_unique<returnNode>(std::move(expr_ptr)));
 }
 
@@ -273,7 +261,7 @@ std::unique_ptr<functionsNode> functions() {
   std::cout << "Parsed function" << std::endl;
   std::unique_ptr<functionsNode> myFuncs_ptr =
       std::make_unique<functionsNode>(std::move(func_ptr));
-  if ((currentTok = getTok()).syntactic_category != Tok::ENDFILE) {
+  if (!check(Tok::ENDFILE)) {
     myFuncs_ptr->setMoreFuncs(functions());
   }
   return std::move(myFuncs_ptr);
@@ -286,6 +274,8 @@ std::unique_ptr<programNode> program() {
   }
   return std::move(head);
 }
+
+std::unique_ptr<exprNode> expr() { return nullptr; }
 
 int parse() {
   std::unique_ptr<programNode> tree;

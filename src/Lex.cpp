@@ -83,7 +83,6 @@ TokValCat getNextTok() {
   case '/':
     return TokValCat{"/", DIV};
   case '\"':
-    inp.putback(c);
     return isString();
   }
   if (isdigit(c)) {
@@ -110,15 +109,17 @@ bool nextIs(char c) {
 }
 TokValCat isString() {
   char c;
-  std::string string_lit = "";
-  string_lit.push_back(inp.get()); // this should only be a " character
+  std::string string_lit = "\"";
+
   while ((c = inp.get()) != '\"' && c != EOF) {
     string_lit.push_back(c);
-  }
+  };
+
   if (inp.eof()) {
     fprintf(stderr, "Unclosed string literal :(\n");
     return TokValCat{"UH OH", Tok::ERR};
   }
+  string_lit.push_back('\"');
   return TokValCat{string_lit, Tok::STRINGLIT};
 }
 

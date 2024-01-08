@@ -17,6 +17,7 @@ int test4() {
       return 1;
     }
     std::cout << "Passed" << std::endl;
+    std::cout << currentTok.lexeme << std::endl;
     string_toks.pop_front();
   }
   return 0;

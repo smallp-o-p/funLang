@@ -1,7 +1,6 @@
 add_library(Lex Lex.cpp)
 add_library(Parse Parse.cpp)
 add_library(AST_stuff ${CMAKE_CURRENT_SOURCE_DIR}/AST/AST.cpp)
-add_subdirectory(tests)
 add_subdirectory(AST)
 include_directories(includes)
 

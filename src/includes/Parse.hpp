@@ -4,6 +4,8 @@
 
 extern TokValCat currentTok;
 
+bool check(char c);
+
 void reportError(std::string format, ...);
 
 void pushTokInQueue();
