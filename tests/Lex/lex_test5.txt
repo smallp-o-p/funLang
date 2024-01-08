@@ -1,0 +1,4 @@
+i32 examplePrototype(i32 a, i32 b){
+  string hello = "hello world"
+  return 0; 
+}

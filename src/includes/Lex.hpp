@@ -1,5 +1,13 @@
 #pragma once
+#include <cctype>
+#include <cstdint>
+#include <cstdio>
+#include <fstream>
+#include <iostream>
+#include <ostream>
+#include <sstream>
 #include <string>
+#include <vector>
 namespace Tok {
 
 enum Token {
@@ -56,3 +64,4 @@ TokValCat getNextTok();
 TokValCat isString();
 TokValCat isNum();
 TokValCat isIdentifier();
+std::vector<TokValCat> lex();

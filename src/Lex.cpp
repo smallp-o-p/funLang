@@ -1,13 +1,9 @@
 #include "includes/Lex.hpp"
-#include <cctype>
-#include <cstdio>
-#include <fstream>
-#include <iostream>
-#include <ostream>
-#include <sstream>
+#include <cstdint>
+#include <sys/types.h>
 
-static int lineCount;
-
+uint32_t colNum = 1;
+uint32_t lineNum = 1;
 static std::ifstream inp;
 
 static std::istringstream inp_str;
@@ -26,17 +22,38 @@ int initInp(std::string filepath) {
   }
 }
 
+std::vector<TokValCat> lex() {
+  std::vector<TokValCat> tokens;
+  TokValCat tokPair;
+  bool failed = false;
+  while ((tokPair = getNextTok()).syntactic_category != Tok::ENDFILE) {
+    if (tokPair.syntactic_category == Tok::ERR) {
+      failed = true;
+    }
+    tokens.push_back(tokPair);
+  }
+  if (failed) {
+    return {};
+  }
+  return tokens;
+}
+
 void closeInp() { inp.close(); }
 
 TokValCat getNextTok() {
   using namespace Tok;
-
   char c = ' ';
   while (isspace(c)) {
+    if (c == '\n') {
+      lineNum++;
+    } else {
+    }
     c = inp.get();
   }
+  colNum++;
   switch (c) {
-
+  case ',':
+    return TokValCat{",", Tok::COMMA};
   case '{':
     return TokValCat{"{", LCURLY};
   case '}':
@@ -89,11 +106,17 @@ TokValCat getNextTok() {
     inp.putback(c);
     return isNum();
   }
+  if (isalpha(c)) {
+    inp.putback(c);
+    return isIdentifier();
+  }
   if (inp.eof()) {
     return TokValCat{"\0", Tok::ENDFILE};
+  } else {
+    std::cout << "Fatal: Unexpected character '" << c << "' on line " << lineNum
+              << std::endl;
+    return TokValCat{"UH OH", Tok::ERR};
   }
-  inp.putback(c);
-  return isIdentifier();
 }
 /*
  * nextIs(char c) checks if the next character in the input buffer is c, if
@@ -126,18 +149,13 @@ TokValCat isString() {
 TokValCat isNum() {
   std::string numStr = "";
   char c;
-  do {
+
+  while ((isdigit(inp.peek()) || inp.peek() == '.')) {
     c = inp.get();
     numStr.push_back(c);
-  } while ((isdigit(c) || c == '.'));
-
+  }
   if (numStr.back() == '.') { // allow numbers like 12.
     numStr.push_back('0');
-  }
-  if (!isspace(c) &&
-      !inp.eof()) { // check if we stopped at anything that isn't whitespace
-    fprintf(stderr, "Unexpected character '%c' in number literal\n.", c);
-    return TokValCat{"UH OH,", Tok::ERR};
   }
   if (numStr.find('.') != std::string::npos) {
     return TokValCat{numStr, Tok::POINTNUM};
@@ -151,10 +169,10 @@ TokValCat isIdentifier() {
 
   char c;
 
-  while (isalnum(c = inp.get())) {
+  while (isalnum(inp.peek())) {
+    c = inp.get();
     id_str.push_back(c);
   }
-
   if (id_str.compare("void") == 0) {
     return TokValCat{id_str, Tok::VOID};
   } else if (id_str.compare("bool") == 0) {

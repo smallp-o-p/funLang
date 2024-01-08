@@ -11,8 +11,8 @@ message(STATUS "LLVM linked!")
 
 target_include_directories(AST_stuff PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/includes)
 
-add_executable(Parser Parse.cpp)
-target_include_directories(Parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/includes)
-target_link_libraries(Parser PUBLIC Lex)
-target_link_libraries(Parser PUBLIC ${llvm_libs})
-target_link_libraries(Parser PUBLIC AST_stuff)
+# add_executable(Parser Parse.cpp)
+# target_include_directories(Parser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/includes)
+# target_link_libraries(Parser PUBLIC Lex)
+# target_link_libraries(Parser PUBLIC ${llvm_libs})
+# target_link_libraries(Parser PUBLIC AST_stuff)

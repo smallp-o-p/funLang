@@ -13,3 +13,13 @@ i64
 
 f32
           f64
+
+identifier1
+
+identifier2
+
+identifier3
+
+identifier4
+
+identifierProto()

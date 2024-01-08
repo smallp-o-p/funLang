@@ -8,8 +8,7 @@ int test3() {
       Tok::VOID,       Tok::BOOL,       Tok::CHAR,       Tok::STRING,
       Tok::I32,        Tok::I64,        Tok::F32,        Tok::F64,
       Tok::IDENTIFIER, Tok::IDENTIFIER, Tok::IDENTIFIER, Tok::IDENTIFIER,
-      Tok::IDENTIFIER, Tok::IDENTIFIER,
-  };
+      Tok::IDENTIFIER, Tok::LPAREN,     Tok::RPAREN};
 
   if (initInp("lex_test3.txt") != 0) {
     return 1;
