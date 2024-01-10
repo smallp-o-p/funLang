@@ -10,4 +10,3 @@ target_link_libraries(FnsParse PUBLIC AST_stuff)
 target_link_libraries(FnsParse PUBLIC ${llvm_libs})
 add_test(FunctionsParse FnsParse)
 
-add_custom_target(ParseTests COMMAND ${CMAKE_CTEST_COMMAND} DEPENDS FnsParse)

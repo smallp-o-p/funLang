@@ -1,2 +1,5 @@
-add_subdirectory(Lex)
-add_subdirectory(Parse)
+if(BUILD_TESTING)
+  add_subdirectory(Lex)
+  add_subdirectory(Parse)
+  include(GoogleTest)
+endif()

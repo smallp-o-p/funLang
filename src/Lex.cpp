@@ -35,6 +35,7 @@ std::vector<TokValCat> lex() {
   if (failed) {
     return {};
   }
+  inp.close();
   return tokens;
 }
 
