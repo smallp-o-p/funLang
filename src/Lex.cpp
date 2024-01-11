@@ -196,6 +196,8 @@ TokValCat isIdentifier() {
     return TokValCat{id_str, Tok::TRUE};
   } else if (id_str == "false") {
     return TokValCat{id_str, Tok::FALSE};
+  } else if (id_str == "call") {
+    return TokValCat{id_str, Tok::CALL};
   }
   return TokValCat{id_str, Tok::IDENTIFIER};
 }

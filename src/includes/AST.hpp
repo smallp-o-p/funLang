@@ -35,10 +35,6 @@ enum Operator {
   ADD,
   NONE
 };
-class ASTNode {
-public:
-  virtual ~ASTNode(){};
-};
 
 class functionsNode;
 class funcNode;
@@ -62,6 +58,11 @@ class fnCallNode;
 class callArgsNode;
 class typeNode;
 
+class ASTNode {
+public:
+  virtual ~ASTNode(){};
+};
+
 /*
  * functions -> func functions
  *            | func
@@ -70,28 +71,13 @@ class typeNode;
 
 class functionsNode : public ASTNode {
 private:
-  std::unique_ptr<funcNode> func;
-  std::unique_ptr<functionsNode> moreFuncs;
+  std::vector<std::unique_ptr<funcNode>> funcs;
 
 public:
-  functionsNode(std::unique_ptr<funcNode> fn,
-                std::unique_ptr<functionsNode> otherFuncs) {
-    func = std::move(fn);
-    moreFuncs = std::move(otherFuncs);
+  functionsNode() { funcs = std::vector<std::unique_ptr<funcNode>>(); };
+  void addFunc(std::unique_ptr<funcNode> func) {
+    funcs.push_back(std::move(func));
   }
-  functionsNode(std::unique_ptr<funcNode> onlyFunc) {
-    moreFuncs = nullptr;
-    func = std::move(onlyFunc);
-  };
-  functionsNode() {
-    func = nullptr;
-    moreFuncs = nullptr;
-  };
-
-  void setMoreFuncs(std::unique_ptr<functionsNode> funcs) {
-    moreFuncs = std::move(funcs);
-  }
-
   ~functionsNode();
   llvm::Value *codegen();
 };
@@ -184,13 +170,9 @@ private:
 public:
   primaryNode(std::string identifier) {
     id_name = identifier;
-    non_terminal_ptr = nullptr;
-    lexed_lit_val = nullptr;
   }
   primaryNode(std::unique_ptr<ASTNode> expr) {
     non_terminal_ptr = std::move(expr);
-    id_name = nullptr;
-    lexed_lit_val = nullptr;
   }
   primaryNode(std::string litVal, Tok::Token typ) {
     switch (typ) {
@@ -483,12 +465,14 @@ class simpleListNode : public ASTNode {
 private:
   std::unique_ptr<simpleStmtNode> simpleStmt;
   std::unique_ptr<simpleListNode> moreStmts;
+  std::vector<std::unique_ptr<simpleStmtNode>> simpleStmts;
 
 public:
-  simpleListNode(std::unique_ptr<simpleStmtNode> simple,
-                 std::unique_ptr<simpleListNode> more) {
-    simpleStmt = std::move(simple);
-    moreStmts = std::move(more);
+  simpleListNode() {
+    simpleStmts = std::vector<std::unique_ptr<simpleStmtNode>>();
+  }
+  void addStmt(std::unique_ptr<simpleStmtNode> stmt) {
+    simpleStmts.push_back(std::move(stmt));
   }
 
   ~simpleListNode() = default;
@@ -547,8 +531,10 @@ class argsNode : public ASTNode {
 private:
   std::unique_ptr<argNode> argu;
   std::unique_ptr<argsNode> moreArgs;
+  std::vector<std::unique_ptr<argNode>> args;
 
 public:
+  argsNode() { args = std::vector<std::unique_ptr<argNode>>(); }
   argsNode(std::unique_ptr<argNode> arg, std::unique_ptr<argsNode> moreArgus) {
     argu = std::move(arg);
     moreArgs = std::move(moreArgus);
@@ -557,12 +543,12 @@ public:
     argu = std::move(arg);
     moreArgs = nullptr;
   };
+
+  void addArg(std::unique_ptr<argNode> arg) { args.push_back(std::move(arg)); }
   ~argsNode() = default;
   llvm::Value *codegen();
 };
 // ------------- end args ----------- //
-
-// ---------- func/functions -------- //
 
 /*
  * program --> functions EOF

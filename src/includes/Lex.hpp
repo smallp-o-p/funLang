@@ -21,6 +21,7 @@ enum Token {
   COLON,
   VOID,
   BOOL,
+  CALL,
   I32,
   I64,
   F32,

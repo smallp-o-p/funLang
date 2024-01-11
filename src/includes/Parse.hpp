@@ -3,7 +3,7 @@
 #include "Lex.hpp"
 #include <memory>
 #include <vector>
-
+void cleanup();
 int initVec();
 bool atEnd();
 bool match(std::vector<Tok::Token> toks);

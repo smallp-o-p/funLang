@@ -13,6 +13,10 @@ uint32_t tok_tracker = 0;
 std::vector<TokValCat> toks;
 std::stack<TokValCat> pastToks;
 
+void cleanup(){
+  toks.clear();
+  tok_tracker = 0;
+}
 int initVec() {
   toks = lex();
   if (toks.empty()) {
@@ -20,9 +24,9 @@ int initVec() {
   }
   return 0;
 }
-void reportError(const char* format, ...) {
+void reportError(const char *format, ...) {
 
-  std::cout << "error" << std::endl; 
+  std::cout << "error" << std::endl;
   va_list errs;
   va_start(errs, format);
   std::vprintf(format, errs);
@@ -44,7 +48,13 @@ TokValCat previous() {
   }
   return toks.at(tok_tracker - 1);
 }
-TokValCat advance() { return toks.at(tok_tracker++); }
+TokValCat advance() {
+  if (tok_tracker + 1 >= toks.size()) {
+    std::cout << "At last token." << std::endl;
+    return toks.at(tok_tracker);
+  }
+  return toks.at(tok_tracker++);
+}
 TokValCat peek() { return toks.at(tok_tracker); }
 
 bool check(Tok::Token tok) {
@@ -104,15 +114,19 @@ std::unique_ptr<programNode> program() {
 }
 
 std::unique_ptr<functionsNode> functions() {
-  std::unique_ptr<funcNode> func_ptr = func();
-  if (!func_ptr) {
-    return nullptr;
-  }
-  std::cout << "Parsed function" << std::endl;
   std::unique_ptr<functionsNode> myFuncs_ptr =
-      std::make_unique<functionsNode>(std::move(func_ptr));
-  if (!atEnd()) {
-    myFuncs_ptr->setMoreFuncs(functions());
+      std::make_unique<functionsNode>();
+  while (true) {
+    if (match({Tok::RPAREN})) {
+      break;
+    }
+    std::unique_ptr<funcNode> func_ptr = func();
+    if (!func_ptr) {
+      return nullptr;
+    }
+
+    std::cout << "Parsed function" << std::endl;
+    myFuncs_ptr->addFunc(func());
   }
   return std::move(myFuncs_ptr);
 }
@@ -127,7 +141,7 @@ std::unique_ptr<funcNode> func() {
   if (!proto_ptr) {
     return nullptr;
   }
-  std::cout << "Parse proto" << std::endl;
+  std::cout << "Parsed proto" << std::endl;
 
   std::unique_ptr<compoundStmtNode> compoundStmt_ptr = compoundStmt();
 
@@ -183,25 +197,32 @@ std::unique_ptr<protoNode> proto() {
 }
 
 std::unique_ptr<argsNode> args() {
-  if (peek().syntactic_category == Tok::RPAREN) {
-    return std::move(std::make_unique<argsNode>(nullptr));
+  std::unique_ptr<argsNode> args_ptr = std::make_unique<argsNode>();
+  while (true) {
+    if (match({Tok::RPAREN})) {
+      backup();
+      break;
+    }
+    std::unique_ptr<argNode> arg_ptr = arg();
+    if (!arg_ptr) {
+      return nullptr;
+    }
+    args_ptr->addArg(std::move(arg_ptr));
+    if (!match({Tok::COMMA}) && peek().syntactic_category != Tok::RPAREN) {
+      reportError(
+          "Assuming there are multiple argument declarations: Expected COMMA, "
+          "received '%s'",
+          peek().lexeme.c_str());
+      return nullptr;
+    }
   }
-  std::unique_ptr<argNode> arg_ptr = arg();
-  std::cout << "Exited arg()" << std::endl;
-  if (!arg_ptr) {
-    return nullptr;
-  }
-  if (match({Tok::COMMA})) {
-    return std::move(
-        std::make_unique<argsNode>(std::move(arg_ptr), std::move(args())));
-  }
-  return std::move(std::make_unique<argsNode>(std::move(arg_ptr)));
+  return std::move(args_ptr);
 }
 
 std::unique_ptr<argNode> arg() { // current token
   std::cout << "In arg()" << std::endl;
   std::unique_ptr<typeNode> type_ptr = type();
-  if (!type()) {
+  if (!type_ptr) {
     return nullptr;
   }
   if (!match({Tok::IDENTIFIER})) {
@@ -235,16 +256,21 @@ std::unique_ptr<compoundStmtNode> compoundStmt() {
 }
 
 std::unique_ptr<simpleListNode> simpleList() {
-  if(check(Tok::RCURLY)){
-    return nullptr; 
-  }
-  std::unique_ptr<simpleStmtNode> stmt_ptr = simpleStmt();
-  if (!stmt_ptr) {
-    return nullptr;
+
+  bool returnStatementFound = false;
+  std::unique_ptr<simpleListNode> list_ptr = std::make_unique<simpleListNode>();
+  while (true) {
+    if (check(Tok::RCURLY)) {
+      break;
+    }
+    std::unique_ptr<simpleStmtNode> stmt_ptr = simpleStmt();
+    if (!stmt_ptr) {
+      return nullptr;
+    }
+    list_ptr->addStmt(std::move(stmt_ptr));
   }
 
-  return std::move(std::make_unique<simpleListNode>(std::move(stmt_ptr),
-                                                    std::move(simpleList())));
+  return std::move(list_ptr);
 }
 
 std::unique_ptr<simpleStmtNode> simpleStmt() {
@@ -261,6 +287,12 @@ std::unique_ptr<simpleStmtNode> simpleStmt() {
       return nullptr;
     }
     return std::move(std::make_unique<simpleStmtNode>(std::move(decl_ptr)));
+  } else if (match({Tok::CALL})) {
+    std::unique_ptr<fnCallNode> fn_ptr = fnCall();
+    if (!fn_ptr) {
+      return nullptr;
+    }
+    return std::move(std::make_unique<simpleStmtNode>(std::move(fn_ptr)));
   } else {
     std::unique_ptr<exprNode> expr_ptr = expr();
     if (!expr_ptr) {
@@ -271,10 +303,10 @@ std::unique_ptr<simpleStmtNode> simpleStmt() {
 }
 
 std::unique_ptr<declareNode> declare() {
-  std::cout << "Declare\n" << std::endl;
+  std::cout << "Declare" << std::endl;
 
   std::unique_ptr<typeNode> type_ptr = type();
-  if (!type()) {
+  if (!type_ptr) {
     return nullptr;
   }
   if (!match({Tok::IDENTIFIER})) {
@@ -283,6 +315,11 @@ std::unique_ptr<declareNode> declare() {
     return nullptr;
   }
   std::string name_in_question = previous().lexeme;
+
+  if(!match({Tok::EQ})){
+    reportError("Expected '=' after variable declaration.");
+    return nullptr; 
+  }
 
   std::unique_ptr<exprNode> expr_ptr = expr();
   if (!expr_ptr) {
@@ -423,14 +460,14 @@ std::unique_ptr<primaryNode> primary() {
     }
     return std::move(
         std::make_unique<primaryNode>(previous().lexeme)); // variable name
-  } else if(match({Tok::NUM, Tok::POINTNUM, Tok::STRINGLIT, Tok::TRUE, Tok::FALSE})){
+  } else if (match({Tok::NUM, Tok::POINTNUM, Tok::STRINGLIT, Tok::TRUE,
+                    Tok::FALSE})) {
     return std::move(std::make_unique<primaryNode>(
         previous().lexeme,
         previous().syntactic_category)); // literal value
-  }
-  else{
+  } else {
     reportError("Unexpected token '%s' in primary.", peek().lexeme.c_str());
-    return nullptr; 
+    return nullptr;
   }
 }
 

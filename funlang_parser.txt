@@ -16,8 +16,7 @@ proto
     ; 
 
 args 
-    : arg ',' args
-    | arg
+    : arg (',' arg)*
     ; 
 
 arg : type ID;
@@ -26,8 +25,7 @@ compoundstmt
     : '{' simplelist '}'
     ;
 simplelist
-    : simplestmt simplelist
-    | simplestmt
+    : simplestmt+ 
     ;
     
 simplestmt 
@@ -77,7 +75,7 @@ primary
     | 'true'
     | 'false'
     | STRINGLIT
-    | fnCall // <-- implement this later
+    | 'call' fnCall // <-- implement this later
     | '(' expr ')'
     ;
     
@@ -86,8 +84,7 @@ fnCall
     ;
     
 callArgs 
-    : primary ',' callArgs
-    | primary
+    : primary (',' primary)*
     ;
 
 type : VOID 
