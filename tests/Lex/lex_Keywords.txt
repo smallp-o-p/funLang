@@ -1,0 +1,25 @@
+void 
+
+      bool 
+
+
+char
+
+string
+
+i32
+
+i64
+
+f32
+          f64
+
+return
+
+
+      true 
+
+
+      false 
+
+
