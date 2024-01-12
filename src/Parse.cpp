@@ -17,9 +17,7 @@ TokValCat previous() { return toks.previous(); }
 TokValCat advance() { return toks.advance(); }
 TokValCat peek() { return toks.peek(); }
 void backup() { toks.backup(); }
-bool atEnd(){
-  return toks.atEnd();
-}
+bool atEnd() { return toks.atEnd(); }
 
 void reportError(const char *format, ...) {
   va_list args;
@@ -83,7 +81,7 @@ std::unique_ptr<programNode> program() {
     return nullptr;
   }
 
-  std::cout << "We parsed :D" << std::endl; 
+  std::cout << "We parsed :D" << std::endl;
   std::unique_ptr<programNode> head =
       std::make_unique<programNode>(std::move(funcs_ptr));
   return std::move(head);
@@ -102,7 +100,7 @@ std::unique_ptr<functionsNode> functions() {
     }
 
     std::cout << "Parsed function" << std::endl;
-    myFuncs_ptr->addFunc(func());
+    myFuncs_ptr->addFunc(std::move(func_ptr));
   }
   return std::move(myFuncs_ptr);
 }
@@ -133,8 +131,8 @@ std::unique_ptr<funcNode> func() {
 std::unique_ptr<typeNode> type() {
   std::cout << "type()\n";
   if (!match({Tok::I32, Tok::I64, Tok::STRING, Tok::CHAR, Tok::F32, Tok::F64,
-              Tok::VOID})) {
-    reportError("Unexpected token '%s', expected type specifier",
+              Tok::VOID, Tok::BOOL})) {
+    reportError("Unexpected token '%s', expected type specifier\n",
                 peek().lexeme.c_str());
     return nullptr;
   }
@@ -357,14 +355,17 @@ std::unique_ptr<assignExprNode> assign() { // some amount of lookahead needed...
 std::unique_ptr<eqExprNode> eqExpr() {
   std::cout << "In eqExpr()\n";
   std::unique_ptr<cmpExprNode> cmp_ptr = cmpExpr();
-
   if (!cmp_ptr) {
     return nullptr;
   }
   if (match({Tok::EQCMP, Tok::NECMP})) {
-    return std::move(
-        std::make_unique<eqExprNode>(std::move(cmp_ptr), std::move(cmpExpr()),
-                                     previous().syntactic_category));
+    Tok::Token op = previous().syntactic_category;
+    std::unique_ptr<cmpExprNode> cmp_ptr2 = cmpExpr();
+    if (!cmp_ptr) {
+      return nullptr;
+    }
+    return std::move(std::make_unique<eqExprNode>(std::move(cmp_ptr),
+                                                  std::move(cmp_ptr2), op));
   }
   return std::move(std::make_unique<eqExprNode>(std::move(cmp_ptr)));
 }
@@ -376,9 +377,14 @@ std::unique_ptr<cmpExprNode> cmpExpr() {
     return nullptr;
   }
   if (match({Tok::LTCMP, Tok::LTECMP, Tok::GTCMP, Tok::GTECMP})) {
-    return std::move(
-        std::make_unique<cmpExprNode>(std::move(add_ptr), std::move(addExpr()),
-                                      previous().syntactic_category));
+    Tok::Token op = previous().syntactic_category;
+    std::unique_ptr<addExprNode> add_ptr2 = addExpr();
+    if (!add_ptr2) {
+      return nullptr;
+    }
+
+    return std::move(std::make_unique<cmpExprNode>(std::move(add_ptr),
+                                                   std::move(add_ptr2), op));
   }
   return std::move(std::make_unique<cmpExprNode>(std::move(add_ptr)));
 }
@@ -392,9 +398,13 @@ std::unique_ptr<addExprNode> addExpr() {
   }
 
   if (match({Tok::PLUS, Tok::MINUS})) {
-    return std::move(std::make_unique<addExprNode>(
-        std::move(multdiv_ptr), previous().syntactic_category,
-        std::move(multdiv())));
+    Tok::Token op = previous().syntactic_category;
+    std::unique_ptr<multdivNode> multdiv_ptr2 = multdiv();
+    if (!multdiv_ptr2) {
+      return nullptr;
+    }
+    return std::move(std::make_unique<addExprNode>(std::move(multdiv_ptr), op,
+                                                   std::move(multdiv_ptr2)));
   }
 
   return std::move(std::make_unique<addExprNode>(std::move(multdiv_ptr)));
@@ -409,9 +419,13 @@ std::unique_ptr<multdivNode> multdiv() {
   }
 
   if (match({Tok::MULT, Tok::DIV})) {
+    Tok::Token op = previous().syntactic_category;
+    std::unique_ptr<unaryNode> unary_ptr2 = unary();
+    if (!unary_ptr2) {
+      return nullptr;
+    }
     return std::move(std::make_unique<multdivNode>(
-        std::move(unary_ptr), previous().syntactic_category,
-        std::move(unary())));
+        std::move(unary_ptr), op, std::move(std::move(unary_ptr2))));
   }
   return std::make_unique<multdivNode>(std::move(unary_ptr));
 }
@@ -419,10 +433,19 @@ std::unique_ptr<multdivNode> multdiv() {
 std::unique_ptr<unaryNode> unary() {
   std::cout << "unary()\n";
   if (match({Tok::PLUSPLUS, Tok::MINUSMINUS, Tok::BANG})) {
-    return std::make_unique<unaryNode>(previous().syntactic_category,
-                                       std::move(primary()));
+    Tok::Token op = previous().syntactic_category;
+    std::unique_ptr<primaryNode> primary_ptr = primary();
+    if (!primary_ptr) {
+      return nullptr;
+    }
+    return std::make_unique<unaryNode>(op, std::move(primary_ptr));
   }
-  return std::make_unique<unaryNode>(std::move(primary()));
+
+  std::unique_ptr<primaryNode> primary_ptr = primary();
+  if (!primary_ptr) {
+    return nullptr;
+  }
+  return std::make_unique<unaryNode>(std::move(primary_ptr));
 }
 
 std::unique_ptr<primaryNode> primary() {
@@ -440,11 +463,10 @@ std::unique_ptr<primaryNode> primary() {
     return std::move(
         std::make_unique<primaryNode>(std::move(expr_ptr))); // expr
   } else if (match({Tok::IDENTIFIER})) {
-    if(peek().syntactic_category == Tok::RPAREN){
+    if (peek().syntactic_category == Tok::RPAREN) {
       reportError("Missing 'call' keyword before function call.");
-      return nullptr;  
+      return nullptr;
     }
-
     return std::move(
         std::make_unique<primaryNode>(previous().lexeme)); // variable name
   } else if (match({Tok::CALL})) {                         // fnCall
@@ -459,22 +481,23 @@ std::unique_ptr<primaryNode> primary() {
         previous().lexeme,
         previous().syntactic_category)); // literal value
   } else {
-    reportError("Unexpected token '%s' in primary.", peek().lexeme.c_str());
+    reportError("Unexpected token '%s' in primary.\n", peek().lexeme.c_str());
     return nullptr;
   }
 }
 
 std::unique_ptr<fnCallNode> fnCall() {
   if (!match({Tok::IDENTIFIER})) {
-    reportError("Expected IDENTIFIER in fnCall(), received '%s'",
+    reportError("Expected IDENTIFIER in fnCall(), received '%s'\n",
                 peek().lexeme.c_str());
     return nullptr;
   }
   std::string name_in_question = previous().lexeme;
 
   if (!match({Tok::LPAREN})) {
-    reportError("Expected '(' after identifier in function call, received '%s'",
-                peek().lexeme.c_str());
+    reportError(
+        "Expected '(' after identifier in function call '%s', received '%s'\n",
+        name_in_question.c_str(), peek().lexeme.c_str());
     return nullptr;
   }
   std::unique_ptr<callArgsNode> callargs_ptr = callArgs();
@@ -483,7 +506,7 @@ std::unique_ptr<fnCallNode> fnCall() {
     return nullptr;
   }
   if (!match({Tok::RPAREN})) {
-    reportError("Expected ')' after function call arguments, received '%s'",
+    reportError("Expected ')' after function call arguments, received '%s'\n",
                 peek().lexeme.c_str());
   }
 

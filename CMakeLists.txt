@@ -6,7 +6,7 @@ project(funLang
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+set(CMAKE_CXX_FLAGS "-fstandalone-debug") # for clang
 include(CTest)
 include(FetchContent)
 

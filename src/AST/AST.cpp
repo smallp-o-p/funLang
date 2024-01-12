@@ -24,6 +24,9 @@ typeNode::typeNode(Tok::Token tok) {
   case (Tok::STRING):
     type = STRING;
     break;
+  case (Tok::BOOL):
+    type = BOOL;
+    break;
   default:
     type = INVALID;
     break;

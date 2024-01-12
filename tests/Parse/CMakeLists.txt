@@ -3,6 +3,8 @@ include_directories(${CMAKE_SOURCE_DIR}/src/includes)
 configure_file(./FnsParseTest.txt ${CMAKE_CURRENT_BINARY_DIR})
 configure_file(./FnsParseTest2.txt ${CMAKE_CURRENT_BINARY_DIR})
 configure_file(./FnsParseTest3.txt ${CMAKE_CURRENT_BINARY_DIR})
+configure_file(./FnsParseTest4.fun ${CMAKE_CURRENT_BINARY_DIR})
+configure_file(./FnsParseTest5.fun ${CMAKE_CURRENT_BINARY_DIR})
 
 add_executable(ParseTests EXCLUDE_FROM_ALL ParseTests.cpp)
 
@@ -13,6 +15,3 @@ target_link_libraries(ParseTests PRIVATE AST_stuff)
 target_link_libraries(ParseTests PRIVATE ${llvm_libs})
 gtest_discover_tests(ParseTests)
 add_test(ParseTests ParseTests)
-
-add_custom_target(ParseTesting DEPENDS ParseTests)
-

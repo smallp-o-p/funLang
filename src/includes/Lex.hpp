@@ -106,9 +106,9 @@ public:
     }
     return false;
   }
-  void reset(){
-    tok_tracker = 0; 
-    tokens = nullptr; 
+  void reset() {
+    tok_tracker = 0;
+    tokens = nullptr;
   }
 
   TokValCat previous() { return tokens->at(tok_tracker - 1); }

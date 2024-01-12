@@ -8,7 +8,7 @@ if(BUILD_TESTING)
   configure_file(lex_StringLits.txt ${CMAKE_CURRENT_BINARY_DIR})
   configure_file(lex_ExampleFunc.txt ${CMAKE_CURRENT_BINARY_DIR})
 
-  add_executable(LexTesting LexTests.cpp)
+  add_executable(LexTesting EXCLUDE_FROM_ALL LexTests.cpp)
 
   target_link_libraries(LexTesting PRIVATE Lex)
   target_link_libraries(LexTesting PRIVATE GTest::gtest_main)
