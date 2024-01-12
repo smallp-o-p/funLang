@@ -1,86 +1,26 @@
 #include "Parse.hpp"
 #include "AST.hpp"
 #include "Lex.hpp"
-#include <cstdarg>
-#include <cstdint>
-#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <stack>
 #include <utility>
 
-uint32_t tok_tracker = 0;
-std::vector<TokValCat> toks;
 std::stack<TokValCat> pastToks;
+LexedTokensSingleton &toks = LexedTokensSingleton::getInstance();
 
-void cleanup(){
-  toks.clear();
-  tok_tracker = 0;
-}
-int initVec() {
-  toks = lex();
-  if (toks.empty()) {
-    return 1;
-  }
-  return 0;
-}
-void reportError(const char *format, ...) {
-
-  std::cout << "error" << std::endl;
-  va_list errs;
-  va_start(errs, format);
-  std::vprintf(format, errs);
-  va_end(errs);
-}
-
-TokValCat lookahead(int how_much) {
-  if (tok_tracker + how_much > toks.size()) {
-    return toks.back();
-  }
-  return toks.at(tok_tracker + how_much);
-}
-
-void backup() { tok_tracker--; }
-bool atEnd() { return peek().syntactic_category == Tok::ENDFILE; }
-TokValCat previous() {
-  if (tok_tracker == 0) {
-    return toks.at(tok_tracker);
-  }
-  return toks.at(tok_tracker - 1);
-}
-TokValCat advance() {
-  if (tok_tracker + 1 >= toks.size()) {
-    std::cout << "At last token." << std::endl;
-    return toks.at(tok_tracker);
-  }
-  return toks.at(tok_tracker++);
-}
-TokValCat peek() { return toks.at(tok_tracker); }
-
-bool check(Tok::Token tok) {
-  if (atEnd()) {
-    return false;
-  }
-  return toks.at(tok_tracker).syntactic_category == tok;
-}
-// consume if match
-bool match(std::vector<Tok::Token> toks) {
-  for (Tok::Token tok : toks) {
-    if (check(tok)) {
-      advance();
-      return true;
-    }
-  }
-  return false;
-}
+bool match(std::vector<Tok::Token> tokens) { return toks.match(tokens); }
+bool check(Tok::Token tok) { return toks.check(tok); }
+TokValCat previous() { return toks.previous(); }
+TokValCat advance() { return toks.advance(); }
+TokValCat peek() { return toks.peek(); }
+void backup() { toks.backup(); }
 
 int parse() {
-  toks = lex();
-  std::unique_ptr<programNode> tree;
-
-  if (initInp("./example_parse.txt") == 1) {
+  if (initInstance("foo") != 0) {
     return 1;
-  }
+  };
+  std::unique_ptr<programNode> tree;
   if (!(tree = std::move(program()))) {
     std::cout << "failed to parse program :(" << std::endl;
     return 1;
@@ -199,8 +139,7 @@ std::unique_ptr<protoNode> proto() {
 std::unique_ptr<argsNode> args() {
   std::unique_ptr<argsNode> args_ptr = std::make_unique<argsNode>();
   while (true) {
-    if (match({Tok::RPAREN})) {
-      backup();
+    if (peek().syntactic_category == Tok::RPAREN) {
       break;
     }
     std::unique_ptr<argNode> arg_ptr = arg();
@@ -260,7 +199,7 @@ std::unique_ptr<simpleListNode> simpleList() {
   bool returnStatementFound = false;
   std::unique_ptr<simpleListNode> list_ptr = std::make_unique<simpleListNode>();
   while (true) {
-    if (check(Tok::RCURLY)) {
+    if (peek().syntactic_category == Tok::RCURLY) {
       break;
     }
     std::unique_ptr<simpleStmtNode> stmt_ptr = simpleStmt();
@@ -316,9 +255,9 @@ std::unique_ptr<declareNode> declare() {
   }
   std::string name_in_question = previous().lexeme;
 
-  if(!match({Tok::EQ})){
+  if (!match({Tok::EQ})) {
     reportError("Expected '=' after variable declaration.");
-    return nullptr; 
+    return nullptr;
   }
 
   std::unique_ptr<exprNode> expr_ptr = expr();

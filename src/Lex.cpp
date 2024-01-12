@@ -1,14 +1,17 @@
 #include "includes/Lex.hpp"
 #include <cstdint>
+#include <fstream>
+#include <memory>
+#include <sstream>
 #include <sys/types.h>
 
 uint32_t colNum = 1;
 uint32_t lineNum = 1;
 static std::ifstream inp;
 
-static std::istringstream inp_str;
+static std::istringstream inpStr;
 
-int initInp(std::string filepath) {
+int initInp(const std::string &filepath) {
   if (filepath.empty()) {
     std::cout << "Usage: funLang {FILE_PATH_DIR}" << std::endl;
     return 1;
@@ -22,21 +25,27 @@ int initInp(std::string filepath) {
   }
 }
 
-std::vector<TokValCat> lex() {
-  std::vector<TokValCat> tokens;
+std::unique_ptr<std::vector<TokValCat>> lex(const std::string &filepath) {
+
+  if (initInp(filepath) != 0) {
+    return nullptr;
+  }
+
+  std::unique_ptr<std::vector<TokValCat>> tokensPtr =
+      std::make_unique<std::vector<TokValCat>>();
   TokValCat tokPair;
   bool failed = false;
   while ((tokPair = getNextTok()).syntactic_category != Tok::ENDFILE) {
     if (tokPair.syntactic_category == Tok::ERR) {
       failed = true;
     }
-    tokens.push_back(tokPair);
+    tokensPtr->push_back(tokPair);
   }
   if (failed) {
-    return {};
+    return nullptr;
   }
   inp.close();
-  return tokens;
+  return std::move(tokensPtr);
 }
 
 void closeInp() { inp.close(); }

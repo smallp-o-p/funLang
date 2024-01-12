@@ -4,13 +4,14 @@
 #include <memory>
 #include <vector>
 void cleanup();
-int initVec();
+int initInstance(const std::string &fp);
 bool atEnd();
 bool match(std::vector<Tok::Token> toks);
 bool check(Tok::Token tok);
 TokValCat peek();
 TokValCat previous();
 TokValCat advance();
+void backup();
 void reportError(std::string format, ...);
 
 std::unique_ptr<programNode> program();

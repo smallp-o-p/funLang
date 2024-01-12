@@ -81,7 +81,6 @@ TEST(LexTests, StringLits) {
 }
 
 TEST(LexTests, ExampleFunc) {
-  EXPECT_EQ(initInp("./lex_ExampleFunc.txt"), 0);
   std::deque<Tok::Token> toks = {
       Tok::I32,        Tok::IDENTIFIER, Tok::LPAREN, Tok::I32,
       Tok::IDENTIFIER, Tok::COMMA,      Tok::I32,    Tok::IDENTIFIER,
@@ -89,8 +88,11 @@ TEST(LexTests, ExampleFunc) {
       Tok::EQ,         Tok::STRINGLIT,  Tok::RETURN, Tok::NUM,
       Tok::SEMI,       Tok::RCURLY,     Tok::ENDFILE};
   TokValCat tok;
-  std::vector<TokValCat> scanned = lex();
-  for (TokValCat tok : scanned) {
+  std::unique_ptr<std::vector<TokValCat>> scanned =
+      lex("./lex_ExampleFunc.txt");
+  EXPECT_NE(scanned, nullptr);
+
+  for (TokValCat tok : *scanned) {
 
     EXPECT_EQ(tok.syntactic_category, toks.front())
         << "Failed at " << tok.lexeme << std::endl;
