@@ -90,9 +90,6 @@ public:
   TokValCat peek() { return tokens->at(tok_tracker); }
 
   bool check(Tok::Token tok) {
-    if (atEnd()) {
-      return false;
-    }
     return tokens->at(tok_tracker).syntactic_category == tok;
   }
 
@@ -108,6 +105,10 @@ public:
       }
     }
     return false;
+  }
+  void reset(){
+    tok_tracker = 0; 
+    tokens = nullptr; 
   }
 
   TokValCat previous() { return tokens->at(tok_tracker - 1); }

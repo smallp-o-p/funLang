@@ -4,10 +4,8 @@
 
 TEST(ParseTesting, ExpFunc) {
   EXPECT_EQ(initInstance("./FnsParseTest.txt"), 0);
-
   EXPECT_NE(func(), nullptr);
   closeInp();
-  cleanup();
 }
 
 TEST(ParseTesting, FuncWArgs) {
@@ -15,6 +13,12 @@ TEST(ParseTesting, FuncWArgs) {
   EXPECT_NE(func(), nullptr);
   closeInp();
 }
+
+TEST(ParseTesting, FuncWLots) {
+  EXPECT_EQ(initInstance("./FnsParseTest3.txt"), 0);
+  EXPECT_NE(program(), nullptr);
+}
+
 int main() {
 
   testing::InitGoogleTest();

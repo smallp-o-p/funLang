@@ -5,8 +5,7 @@ program
     ;
     
 functions
-    : func functions
-    | func
+    : func+
     ; 
 
 func : type proto compoundstmt;

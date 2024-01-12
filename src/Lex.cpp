@@ -44,6 +44,7 @@ std::unique_ptr<std::vector<TokValCat>> lex(const std::string &filepath) {
   if (failed) {
     return nullptr;
   }
+  tokensPtr->push_back({"\0", Tok::ENDFILE});
   inp.close();
   return std::move(tokensPtr);
 }
@@ -179,7 +180,7 @@ TokValCat isIdentifier() {
 
   char c;
 
-  while (isalnum(inp.peek())) {
+  while (isalnum(inp.peek()) || inp.peek() == '_') {
     c = inp.get();
     id_str.push_back(c);
   }

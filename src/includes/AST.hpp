@@ -168,9 +168,7 @@ private:
   DataTypes type;
 
 public:
-  primaryNode(std::string identifier) {
-    id_name = identifier;
-  }
+  primaryNode(std::string identifier) { id_name = identifier; }
   primaryNode(std::unique_ptr<ASTNode> expr) {
     non_terminal_ptr = std::move(expr);
   }
@@ -214,14 +212,11 @@ public:
 
 class callArgsNode : public ASTNode {
 private:
-  std::unique_ptr<primaryNode> arg;
-  std::unique_ptr<callArgsNode> moreArgs;
+  std::vector<std::unique_ptr<primaryNode>> callArgs;
 
 public:
-  callArgsNode(std::unique_ptr<primaryNode> prim,
-               std::unique_ptr<callArgsNode> more) {
-    arg = std::move(prim);
-    moreArgs = std::move(more);
+  callArgsNode(std::vector<std::unique_ptr<primaryNode>> primaries) {
+    callArgs = std::move(primaries);
   }
 };
 
@@ -560,7 +555,7 @@ private:
   std::unique_ptr<functionsNode> funcs;
 
 public:
-  void setFuncs(std::unique_ptr<functionsNode> fns) { funcs = std::move(fns); }
+  programNode(std::unique_ptr<functionsNode> fns) { funcs = std::move(fns); }
 
   ~programNode();
   llvm::Value *codegen();

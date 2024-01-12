@@ -3,7 +3,6 @@
 #include "Lex.hpp"
 #include <memory>
 #include <vector>
-void cleanup();
 int initInstance(const std::string &fp);
 bool atEnd();
 bool match(std::vector<Tok::Token> toks);
@@ -12,7 +11,7 @@ TokValCat peek();
 TokValCat previous();
 TokValCat advance();
 void backup();
-void reportError(std::string format, ...);
+void reportError(const char *format, ...);
 
 std::unique_ptr<programNode> program();
 std::unique_ptr<functionsNode> functions();
