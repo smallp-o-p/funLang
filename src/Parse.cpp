@@ -26,9 +26,9 @@ void reportError(const char *format, ...) {
   va_end(args);
 };
 
-int initInstance(const std::string &fp) {
+int initInstance(const std::string &fp, bool usingString) {
   toks.reset(); // reset for testing purposes
-  std::unique_ptr<std::vector<TokValCat>> lexed = lex(fp);
+  std::unique_ptr<std::vector<TokValCat>> lexed = lex(fp, usingString);
 
   if (!lexed) {
     std::cout << "Failed to lex tokens." << std::endl;

@@ -3,7 +3,7 @@
 #include "Lex.hpp"
 #include <memory>
 #include <vector>
-int initInstance(const std::string &fp);
+int initInstance(const std::string &fp, bool usingString = false);
 bool atEnd();
 bool match(std::vector<Tok::Token> toks);
 bool check(Tok::Token tok);

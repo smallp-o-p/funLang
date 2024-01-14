@@ -115,12 +115,13 @@ public:
 };
 
 extern LexedTokensSingleton &toks;
-std::unique_ptr<std::vector<TokValCat>> lex(const std::string &filepath);
-int initInp(const std::string &filepath);
-void closeInp();
-bool nextIs(char c);
+std::unique_ptr<std::vector<TokValCat>> lex(const std::string &filepath,
+                                            bool usingString = false);
+std::unique_ptr<std::istream> initInp(const std::string &filepath,
+                                      bool usingString = false);
+bool nextIs(char c, const std::unique_ptr<std::istream> &inp);
 static std::string current_identifier_str;
-TokValCat getNextTok();
-TokValCat isString();
-TokValCat isNum();
-TokValCat isIdentifier();
+TokValCat getNextTok(const std::unique_ptr<std::istream> &inp);
+TokValCat isString(const std::unique_ptr<std::istream> &inp);
+TokValCat isNum(const std::unique_ptr<std::istream> &inp);
+TokValCat isIdentifier(const std::unique_ptr<std::istream> &inp);

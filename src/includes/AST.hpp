@@ -63,6 +63,16 @@ public:
   virtual ~ASTNode(){};
 };
 
+class BinaryOpNode : ASTNode {
+private:
+  std::unique_ptr<BinaryOpNode> lhs;
+  std::unique_ptr<BinaryOpNode> rhs;
+  Operator op;
+
+public:
+  virtual ~BinaryOpNode(){};
+};
+
 /*
  * functions -> func functions
  *            | func
@@ -248,12 +258,13 @@ public:
 
   unaryNode(std::unique_ptr<primaryNode> rhs) { operand = std::move(rhs); }
 };
+
 /*
  * multdiv --> unary ('*'| '/') unary
  *          |  unary
  *
  * */
-class multdivNode : public ASTNode {
+class multdivNode : public BinaryOpNode {
 private:
   std::unique_ptr<unaryNode> lhs;
   std::unique_ptr<unaryNode> rhs;
@@ -275,12 +286,15 @@ public:
       op = NONE;
     }
   }
-
   multdivNode(std::unique_ptr<unaryNode> left) {
     lhs = std::move(left);
     rhs = nullptr;
     op = NONE;
   }
+
+  const std::unique_ptr<unaryNode> &getLHS() { return lhs; }
+  const std::unique_ptr<unaryNode> &getRHS() { return rhs; }
+  Operator getOp() { return op; }
 };
 
 /*
@@ -289,7 +303,7 @@ public:
  *
  * */
 
-class addExprNode : public ASTNode {
+class addExprNode : public BinaryOpNode {
 private:
   std::unique_ptr<multdivNode> lhs;
   std::unique_ptr<multdivNode> rhs;
@@ -316,6 +330,10 @@ public:
     rhs = nullptr;
     op = NONE;
   }
+
+  const std::unique_ptr<multdivNode> &getLHS() { return lhs; }
+  const std::unique_ptr<multdivNode> &getRHS() { return rhs; }
+  Operator getOp() { return op; }
 };
 
 /*
@@ -324,7 +342,7 @@ public:
  *
  * */
 
-class cmpExprNode : public ASTNode {
+class cmpExprNode : public BinaryOpNode {
 private:
   std::unique_ptr<addExprNode> lhs;
   std::unique_ptr<addExprNode> rhs;
@@ -357,13 +375,18 @@ public:
     rhs = nullptr;
     op = NONE;
   }
+
+  const std::unique_ptr<addExprNode> &getLHS() { return lhs; }
+  const std::unique_ptr<addExprNode> &getRHS() { return rhs; }
+  Operator getOp() { return op; }
 };
+
 /*
  * eqExpr --> cmpExpr ('==' | '!=') cmpExpr
  *          | cmpExpr
  *
  * */
-class eqExprNode : public ASTNode {
+class eqExprNode : public BinaryOpNode {
 private:
   std::unique_ptr<cmpExprNode> lhs;
   std::unique_ptr<cmpExprNode> rhs;
@@ -387,7 +410,11 @@ public:
     rhs = nullptr;
     op = NONE;
   }
+  const std::unique_ptr<cmpExprNode> &getLHS() { return lhs; }
+  const std::unique_ptr<cmpExprNode> &getRHS() { return rhs; }
+  Operator getOp() { return op; }
 };
+
 /*
  * assign --> eqExpr
  *          | ID '=' expr
@@ -395,7 +422,7 @@ public:
  * */
 class assignExprNode : public ASTNode {
 private:
-  std::unique_ptr<ASTNode> eq;
+  std::unique_ptr<BinaryOpNode> eq;
   std::string id;
   std::unique_ptr<exprNode> expr;
 
@@ -427,6 +454,11 @@ public:
   }
 };
 
+/*
+ * return --> 'return' expr ';'
+ *
+ *
+ */
 class returnNode : public ASTNode {
 private:
   std::unique_ptr<exprNode> expr;
