@@ -55,6 +55,9 @@ struct TokValCat {
   Tok::Token syntactic_category;
 };
 
+namespace Lexer {
+extern std::string fileName;
+}
 // singleton
 class LexedTokensSingleton {
 private:

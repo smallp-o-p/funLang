@@ -8,6 +8,7 @@
 
 uint32_t colNum = 1;
 uint32_t lineNum = 1;
+extern std::string fileName;
 
 std::unique_ptr<std::istream> initInp(const std::string &filepath,
                                       bool usingString) {
@@ -29,6 +30,7 @@ std::unique_ptr<std::istream> initInp(const std::string &filepath,
       std::cout << "Usage: funLang {FILE_PATH_DIR}" << std::endl;
       return nullptr;
     } else {
+      fileName = filepath;
       auto inp_fstream =
           std::make_unique<std::ifstream>(filepath, std::ifstream::in);
       if (inp_fstream->fail()) {

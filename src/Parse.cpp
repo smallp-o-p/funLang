@@ -107,24 +107,18 @@ std::unique_ptr<functionsNode> functions() {
 
 std::unique_ptr<funcNode> func() {
   std::cout << "In func()" << std::endl;
-  std::unique_ptr<typeNode> type_ptr = type();
-  if (!type_ptr) {
-    return nullptr;
-  } // from here it should be an identifier
   std::unique_ptr<protoNode> proto_ptr = proto();
   if (!proto_ptr) {
     return nullptr;
   }
   std::cout << "Parsed proto" << std::endl;
-
   std::unique_ptr<compoundStmtNode> compoundStmt_ptr = compoundStmt();
-
   if (!compoundStmt_ptr) {
     return nullptr;
   }
 
   std::unique_ptr<funcNode> func_ptr = std::make_unique<funcNode>(
-      std::move(type_ptr), std::move(proto_ptr), std::move(compoundStmt_ptr));
+      std::move(proto_ptr), std::move(compoundStmt_ptr));
   return std::move(func_ptr);
 }
 
@@ -143,6 +137,10 @@ std::unique_ptr<typeNode> type() {
 
 std::unique_ptr<protoNode> proto() {
   std::cout << "In proto()" << std::endl;
+  std::unique_ptr<typeNode> type_ptr = type();
+  if (!type_ptr) {
+    return nullptr;
+  } // from here it should be an identifier
   if (!match({Tok::IDENTIFIER})) {
     reportError("Expected IDENTIFIER, received '%s'",
                 previous().lexeme.c_str());
@@ -166,8 +164,8 @@ std::unique_ptr<protoNode> proto() {
     return nullptr;
   }
   std::cout << "Got ')'" << std::endl;
-  return std::move(
-      std::make_unique<protoNode>(name_in_question, std::move(args_ptr)));
+  return std::move(std::make_unique<protoNode>(
+      std::move(type_ptr), name_in_question, std::move(args_ptr)));
 }
 
 std::unique_ptr<argsNode> args() {

@@ -8,10 +8,10 @@ functions
     : func+
     ; 
 
-func : type proto compoundstmt;
+func : proto compoundstmt;
 
 proto 
-    : ID '(' args ')'
+    : type ID '(' args ')'
     ; 
 
 args 

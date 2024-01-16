@@ -1,12 +1,18 @@
 #pragma once
 #include "Lex.hpp"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include <llvm-14/llvm/IR/Constant.h>
 #include <llvm-14/llvm/IR/Value.h>
 #include <memory>
 #include <stdexcept>
 #include <string>
+
 /*
  * TODO: find a way to untangle this with CMake */
+
 enum DataTypes {
   VOID = 10000,
   CHAR,
@@ -57,12 +63,41 @@ class primaryNode;
 class fnCallNode;
 class callArgsNode;
 class typeNode;
+class programNode;
 
 class ASTNode {
 public:
   virtual ~ASTNode(){};
 };
 
+class ASTNodeVisitor {
+public:
+  llvm::Value *codegenProgram(const std::unique_ptr<programNode> &program);
+  llvm::Value *
+  codegenFunctions(const std::unique_ptr<functionsNode> &functions);
+  llvm::Value *codegenFunc(funcNode &func);
+  llvm::Function *codegenProto(protoNode &proto);
+  llvm::Value *
+  codegenCompoundStmt(const std::unique_ptr<compoundStmtNode> &compound);
+  llvm::Value *
+  codegenSimpleList(const std::unique_ptr<simpleListNode> &simpleList);
+  llvm::Value *
+  codegenSimpleStmt(const std::unique_ptr<simpleStmtNode> &simpleStmt);
+  llvm::Value *codegenDeclare(const std::unique_ptr<declareNode> &decl);
+  llvm::Value *codegenExpr(const std::unique_ptr<exprNode> &expr);
+  llvm::Value *codegenRet(const std::unique_ptr<returnNode> &ret);
+  llvm::Value *codegenAssign(const std::unique_ptr<assignExprNode> &assign);
+  llvm::Value *codegenEq(const std::unique_ptr<eqExprNode> &eq);
+  llvm::Value *codegenCmp(const std::unique_ptr<cmpExprNode> &cmp);
+  llvm::Value *codegenAdd(const std::unique_ptr<addExprNode> &add);
+  llvm::Value *codegenMultDiv(const std::unique_ptr<multdivNode> &multdiv);
+  llvm::Value *codegenUnary(const std::unique_ptr<unaryNode> &unary);
+  llvm::Value *codegenPrimary(const std::unique_ptr<primaryNode> &primary);
+  llvm::Value *codegenFnCall(const std::unique_ptr<fnCallNode> &fncall);
+  llvm::Value *logCodegenError(const char *str, ...);
+};
+std::vector<llvm::Type *>
+processArgs(std::vector<std::unique_ptr<argNode>> &args);
 class BinaryOpNode : ASTNode {
 private:
   std::unique_ptr<BinaryOpNode> lhs;
@@ -88,6 +123,8 @@ public:
   void addFunc(std::unique_ptr<funcNode> func) {
     funcs.push_back(std::move(func));
   }
+
+  std::vector<std::unique_ptr<funcNode>> &getFuncs() { return funcs; }
   ~functionsNode();
   llvm::Value *codegen();
 };
@@ -99,34 +136,42 @@ public:
 
 class funcNode : public ASTNode {
 private:
-  std::unique_ptr<typeNode> returnType;
   std::unique_ptr<protoNode> proto;
   std::unique_ptr<compoundStmtNode> compoundStmt;
 
 public:
-  funcNode(std::unique_ptr<typeNode> type, std::unique_ptr<protoNode> prototype,
+  funcNode(std::unique_ptr<protoNode> prototype,
            std::unique_ptr<compoundStmtNode> compound) {
-    returnType = std::move(type);
     proto = std::move(prototype);
     compoundStmt = std::move(compound);
   }
   ~funcNode();
+  void accept(ASTNodeVisitor &visitor) { visitor.codegenFunc(*this); }
+  std::unique_ptr<protoNode> &getProto() { return proto; }
   llvm::Value *codegen();
 };
 
 // proto --> identifier '(' args ')'
 class protoNode : public ASTNode {
 private:
+  std::unique_ptr<typeNode> returnType;
   std::unique_ptr<argsNode> argList;
   std::string id;
 
 public:
-  protoNode(std::string name, std::unique_ptr<argsNode> args) {
+  protoNode(std::unique_ptr<typeNode> ret, std::string name,
+            std::unique_ptr<argsNode> args) {
+    returnType = std::move(ret);
     argList = std::move(args);
     id = name;
   }
   ~protoNode() = default;
-
+  std::unique_ptr<argsNode> &getArgsNode() { return argList; }
+  std::unique_ptr<typeNode> &getTypePtr() { return returnType; }
+  std::string &getId() { return id; }
+  llvm::Function *accept(ASTNodeVisitor &visitor) {
+    visitor.codegenProto(*this);
+  }
   llvm::Value *codegen();
 };
 
@@ -135,7 +180,37 @@ private:
   DataTypes type;
 
 public:
-  typeNode(Tok::Token tok);
+  typeNode(Tok::Token tok) {
+    switch (tok) {
+    case (Tok::VOID):
+      type = VOID;
+      break;
+    case (Tok::I32):
+      type = i32;
+      break;
+    case (Tok::I64):
+      type = i64;
+      break;
+    case (Tok::F32):
+      type = f32;
+      break;
+    case (Tok::F64):
+      type = f64;
+      break;
+    case (Tok::CHAR):
+      type = CHAR;
+      break;
+    case (Tok::STRING):
+      type = STRING;
+      break;
+    case (Tok::BOOL):
+      type = BOOL;
+      break;
+    default:
+      type = INVALID;
+      break;
+    }
+  };
   ~typeNode();
   bool invalid() { return type == INVALID; }
   DataTypes getType() { return type; }
@@ -544,7 +619,8 @@ public:
     type = nullptr;
   }
   ~argNode() = default;
-
+  std::string &getId() { return id; }
+  typeNode &typeNode() { return *type; }
   llvm::Value *codegen();
 };
 
@@ -556,24 +632,13 @@ public:
 class argsNode : public ASTNode {
 
 private:
-  std::unique_ptr<argNode> argu;
-  std::unique_ptr<argsNode> moreArgs;
   std::vector<std::unique_ptr<argNode>> args;
 
 public:
   argsNode() { args = std::vector<std::unique_ptr<argNode>>(); }
-  argsNode(std::unique_ptr<argNode> arg, std::unique_ptr<argsNode> moreArgus) {
-    argu = std::move(arg);
-    moreArgs = std::move(moreArgus);
-  };
-  argsNode(std::unique_ptr<argNode> arg) {
-    argu = std::move(arg);
-    moreArgs = nullptr;
-  };
-
   void addArg(std::unique_ptr<argNode> arg) { args.push_back(std::move(arg)); }
   ~argsNode() = default;
-  llvm::Value *codegen();
+  std::vector<std::unique_ptr<argNode>> &getArgs() { return args; }
 };
 // ------------- end args ----------- //
 
