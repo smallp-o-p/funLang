@@ -170,7 +170,7 @@ std::unique_ptr<protoNode> proto() {
 
 std::unique_ptr<argsNode> args() {
   std::unique_ptr<argsNode> args_ptr = std::make_unique<argsNode>();
-  while (true) {
+  while (true) { // if no args we immediately break
     if (peek().syntactic_category == Tok::RPAREN) {
       break;
     }

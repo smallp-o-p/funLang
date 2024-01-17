@@ -15,10 +15,11 @@ proto
     ; 
 
 args 
-    : arg (',' arg)*
+    : (arg (',' arg)*)?
     ; 
 
-arg : type ID;
+arg : type ID
+    ;
 
 compoundstmt 
     : '{' simplelist '}'
@@ -83,7 +84,7 @@ fnCall
     ;
     
 callArgs 
-    : primary (',' primary)*
+    : (primary (',' primary)*)?
     ;
 
 type : VOID 

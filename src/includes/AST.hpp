@@ -1,11 +1,6 @@
 #pragma once
 #include "Lex.hpp"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
-#include <llvm-14/llvm/IR/Constant.h>
-#include <llvm-14/llvm/IR/Value.h>
+#include <map>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -69,35 +64,6 @@ class ASTNode {
 public:
   virtual ~ASTNode(){};
 };
-
-class ASTNodeVisitor {
-public:
-  llvm::Value *codegenProgram(const std::unique_ptr<programNode> &program);
-  llvm::Value *
-  codegenFunctions(const std::unique_ptr<functionsNode> &functions);
-  llvm::Value *codegenFunc(funcNode &func);
-  llvm::Function *codegenProto(protoNode &proto);
-  llvm::Value *
-  codegenCompoundStmt(const std::unique_ptr<compoundStmtNode> &compound);
-  llvm::Value *
-  codegenSimpleList(const std::unique_ptr<simpleListNode> &simpleList);
-  llvm::Value *
-  codegenSimpleStmt(const std::unique_ptr<simpleStmtNode> &simpleStmt);
-  llvm::Value *codegenDeclare(const std::unique_ptr<declareNode> &decl);
-  llvm::Value *codegenExpr(const std::unique_ptr<exprNode> &expr);
-  llvm::Value *codegenRet(const std::unique_ptr<returnNode> &ret);
-  llvm::Value *codegenAssign(const std::unique_ptr<assignExprNode> &assign);
-  llvm::Value *codegenEq(const std::unique_ptr<eqExprNode> &eq);
-  llvm::Value *codegenCmp(const std::unique_ptr<cmpExprNode> &cmp);
-  llvm::Value *codegenAdd(const std::unique_ptr<addExprNode> &add);
-  llvm::Value *codegenMultDiv(const std::unique_ptr<multdivNode> &multdiv);
-  llvm::Value *codegenUnary(const std::unique_ptr<unaryNode> &unary);
-  llvm::Value *codegenPrimary(const std::unique_ptr<primaryNode> &primary);
-  llvm::Value *codegenFnCall(const std::unique_ptr<fnCallNode> &fncall);
-  llvm::Value *logCodegenError(const char *str, ...);
-};
-std::vector<llvm::Type *>
-processArgs(std::vector<std::unique_ptr<argNode>> &args);
 class BinaryOpNode : ASTNode {
 private:
   std::unique_ptr<BinaryOpNode> lhs;
@@ -109,6 +75,19 @@ public:
 };
 
 /*
+ * program --> functions EOF
+ *
+ * */
+
+class programNode : public ASTNode {
+private:
+  std::unique_ptr<functionsNode> funcs;
+
+public:
+  programNode(std::unique_ptr<functionsNode> fns);
+  ~programNode() = default;
+};
+/*
  * functions -> func functions
  *            | func
  *
@@ -119,14 +98,10 @@ private:
   std::vector<std::unique_ptr<funcNode>> funcs;
 
 public:
-  functionsNode() { funcs = std::vector<std::unique_ptr<funcNode>>(); };
-  void addFunc(std::unique_ptr<funcNode> func) {
-    funcs.push_back(std::move(func));
-  }
-
-  std::vector<std::unique_ptr<funcNode>> &getFuncs() { return funcs; }
-  ~functionsNode();
-  llvm::Value *codegen();
+  functionsNode();
+  void addFunc(std::unique_ptr<funcNode> func);
+  std::vector<std::unique_ptr<funcNode>> &getFuncs();
+  ~functionsNode() = default;
 };
 
 /*
@@ -141,14 +116,10 @@ private:
 
 public:
   funcNode(std::unique_ptr<protoNode> prototype,
-           std::unique_ptr<compoundStmtNode> compound) {
-    proto = std::move(prototype);
-    compoundStmt = std::move(compound);
-  }
-  ~funcNode();
-  void accept(ASTNodeVisitor &visitor) { visitor.codegenFunc(*this); }
-  std::unique_ptr<protoNode> &getProto() { return proto; }
-  llvm::Value *codegen();
+           std::unique_ptr<compoundStmtNode> compound);
+  ~funcNode() = default;
+  std::unique_ptr<protoNode> &getProto();
+  std::unique_ptr<compoundStmtNode> &getCompound();
 };
 
 // proto --> identifier '(' args ')'
@@ -160,19 +131,112 @@ private:
 
 public:
   protoNode(std::unique_ptr<typeNode> ret, std::string name,
-            std::unique_ptr<argsNode> args) {
-    returnType = std::move(ret);
-    argList = std::move(args);
-    id = name;
-  }
+            std::unique_ptr<argsNode> args);
   ~protoNode() = default;
-  std::unique_ptr<argsNode> &getArgsNode() { return argList; }
-  std::unique_ptr<typeNode> &getTypePtr() { return returnType; }
-  std::string &getId() { return id; }
-  llvm::Function *accept(ASTNodeVisitor &visitor) {
-    visitor.codegenProto(*this);
-  }
-  llvm::Value *codegen();
+  std::unique_ptr<argsNode> &getArgsNode();
+  DataTypes getTypeVal();
+  std::string &getId();
+};
+
+/*
+ * args --> arg ',' args
+ *       |  arg
+ * */
+class argsNode : public ASTNode {
+private:
+  std::vector<std::unique_ptr<argNode>> args;
+
+public:
+  argsNode();
+  ~argsNode() = default;
+  void addArg(std::unique_ptr<argNode> arg);
+  std::vector<std::unique_ptr<argNode>> &getArgs();
+  bool hasArgs();
+};
+
+/*
+ * arg --> type identifier
+ *
+ * */
+class argNode : public ASTNode {
+private:
+  std::unique_ptr<typeNode> type;
+  std::string id;
+
+public:
+  argNode(std::unique_ptr<typeNode> nodeType, std::string identifier);
+  ~argNode() = default;
+  std::string &getId();
+  DataTypes getTypeVal();
+};
+
+/**
+  compoundStmt --> '{' simpleList '}'
+*/
+class compoundStmtNode : public ASTNode {
+private:
+  std::unique_ptr<simpleListNode> simpleList;
+
+public:
+  compoundStmtNode(std::unique_ptr<simpleListNode> simples);
+  ~compoundStmtNode() = default;
+};
+
+/*
+ * simpleList --> simpleStmt simpleList
+ *             |  simpleStmt
+ *
+ * */
+
+class simpleListNode : public ASTNode {
+private:
+  std::unique_ptr<simpleStmtNode> simpleStmt;
+  std::unique_ptr<simpleListNode> moreStmts;
+  std::vector<std::unique_ptr<simpleStmtNode>> simpleStmts;
+
+public:
+  simpleListNode();
+  void addStmt(std::unique_ptr<simpleStmtNode> stmt);
+  ~simpleListNode() = default;
+};
+
+/*
+ * simpleStmt --> declare
+ *              | expr
+ *              | return
+ * */
+
+class simpleStmtNode : public ASTNode {
+private:
+  std::unique_ptr<ASTNode> stmt;
+
+public:
+  simpleStmtNode(std::unique_ptr<ASTNode> decl);
+};
+
+class declareNode : public ASTNode {
+private:
+  std::unique_ptr<typeNode> type;
+  std::string id;
+  std::unique_ptr<exprNode> expr;
+
+public:
+  declareNode(std::unique_ptr<typeNode> t, std::string i,
+              std::unique_ptr<exprNode> exp);
+  std::string &getId();
+};
+
+/*
+ * return --> 'return' expr ';'
+ *
+ *
+ */
+class returnNode : public ASTNode {
+private:
+  std::unique_ptr<exprNode> expr;
+
+public:
+  returnNode(std::unique_ptr<exprNode> exp);
 };
 
 class typeNode : public ASTNode {
@@ -180,42 +244,10 @@ private:
   DataTypes type;
 
 public:
-  typeNode(Tok::Token tok) {
-    switch (tok) {
-    case (Tok::VOID):
-      type = VOID;
-      break;
-    case (Tok::I32):
-      type = i32;
-      break;
-    case (Tok::I64):
-      type = i64;
-      break;
-    case (Tok::F32):
-      type = f32;
-      break;
-    case (Tok::F64):
-      type = f64;
-      break;
-    case (Tok::CHAR):
-      type = CHAR;
-      break;
-    case (Tok::STRING):
-      type = STRING;
-      break;
-    case (Tok::BOOL):
-      type = BOOL;
-      break;
-    default:
-      type = INVALID;
-      break;
-    }
-  };
-  ~typeNode();
-  bool invalid() { return type == INVALID; }
-  DataTypes getType() { return type; }
-
-  llvm::Value *codegen();
+  typeNode(Tok::Token tok);
+  ~typeNode() = default;
+  bool invalid();
+  DataTypes getType();
 };
 
 class exprNode : public ASTNode {
@@ -223,192 +255,26 @@ private:
   std::unique_ptr<assignExprNode> assign;
 
 public:
-  exprNode(std::unique_ptr<assignExprNode> ass) { assign = std::move(ass); }
-};
-
-class fnCallNode : public ASTNode {
-private:
-  std::string name;
-  std::unique_ptr<callArgsNode> args;
-
-public:
-  fnCallNode(std::string id, std::unique_ptr<callArgsNode> calls) {
-    name = id;
-    args = std::move(calls);
-  }
+  exprNode(std::unique_ptr<assignExprNode> ass);
+  ~exprNode() = default;
 };
 
 /*
- * primary --> ID
- *          | NUM
- *          | STRINGLIT
- *          | fnCall
- *          | '(' expr ')'
- * */
-class primaryNode : public ASTNode {
-private:
-  std::string id_name;
-  std::string lexed_lit_val;
-  std::unique_ptr<ASTNode> non_terminal_ptr;
-  DataTypes type;
-
-public:
-  primaryNode(std::string identifier) { id_name = identifier; }
-  primaryNode(std::unique_ptr<ASTNode> expr) {
-    non_terminal_ptr = std::move(expr);
-  }
-  primaryNode(std::string litVal, Tok::Token typ) {
-    switch (typ) {
-    case (Tok::STRINGLIT):
-      if (litVal.length() == 1) {
-        type = CHAR;
-      } else {
-        type = STRING;
-      }
-      break;
-    case (Tok::NUM):
-      try {
-        std::stoi(litVal);
-        type = i32;
-      } catch (std::out_of_range) {
-        type = i64;
-      }
-      break;
-    case (Tok::POINTNUM):
-      try {
-        std::stof(litVal);
-        type = f32;
-      } catch (std::out_of_range) {
-        type = f64;
-      }
-      break;
-    case (Tok::FALSE):
-    case (Tok::TRUE):
-      type = BOOL;
-      break;
-    default:
-      type = INVALID;
-    }
-    lexed_lit_val = litVal;
-  }
-
-  DataTypes getType() { return type; }
-};
-
-class callArgsNode : public ASTNode {
-private:
-  std::vector<std::unique_ptr<primaryNode>> callArgs;
-
-public:
-  callArgsNode(std::vector<std::unique_ptr<primaryNode>> primaries) {
-    callArgs = std::move(primaries);
-  }
-};
-
-class unaryNode : public ASTNode {
-private:
-  std::unique_ptr<primaryNode> operand;
-  Operator op;
-
-public:
-  unaryNode(Tok::Token opr, std::unique_ptr<primaryNode> rhs) {
-    operand = std::move(rhs);
-    switch (opr) {
-    case (Tok::PLUSPLUS):
-      op = INCREMENT;
-      break;
-    case (Tok::MINUSMINUS):
-      op = DECREMENT;
-      break;
-    case (Tok::BANG):
-      op = BANG;
-      break;
-    case (Tok::MINUS):
-      op = SUBTRACT;
-      break;
-    default:
-      op = NONE;
-    }
-  }
-
-  unaryNode(std::unique_ptr<primaryNode> rhs) { operand = std::move(rhs); }
-};
-
-/*
- * multdiv --> unary ('*'| '/') unary
- *          |  unary
+ * assign --> eqExpr
+ *          | ID '=' expr
  *
  * */
-class multdivNode : public BinaryOpNode {
+class assignExprNode : public ASTNode {
 private:
-  std::unique_ptr<unaryNode> lhs;
-  std::unique_ptr<unaryNode> rhs;
-  Operator op;
+  std::unique_ptr<BinaryOpNode> eq;
+  std::string id;
+  std::unique_ptr<exprNode> expr;
 
 public:
-  multdivNode(std::unique_ptr<unaryNode> left, Tok::Token opr,
-              std::unique_ptr<unaryNode> right) {
-    lhs = std::move(left);
-    rhs = std::move(right);
-    switch (opr) {
-    case (Tok::MULT):
-      op = MULT;
-      break;
-    case (Tok::DIV):
-      op = DIV;
-      break;
-    default:
-      op = NONE;
-    }
-  }
-  multdivNode(std::unique_ptr<unaryNode> left) {
-    lhs = std::move(left);
-    rhs = nullptr;
-    op = NONE;
-  }
-
-  const std::unique_ptr<unaryNode> &getLHS() { return lhs; }
-  const std::unique_ptr<unaryNode> &getRHS() { return rhs; }
-  Operator getOp() { return op; }
-};
-
-/*
- *  addExpr --> multdiv ('*'| '/') multdiv
- *           |  multdiv
- *
- * */
-
-class addExprNode : public BinaryOpNode {
-private:
-  std::unique_ptr<multdivNode> lhs;
-  std::unique_ptr<multdivNode> rhs;
-  Operator op;
-
-public:
-  addExprNode(std::unique_ptr<multdivNode> left, Tok::Token opr,
-              std::unique_ptr<multdivNode> right) {
-    lhs = std::move(left);
-    rhs = std::move(right);
-    switch (opr) {
-    case (Tok::PLUS):
-      op = ADD;
-      break;
-    case (Tok::MINUS):
-      op = SUBTRACT;
-      break;
-    default:
-      op = NONE;
-    }
-  }
-  addExprNode(std::unique_ptr<multdivNode> left) {
-    lhs = std::move(left);
-    rhs = nullptr;
-    op = NONE;
-  }
-
-  const std::unique_ptr<multdivNode> &getLHS() { return lhs; }
-  const std::unique_ptr<multdivNode> &getRHS() { return rhs; }
-  Operator getOp() { return op; }
+  assignExprNode(std::unique_ptr<eqExprNode> eq_expr);
+  assignExprNode(std::string identifier, std::unique_ptr<exprNode> expr_ptr);
+  ~assignExprNode() = default;
+  std::string &getId();
 };
 
 /*
@@ -425,35 +291,11 @@ private:
 
 public:
   cmpExprNode(std::unique_ptr<addExprNode> left,
-              std::unique_ptr<addExprNode> right, Tok::Token opr) {
-    lhs = std::move(left);
-    rhs = std::move(right);
-    switch (opr) {
-    case (Tok::LTCMP):
-      op = LT;
-      break;
-    case (Tok::LTECMP):
-      op = LTE;
-      break;
-    case (Tok::GTCMP):
-      op = GT;
-      break;
-    case (Tok::GTECMP):
-      op = GTE;
-      break;
-    default:
-      op = NONE;
-    }
-  }
-  cmpExprNode(std::unique_ptr<addExprNode> left) {
-    lhs = std::move(left);
-    rhs = nullptr;
-    op = NONE;
-  }
-
-  const std::unique_ptr<addExprNode> &getLHS() { return lhs; }
-  const std::unique_ptr<addExprNode> &getRHS() { return rhs; }
-  Operator getOp() { return op; }
+              std::unique_ptr<addExprNode> right, Tok::Token opr);
+  cmpExprNode(std::unique_ptr<addExprNode> left);
+  const std::unique_ptr<addExprNode> &getLHS();
+  const std::unique_ptr<addExprNode> &getRHS();
+  Operator getOp();
 };
 
 /*
@@ -469,192 +311,101 @@ private:
 
 public:
   eqExprNode(std::unique_ptr<cmpExprNode> left,
-             std::unique_ptr<cmpExprNode> right, Tok::Token opr) {
-    lhs = std::move(left);
-    rhs = std::move(right);
-    if (opr == Tok::NECMP) {
-      op = NE;
-    } else if (opr == Tok::EQCMP) {
-      op = EQEQ;
-    } else {
-      op = NONE;
-    }
-  }
-  eqExprNode(std::unique_ptr<cmpExprNode> left) {
-    lhs = std::move(left);
-    rhs = nullptr;
-    op = NONE;
-  }
-  const std::unique_ptr<cmpExprNode> &getLHS() { return lhs; }
-  const std::unique_ptr<cmpExprNode> &getRHS() { return rhs; }
-  Operator getOp() { return op; }
-};
-
-/*
- * assign --> eqExpr
- *          | ID '=' expr
- *
- * */
-class assignExprNode : public ASTNode {
-private:
-  std::unique_ptr<BinaryOpNode> eq;
-  std::string id;
-  std::unique_ptr<exprNode> expr;
-
-public:
-  assignExprNode(std::unique_ptr<eqExprNode> eq_expr) {
-    eq = std::move(eq_expr);
-    id = "";
-    expr = nullptr;
-  }
-  assignExprNode(std::string identifier, std::unique_ptr<exprNode> expr_ptr) {
-    eq = nullptr;
-    id = identifier;
-    expr = std::move(expr_ptr);
-  }
-};
-
-class declareNode : public ASTNode {
-private:
-  std::unique_ptr<typeNode> type;
-  std::string id;
-  std::unique_ptr<exprNode> expr;
-
-public:
-  declareNode(std::unique_ptr<typeNode> t, std::string i,
-              std::unique_ptr<exprNode> exp) {
-    type = std::move(t);
-    id = i;
-    expr = std::move(exp);
-  }
-};
-
-/*
- * return --> 'return' expr ';'
- *
- *
- */
-class returnNode : public ASTNode {
-private:
-  std::unique_ptr<exprNode> expr;
-
-public:
-  returnNode(std::unique_ptr<exprNode> exp) { expr = std::move(exp); }
+             std::unique_ptr<cmpExprNode> right, Tok::Token opr);
+  eqExprNode(std::unique_ptr<cmpExprNode> left);
+  const std::unique_ptr<cmpExprNode> &getLHS();
+  const std::unique_ptr<cmpExprNode> &getRHS();
+  Operator getOp();
 };
 /*
- * simpleStmt --> declare
- *              | expr
- *              | return
- * */
-
-class simpleStmtNode : public ASTNode {
-private:
-  std::unique_ptr<ASTNode> stmt;
-
-public:
-  simpleStmtNode(std::unique_ptr<ASTNode> decl) { stmt = std::move(decl); };
-
-  llvm::Value *codegen();
-};
-
-/*
- * simpleList --> simpleStmt simpleList
- *             |  simpleStmt
+ *  addExpr --> multdiv ('*'| '/') multdiv
+ *           |  multdiv
  *
  * */
 
-class simpleListNode : public ASTNode {
+class addExprNode : public BinaryOpNode {
 private:
-  std::unique_ptr<simpleStmtNode> simpleStmt;
-  std::unique_ptr<simpleListNode> moreStmts;
-  std::vector<std::unique_ptr<simpleStmtNode>> simpleStmts;
+  std::unique_ptr<multdivNode> lhs;
+  std::unique_ptr<multdivNode> rhs;
+  Operator op;
 
 public:
-  simpleListNode() {
-    simpleStmts = std::vector<std::unique_ptr<simpleStmtNode>>();
-  }
-  void addStmt(std::unique_ptr<simpleStmtNode> stmt) {
-    simpleStmts.push_back(std::move(stmt));
-  }
-
-  ~simpleListNode() = default;
-
-  llvm::Value *codegen();
+  addExprNode(std::unique_ptr<multdivNode> left, Tok::Token opr,
+              std::unique_ptr<multdivNode> right);
+  addExprNode(std::unique_ptr<multdivNode> left);
+  const std::unique_ptr<multdivNode> &getLHS();
+  const std::unique_ptr<multdivNode> &getRHS();
+  Operator getOp();
 };
-
-class compoundStmtNode : public ASTNode {
-private:
-  std::unique_ptr<simpleListNode> simpleList;
-
-public:
-  compoundStmtNode(std::unique_ptr<simpleListNode> simples) {
-    simpleList = std::move(simples);
-  }
-
-  ~compoundStmtNode() = default;
-
-  llvm::Value *codegen();
-};
-
-// nodes for functions
-
-// ------------ args --------------- //
 
 /*
- * arg --> type identifier
+ * multdiv --> unary ('*'| '/') unary
+ *          |  unary
  *
  * */
-
-class argNode : public ASTNode {
+class multdivNode : public BinaryOpNode {
 private:
-  std::unique_ptr<typeNode> type;
-  std::string id;
+  std::unique_ptr<unaryNode> lhs;
+  std::unique_ptr<unaryNode> rhs;
+  Operator op;
 
 public:
-  argNode(std::unique_ptr<typeNode> nodeType, std::string identifier) {
-    type = std::move(nodeType);
-    id = identifier;
-  }
-  argNode() { // no args
-    type = nullptr;
-  }
-  ~argNode() = default;
-  std::string &getId() { return id; }
-  typeNode &typeNode() { return *type; }
-  llvm::Value *codegen();
+  multdivNode(std::unique_ptr<unaryNode> left, Tok::Token opr,
+              std::unique_ptr<unaryNode> right);
+  multdivNode(std::unique_ptr<unaryNode> left);
+  const std::unique_ptr<unaryNode> &getLHS();
+  const std::unique_ptr<unaryNode> &getRHS();
+  Operator getOp();
+};
+
+class unaryNode : public ASTNode {
+private:
+  std::unique_ptr<primaryNode> operand;
+  Operator op;
+
+public:
+  unaryNode(Tok::Token opr, std::unique_ptr<primaryNode> rhs);
+  unaryNode(std::unique_ptr<primaryNode> rhs);
 };
 
 /*
- * args --> arg ',' args
- *       |  arg
+ * primary --> ID
+ *          | NUM
+ *          | STRINGLIT
+ *          | 'call' fnCall
+ *          | '(' expr ')'
  * */
-
-class argsNode : public ASTNode {
-
+class primaryNode : public ASTNode {
 private:
-  std::vector<std::unique_ptr<argNode>> args;
+  std::string id_name;
+  std::string lexed_lit_val;
+  std::unique_ptr<ASTNode> non_terminal_ptr;
+  DataTypes type;
 
 public:
-  argsNode() { args = std::vector<std::unique_ptr<argNode>>(); }
-  void addArg(std::unique_ptr<argNode> arg) { args.push_back(std::move(arg)); }
-  ~argsNode() = default;
-  std::vector<std::unique_ptr<argNode>> &getArgs() { return args; }
+  primaryNode(std::string identifier);
+  primaryNode(std::unique_ptr<ASTNode> expr);
+  primaryNode(std::string litVal, Tok::Token typ);
+  DataTypes getType();
 };
-// ------------- end args ----------- //
 
-/*
- * program --> functions EOF
- *
- * */
+/**
+  fnCall -> identifier '(' callArgs ')'
 
-class programNode : public ASTNode {
+  */
+class fnCallNode : public ASTNode {
 private:
-  std::unique_ptr<functionsNode> funcs;
+  std::string name;
+  std::unique_ptr<callArgsNode> args;
 
 public:
-  programNode(std::unique_ptr<functionsNode> fns) { funcs = std::move(fns); }
-
-  ~programNode();
-  llvm::Value *codegen();
+  fnCallNode(std::string id, std::unique_ptr<callArgsNode> calls);
 };
-// ---------- end func/functions -------- //
+
+class callArgsNode : public ASTNode {
+private:
+  std::vector<std::unique_ptr<primaryNode>> callArgs;
+
+public:
+  callArgsNode(std::vector<std::unique_ptr<primaryNode>> primaries);
+};

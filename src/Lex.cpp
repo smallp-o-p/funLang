@@ -8,7 +8,7 @@
 
 uint32_t colNum = 1;
 uint32_t lineNum = 1;
-extern std::string fileName;
+std::string fileName;
 
 std::unique_ptr<std::istream> initInp(const std::string &filepath,
                                       bool usingString) {
