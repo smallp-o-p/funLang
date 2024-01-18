@@ -6,11 +6,19 @@ project(funLang
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "-fstandalone-debug") # for clang
+
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+  message("Using Clang")
+  add_compile_options(-fcstandalone-debug)
+elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+  message("Using GCC")
+endif()
+
 include(CTest)
 include(FetchContent)
 
 find_package(LLVM REQUIRED CONFIG)
+message(STATUS "Found LLVM! ${LLVM_PACKAGE_VERSION}")
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -21,6 +29,5 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-message(STATUS "Found LLVM! ${LLVM_PACKAGE_VERSION}")
 add_subdirectory(src)
 add_subdirectory(tests)

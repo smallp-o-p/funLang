@@ -11,7 +11,7 @@
 std::stack<TokValCat> pastToks;
 LexedTokensSingleton &toks = LexedTokensSingleton::getInstance();
 
-bool match(std::vector<Tok::Token> tokens) { return toks.match(tokens); }
+bool match(std::vector<Tok::Token> tokens) {return toks.match(tokens); }
 bool check(Tok::Token tok) { return toks.check(tok); }
 TokValCat previous() { return toks.previous(); }
 TokValCat advance() { return toks.advance(); }
