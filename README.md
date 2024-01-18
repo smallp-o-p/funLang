@@ -33,6 +33,6 @@ you're free to add more as you wish.
 | Section                           | Implementation            | Tests                     | Documentation/Write-up |
 |-----------------------------------|---------------------------|---------------------------|------------------------|
 | Lexer                             | Done ✅                   | Done ✅                   | In Progress ⚠️          |
-| Parser                            | In Progress ⚠️             | In Progress ⚠️             | Not Started ❌         |
-| Code Generation                   | Not Started ❌            | Not Started ❌            | Not Started ❌         |
+| Parser                            | Done ✅                    | Done ✅                   | Not Started ❌         |
+| Code Generation                   | In Progress ⚠️            | Not Started ❌           | Not Started ❌         |
 | Not Thrown-together System Design | In Progress ⚠️ (Perpetual) | In Progress ⚠️ (Perpetual) |                        |
