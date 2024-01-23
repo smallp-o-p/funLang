@@ -1,7 +1,12 @@
 #pragma once
-#include "AST.hpp"
 #include "Lex.hpp"
+#include "ParseTree.hpp"
+#include <cstdarg>
+#include <cstdio>
+#include <iostream>
 #include <memory>
+#include <stack>
+#include <utility>
 #include <vector>
 
 int initInstance(const std::string &fp, bool usingString = false);

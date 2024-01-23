@@ -1,4 +1,4 @@
-#include "includes/Lex.hpp"
+#include "Lex.hpp"
 #include <cstdint>
 #include <fstream>
 #include <istream>

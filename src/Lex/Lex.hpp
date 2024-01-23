@@ -89,7 +89,7 @@ public:
   }
 
   TokValCat peek() { return tokens->at(tok_tracker); }
-
+  TokValCat previous(){ return tokens->at(tok_tracker - 1);}
   bool check(Tok::Token tok) {
     return tokens->at(tok_tracker).syntactic_category == tok;
   }

@@ -1,6 +1,4 @@
-#include "AST.hpp"
-#include "Lex.hpp"
-#include "Parse.hpp"
+#include "ParseTree.hpp"
 #include <cstdarg>
 #include <cstdint>
 #include <map>
@@ -103,10 +101,18 @@ simpleListNode::simpleListNode() {
 void simpleListNode::addStmt(std::unique_ptr<simpleStmtNode> stmt) {
   simpleStmts.push_back(std::move(stmt));
 }
+std::vector<std::unique_ptr<simpleStmtNode>> &simpleListNode::getStmts() {
+  return simpleStmts;
+}
 
-simpleStmtNode::simpleStmtNode(std::unique_ptr<ASTNode> decl) {
+simpleStmtNode::simpleStmtNode(std::unique_ptr<ParseTreeNode> decl,
+                               enum stmtType stmtT) {
   stmt = std::move(decl);
+  stmtType = stmtT;
 };
+
+std::unique_ptr<ParseTreeNode> &simpleStmtNode::getChild() { return stmt; };
+stmtType simpleStmtNode::getStmtT() { return stmtType; }
 
 declareNode::declareNode(std::unique_ptr<typeNode> t, std::string i,
                          std::unique_ptr<exprNode> exp) {
@@ -256,7 +262,7 @@ unaryNode::unaryNode(std::unique_ptr<primaryNode> rhs) {
 }
 
 primaryNode::primaryNode(std::string identifier) { id_name = identifier; }
-primaryNode::primaryNode(std::unique_ptr<ASTNode> expr) {
+primaryNode::primaryNode(std::unique_ptr<ParseTreeNode> expr) {
   non_terminal_ptr = std::move(expr);
 }
 primaryNode::primaryNode(std::string litVal, Tok::Token typ) {

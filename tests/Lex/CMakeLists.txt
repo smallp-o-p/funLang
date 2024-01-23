@@ -1,6 +1,5 @@
 if(BUILD_TESTING)
   include(GoogleTest)
-  include_directories(${CMAKE_SOURCE_DIR}/src/includes)
   configure_file(lex_Basic.txt ${CMAKE_CURRENT_BINARY_DIR})
   configure_file(lex_IntNumLits.txt ${CMAKE_CURRENT_BINARY_DIR})
   configure_file(lex_Keywords.txt ${CMAKE_CURRENT_BINARY_DIR})
@@ -8,11 +7,10 @@ if(BUILD_TESTING)
   configure_file(lex_StringLits.txt ${CMAKE_CURRENT_BINARY_DIR})
   configure_file(lex_ExampleFunc.txt ${CMAKE_CURRENT_BINARY_DIR})
 
-  add_executable(LexTesting EXCLUDE_FROM_ALL LexTests.cpp)
+  add_executable(LexTests EXCLUDE_FROM_ALL LexTests.cpp)
 
-  target_link_libraries(LexTesting PRIVATE Lex)
-  target_link_libraries(LexTesting PRIVATE GTest::gtest_main)
-
-  add_test(LexTesting LexTesting)
-  gtest_discover_tests(LexTesting)
+  target_link_libraries(LexTests PRIVATE Lex)
+  target_link_libraries(LexTests PRIVATE GTest::gtest_main)
+  add_test(LexTests LexTests)
+  gtest_discover_tests(LexTests)
 endif()

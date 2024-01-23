@@ -1,17 +1,9 @@
 #include "Parse.hpp"
-#include "AST.hpp"
-#include "Lex.hpp"
-#include <cstdarg>
-#include <cstdio>
-#include <iostream>
-#include <memory>
-#include <stack>
-#include <utility>
 
 std::stack<TokValCat> pastToks;
 LexedTokensSingleton &toks = LexedTokensSingleton::getInstance();
 
-bool match(std::vector<Tok::Token> tokens) {return toks.match(tokens); }
+bool match(std::vector<Tok::Token> tokens) { return toks.match(tokens); }
 bool check(Tok::Token tok) { return toks.check(tok); }
 TokValCat previous() { return toks.previous(); }
 TokValCat advance() { return toks.advance(); }
@@ -251,25 +243,22 @@ std::unique_ptr<simpleStmtNode> simpleStmt() {
     if (!ret_ptr) {
       return nullptr;
     }
-    return std::move(std::make_unique<simpleStmtNode>(std::move(ret_ptr)));
+    return std::move(std::make_unique<simpleStmtNode>(std::move(ret_ptr),
+                                                      stmtType::retStmt));
   } else if (isDeclarableType(peek().syntactic_category)) {
     std::unique_ptr<declareNode> decl_ptr = declare();
     if (!decl_ptr) {
       return nullptr;
     }
-    return std::move(std::make_unique<simpleStmtNode>(std::move(decl_ptr)));
-  } else if (match({Tok::CALL})) {
-    std::unique_ptr<fnCallNode> fn_ptr = fnCall();
-    if (!fn_ptr) {
-      return nullptr;
-    }
-    return std::move(std::make_unique<simpleStmtNode>(std::move(fn_ptr)));
+    return std::move(std::make_unique<simpleStmtNode>(std::move(decl_ptr),
+                                                      stmtType::declStmt));
   } else {
     std::unique_ptr<exprNode> expr_ptr = expr();
     if (!expr_ptr) {
       return nullptr;
     }
-    return std::move(std::make_unique<simpleStmtNode>(std::move(expr_ptr)));
+    return std::move(std::make_unique<simpleStmtNode>(std::move(expr_ptr),
+                                                      stmtType::exprStmt));
   }
 }
 

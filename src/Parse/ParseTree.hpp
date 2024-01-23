@@ -1,5 +1,5 @@
 #pragma once
-#include "Lex.hpp"
+#include "../Lex/Lex.hpp"
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -37,6 +37,8 @@ enum Operator {
   NONE
 };
 
+enum stmtType { declStmt, retStmt, exprStmt };
+
 class functionsNode;
 class funcNode;
 class protoNode;
@@ -60,11 +62,11 @@ class callArgsNode;
 class typeNode;
 class programNode;
 
-class ASTNode {
+class ParseTreeNode {
 public:
-  virtual ~ASTNode(){};
+  virtual ~ParseTreeNode(){};
 };
-class BinaryOpNode : ASTNode {
+class BinaryOpNode : ParseTreeNode {
 private:
   std::unique_ptr<BinaryOpNode> lhs;
   std::unique_ptr<BinaryOpNode> rhs;
@@ -79,7 +81,7 @@ public:
  *
  * */
 
-class programNode : public ASTNode {
+class programNode : public ParseTreeNode {
 private:
   std::unique_ptr<functionsNode> funcs;
 
@@ -93,7 +95,7 @@ public:
  *
  * */
 
-class functionsNode : public ASTNode {
+class functionsNode : public ParseTreeNode {
 private:
   std::vector<std::unique_ptr<funcNode>> funcs;
 
@@ -109,7 +111,7 @@ public:
  *
  * */
 
-class funcNode : public ASTNode {
+class funcNode : public ParseTreeNode {
 private:
   std::unique_ptr<protoNode> proto;
   std::unique_ptr<compoundStmtNode> compoundStmt;
@@ -123,7 +125,7 @@ public:
 };
 
 // proto --> identifier '(' args ')'
-class protoNode : public ASTNode {
+class protoNode : public ParseTreeNode {
 private:
   std::unique_ptr<typeNode> returnType;
   std::unique_ptr<argsNode> argList;
@@ -142,7 +144,7 @@ public:
  * args --> arg ',' args
  *       |  arg
  * */
-class argsNode : public ASTNode {
+class argsNode : public ParseTreeNode {
 private:
   std::vector<std::unique_ptr<argNode>> args;
 
@@ -158,7 +160,7 @@ public:
  * arg --> type identifier
  *
  * */
-class argNode : public ASTNode {
+class argNode : public ParseTreeNode {
 private:
   std::unique_ptr<typeNode> type;
   std::string id;
@@ -173,13 +175,15 @@ public:
 /**
   compoundStmt --> '{' simpleList '}'
 */
-class compoundStmtNode : public ASTNode {
+class compoundStmtNode : public ParseTreeNode {
 private:
   std::unique_ptr<simpleListNode> simpleList;
 
 public:
   compoundStmtNode(std::unique_ptr<simpleListNode> simples);
   ~compoundStmtNode() = default;
+
+  std::unique_ptr<simpleListNode> &getList() { return simpleList; }
 };
 
 /*
@@ -188,7 +192,7 @@ public:
  *
  * */
 
-class simpleListNode : public ASTNode {
+class simpleListNode : public ParseTreeNode {
 private:
   std::unique_ptr<simpleStmtNode> simpleStmt;
   std::unique_ptr<simpleListNode> moreStmts;
@@ -198,6 +202,7 @@ public:
   simpleListNode();
   void addStmt(std::unique_ptr<simpleStmtNode> stmt);
   ~simpleListNode() = default;
+  std::vector<std::unique_ptr<simpleStmtNode>> &getStmts();
 };
 
 /*
@@ -206,15 +211,18 @@ public:
  *              | return
  * */
 
-class simpleStmtNode : public ASTNode {
+class simpleStmtNode : public ParseTreeNode {
 private:
-  std::unique_ptr<ASTNode> stmt;
+  std::unique_ptr<ParseTreeNode> stmt;
+  stmtType stmtType;
 
 public:
-  simpleStmtNode(std::unique_ptr<ASTNode> decl);
+  simpleStmtNode(std::unique_ptr<ParseTreeNode> decl, enum stmtType stmtT);
+  enum stmtType getStmtT();
+  std::unique_ptr<ParseTreeNode> &getChild();
 };
 
-class declareNode : public ASTNode {
+class declareNode : public ParseTreeNode {
 private:
   std::unique_ptr<typeNode> type;
   std::string id;
@@ -231,7 +239,7 @@ public:
  *
  *
  */
-class returnNode : public ASTNode {
+class returnNode : public ParseTreeNode {
 private:
   std::unique_ptr<exprNode> expr;
 
@@ -239,7 +247,7 @@ public:
   returnNode(std::unique_ptr<exprNode> exp);
 };
 
-class typeNode : public ASTNode {
+class typeNode : public ParseTreeNode {
 private:
   DataTypes type;
 
@@ -250,7 +258,7 @@ public:
   DataTypes getType();
 };
 
-class exprNode : public ASTNode {
+class exprNode : public ParseTreeNode {
 private:
   std::unique_ptr<assignExprNode> assign;
 
@@ -264,7 +272,7 @@ public:
  *          | ID '=' expr
  *
  * */
-class assignExprNode : public ASTNode {
+class assignExprNode : public ParseTreeNode {
 private:
   std::unique_ptr<BinaryOpNode> eq;
   std::string id;
@@ -358,7 +366,7 @@ public:
   Operator getOp();
 };
 
-class unaryNode : public ASTNode {
+class unaryNode : public ParseTreeNode {
 private:
   std::unique_ptr<primaryNode> operand;
   Operator op;
@@ -375,16 +383,16 @@ public:
  *          | 'call' fnCall
  *          | '(' expr ')'
  * */
-class primaryNode : public ASTNode {
+class primaryNode : public ParseTreeNode {
 private:
   std::string id_name;
   std::string lexed_lit_val;
-  std::unique_ptr<ASTNode> non_terminal_ptr;
+  std::unique_ptr<ParseTreeNode> non_terminal_ptr;
   DataTypes type;
 
 public:
   primaryNode(std::string identifier);
-  primaryNode(std::unique_ptr<ASTNode> expr);
+  primaryNode(std::unique_ptr<ParseTreeNode> expr);
   primaryNode(std::string litVal, Tok::Token typ);
   DataTypes getType();
 };
@@ -393,7 +401,7 @@ public:
   fnCall -> identifier '(' callArgs ')'
 
   */
-class fnCallNode : public ASTNode {
+class fnCallNode : public ParseTreeNode {
 private:
   std::string name;
   std::unique_ptr<callArgsNode> args;
@@ -402,7 +410,7 @@ public:
   fnCallNode(std::string id, std::unique_ptr<callArgsNode> calls);
 };
 
-class callArgsNode : public ASTNode {
+class callArgsNode : public ParseTreeNode {
 private:
   std::vector<std::unique_ptr<primaryNode>> callArgs;
 

@@ -9,8 +9,8 @@ add_executable(ParseTests EXCLUDE_FROM_ALL ParseTests.cpp)
 
 target_link_libraries(ParseTests PRIVATE GTest::gtest_main)
 target_link_libraries(ParseTests PRIVATE Parse)
-target_link_libraries(ParseTests PRIVATE Lex)
-target_link_libraries(ParseTests PRIVATE AST_stuff)
 target_link_libraries(ParseTests PRIVATE ${llvm_libs})
 gtest_discover_tests(ParseTests)
 add_test(ParseTests ParseTests)
+
+get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)

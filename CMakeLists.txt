@@ -9,16 +9,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   message("Using Clang")
-  add_compile_options(-fcstandalone-debug)
+  add_compile_options(-fstandalone-debug)
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   message("Using GCC")
 endif()
 
+enable_testing()
 include(CTest)
 include(FetchContent)
 
 find_package(LLVM REQUIRED CONFIG)
-message(STATUS "Found LLVM! ${LLVM_PACKAGE_VERSION}")
+message(STATUS "LLVM found: ${LLVM_PACKAGE_VERSION}")
+message(STATUS "LLVM includes: ${LLVM_INCLUDE_DIRS}")
+message(STATUS "LLVM definitions: ${LLVM_DEFINITIONS}")
+message(STATUS "LLVM tools: ${LLVM_TOOLS_BINARY_DIR}")
+
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
@@ -28,6 +33,5 @@ FetchContent_Declare(
   URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
 FetchContent_MakeAvailable(googletest)
-
 add_subdirectory(src)
 add_subdirectory(tests)
