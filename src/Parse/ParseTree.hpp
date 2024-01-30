@@ -4,6 +4,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 
 /*
  * TODO: find a way to untangle this with CMake */
@@ -67,12 +68,15 @@ public:
   virtual ~ParseTreeNode(){};
 };
 class BinaryOpNode : ParseTreeNode {
-private:
+protected:
   std::unique_ptr<BinaryOpNode> lhs;
   std::unique_ptr<BinaryOpNode> rhs;
   Operator op;
 
 public:
+  bool isFallthrough() { return rhs == nullptr; }
+  const std::unique_ptr<BinaryOpNode> &getLHS() { return lhs; };
+  const std::unique_ptr<BinaryOpNode> &getRHS() { return rhs; };
   virtual ~BinaryOpNode(){};
 };
 
@@ -293,16 +297,12 @@ public:
 
 class cmpExprNode : public BinaryOpNode {
 private:
-  std::unique_ptr<addExprNode> lhs;
-  std::unique_ptr<addExprNode> rhs;
-  Operator op;
-
 public:
   cmpExprNode(std::unique_ptr<addExprNode> left,
               std::unique_ptr<addExprNode> right, Tok::Token opr);
   cmpExprNode(std::unique_ptr<addExprNode> left);
-  const std::unique_ptr<addExprNode> &getLHS();
-  const std::unique_ptr<addExprNode> &getRHS();
+
+  std::unique_ptr<addExprNode> &getLHS();
   Operator getOp();
 };
 
@@ -313,16 +313,10 @@ public:
  * */
 class eqExprNode : public BinaryOpNode {
 private:
-  std::unique_ptr<cmpExprNode> lhs;
-  std::unique_ptr<cmpExprNode> rhs;
-  Operator op;
-
 public:
   eqExprNode(std::unique_ptr<cmpExprNode> left,
              std::unique_ptr<cmpExprNode> right, Tok::Token opr);
   eqExprNode(std::unique_ptr<cmpExprNode> left);
-  const std::unique_ptr<cmpExprNode> &getLHS();
-  const std::unique_ptr<cmpExprNode> &getRHS();
   Operator getOp();
 };
 /*
@@ -332,17 +326,10 @@ public:
  * */
 
 class addExprNode : public BinaryOpNode {
-private:
-  std::unique_ptr<multdivNode> lhs;
-  std::unique_ptr<multdivNode> rhs;
-  Operator op;
-
 public:
   addExprNode(std::unique_ptr<multdivNode> left, Tok::Token opr,
               std::unique_ptr<multdivNode> right);
   addExprNode(std::unique_ptr<multdivNode> left);
-  const std::unique_ptr<multdivNode> &getLHS();
-  const std::unique_ptr<multdivNode> &getRHS();
   Operator getOp();
 };
 
@@ -352,7 +339,7 @@ public:
  *
  * */
 class multdivNode : public BinaryOpNode {
-private:
+protected:
   std::unique_ptr<unaryNode> lhs;
   std::unique_ptr<unaryNode> rhs;
   Operator op;
@@ -361,8 +348,6 @@ public:
   multdivNode(std::unique_ptr<unaryNode> left, Tok::Token opr,
               std::unique_ptr<unaryNode> right);
   multdivNode(std::unique_ptr<unaryNode> left);
-  const std::unique_ptr<unaryNode> &getLHS();
-  const std::unique_ptr<unaryNode> &getRHS();
   Operator getOp();
 };
 
@@ -384,17 +369,21 @@ public:
  *          | '(' expr ')'
  * */
 class primaryNode : public ParseTreeNode {
+public:
+  enum primaryType { EXPR, SYMBOL, LITERAL, FUNCCALL };
+  primaryNode(std::string identifier);
+  primaryNode(std::unique_ptr<exprNode> expr);
+  primaryNode(std::unique_ptr<fnCallNode> fncall);
+  primaryNode(std::string litVal, Tok::Token typ);
+  DataTypes getType();
+
 private:
   std::string id_name;
   std::string lexed_lit_val;
   std::unique_ptr<ParseTreeNode> non_terminal_ptr;
+  std::unique_ptr<fnCallNode> fnc;
   DataTypes type;
-
-public:
-  primaryNode(std::string identifier);
-  primaryNode(std::unique_ptr<ParseTreeNode> expr);
-  primaryNode(std::string litVal, Tok::Token typ);
-  DataTypes getType();
+  primaryType primType;
 };
 
 /**
@@ -403,11 +392,11 @@ public:
   */
 class fnCallNode : public ParseTreeNode {
 private:
-  std::string name;
+  std::string fnName;
   std::unique_ptr<callArgsNode> args;
 
 public:
-  fnCallNode(std::string id, std::unique_ptr<callArgsNode> calls);
+  fnCallNode(std::string &name, std::unique_ptr<callArgsNode> calls);
 };
 
 class callArgsNode : public ParseTreeNode {

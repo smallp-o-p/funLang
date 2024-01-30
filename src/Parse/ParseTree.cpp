@@ -156,8 +156,6 @@ eqExprNode::eqExprNode(std::unique_ptr<cmpExprNode> left) {
   rhs = nullptr;
   op = NONE;
 }
-const std::unique_ptr<cmpExprNode> &eqExprNode::getLHS() { return lhs; }
-const std::unique_ptr<cmpExprNode> &eqExprNode::getRHS() { return rhs; }
 Operator eqExprNode::getOp() { return op; }
 
 cmpExprNode::cmpExprNode(std::unique_ptr<addExprNode> left,
@@ -186,8 +184,6 @@ cmpExprNode::cmpExprNode(std::unique_ptr<addExprNode> left) {
   rhs = nullptr;
   op = NONE;
 }
-const std::unique_ptr<addExprNode> &cmpExprNode::getLHS() { return lhs; }
-const std::unique_ptr<addExprNode> &cmpExprNode::getRHS() { return rhs; }
 Operator cmpExprNode::getOp() { return op; }
 
 addExprNode::addExprNode(std::unique_ptr<multdivNode> left, Tok::Token opr,
@@ -210,8 +206,6 @@ addExprNode::addExprNode(std::unique_ptr<multdivNode> left) {
   rhs = nullptr;
   op = NONE;
 }
-const std::unique_ptr<multdivNode> &addExprNode::getLHS() { return lhs; }
-const std::unique_ptr<multdivNode> &addExprNode::getRHS() { return rhs; }
 Operator addExprNode::getOp() { return op; }
 
 multdivNode::multdivNode(std::unique_ptr<unaryNode> left, Tok::Token opr,
@@ -234,8 +228,6 @@ multdivNode::multdivNode(std::unique_ptr<unaryNode> left) {
   rhs = nullptr;
   op = NONE;
 }
-const std::unique_ptr<unaryNode> &multdivNode::getLHS() { return lhs; }
-const std::unique_ptr<unaryNode> &multdivNode::getRHS() { return rhs; }
 Operator multdivNode::getOp() { return op; }
 
 unaryNode::unaryNode(Tok::Token opr, std::unique_ptr<primaryNode> rhs) {
@@ -261,9 +253,17 @@ unaryNode::unaryNode(std::unique_ptr<primaryNode> rhs) {
   operand = std::move(rhs);
 }
 
-primaryNode::primaryNode(std::string identifier) { id_name = identifier; }
-primaryNode::primaryNode(std::unique_ptr<ParseTreeNode> expr) {
+primaryNode::primaryNode(std::string identifier) {
+  id_name = identifier;
+  primType = SYMBOL;
+}
+primaryNode::primaryNode(std::unique_ptr<exprNode> expr) {
   non_terminal_ptr = std::move(expr);
+  primType = EXPR;
+}
+primaryNode::primaryNode(std::unique_ptr<fnCallNode> fncall) {
+  fnc = std::move(fncall);
+  primType = FUNCCALL;
 }
 primaryNode::primaryNode(std::string litVal, Tok::Token typ) {
   switch (typ) {
@@ -298,11 +298,12 @@ primaryNode::primaryNode(std::string litVal, Tok::Token typ) {
     type = INVALID;
   }
   lexed_lit_val = litVal;
+  primType = LITERAL;
 }
 DataTypes primaryNode::getType() { return type; }
 
-fnCallNode::fnCallNode(std::string id, std::unique_ptr<callArgsNode> calls) {
-  name = id;
+fnCallNode::fnCallNode(std::string &name, std::unique_ptr<callArgsNode> calls) {
+  fnName = name;
   args = std::move(calls);
 }
 callArgsNode::callArgsNode(

@@ -42,6 +42,14 @@ TEST(ParseTesting, multdivUnit) {
   EXPECT_EQ(multdiv_ptr->getOp(), Operator::MULT);
 }
 
+TEST(ParseTesting, complexExprs) {
+  EXPECT_EQ(initInstance("a*b+c == 9+5", true), 0);
+  auto eqexpr_ptr = eqExpr();
+  EXPECT_NE(eqexpr_ptr, nullptr);
+  EXPECT_EQ(eqexpr_ptr->getOp(), Operator::EQEQ);
+  EXPECT_NE(eqexpr_ptr->getLHS(), nullptr);
+}
+
 int main() {
   testing::InitGoogleTest();
   return RUN_ALL_TESTS();

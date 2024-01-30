@@ -1,8 +1,9 @@
 #include "Parse.hpp"
 
 std::stack<TokValCat> pastToks;
+std::unordered_map<uint32_t, const std::string &> symbol_table;
+uint32_t identifier_counter = 0;
 LexedTokensSingleton &toks = LexedTokensSingleton::getInstance();
-
 bool match(std::vector<Tok::Token> tokens) { return toks.match(tokens); }
 bool check(Tok::Token tok) { return toks.check(tok); }
 TokValCat previous() { return toks.previous(); }
