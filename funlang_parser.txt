@@ -91,4 +91,5 @@ type : VOID
     | I32 
     | F64
     | F32
+    | ID
     ;

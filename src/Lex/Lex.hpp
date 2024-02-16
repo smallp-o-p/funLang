@@ -115,6 +115,9 @@ public:
     }
     return false;
   }
+  Lexer::LexerToken lookahead(int howMuch) {
+    return tokens->at(tok_tracker + howMuch);
+  }
   void reset() {
     tok_tracker = 0;
     tokens = nullptr;

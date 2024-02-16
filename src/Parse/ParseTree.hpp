@@ -82,9 +82,11 @@ public:
 class TypeNode {
 private:
   Parse::DataTypes type;
+  std::string &user_defined;
 
 public:
   TypeNode(Lexer::LexerToken tag);
+  TypeNode(Lexer::LexerToken tag, std::string &user);
 };
 
 class FunctionsNode {
@@ -99,6 +101,10 @@ class FunctionNode {
 private:
   std::unique_ptr<PrototypeNode> proto;
   std::unique_ptr<CompoundStmt> compound;
+
+public:
+  FunctionNode(std::unique_ptr<PrototypeNode> pro,
+               std::unique_ptr<CompoundStmt> compoundStmt);
 };
 
 class PrototypeNode {
@@ -115,6 +121,9 @@ public:
 class ArgumentsNode {
 private:
   std::vector<std::unique_ptr<ArgNode>> argList;
+
+public:
+  ArgumentsNode(std::vector<std::unique_ptr<ArgNode>>);
 };
 
 class ArgNode {
@@ -123,16 +132,15 @@ private:
   std::string &argName;
 
 public:
-  ArgNode(std::unique_ptr<TypeNode> type, std::string &id);
+  ArgNode(std::unique_ptr<TypeNode> type, const std::string &id);
 };
 
 class CompoundStmt {
 private:
-  std::vector<std::pair<std::unique_ptr<Stmt>, Parse::StmtType>> stmts;
+  std::vector<std::unique_ptr<Stmt>> stmts;
 
 public:
-  CompoundStmt(
-      std::vector<std::pair<std::unique_ptr<Stmt>, Parse::StmtType>> simples);
+  CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples);
 };
 
 class Stmt {
@@ -141,16 +149,17 @@ protected:
 
 public:
   Stmt() = delete;
+  virtual Parse::StmtType getStmtT();
 };
 
 class VarDecl : Stmt {
 private:
-  Parse::DataTypes declType;
+  std::unique_ptr<TypeNode> type;
   std::string &name;
   std::unique_ptr<Expr> expr;
 
 public:
-  VarDecl(Parse::DataTypes declT, std::string &id,
+  VarDecl(std::unique_ptr<TypeNode> t, std::string &id,
           std::unique_ptr<Expr> expression);
   Parse::DataTypes getDeclType();
   std::string &getName();
