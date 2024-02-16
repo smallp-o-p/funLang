@@ -5,10 +5,11 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-
+#include <utility>
+#include <variant>
 /*
  * TODO: find a way to untangle this with CMake */
-
+namespace Parse {
 enum DataTypes {
   VOID = 10000,
   CHAR,
@@ -21,7 +22,7 @@ enum DataTypes {
   INVALID
 };
 
-enum Operator {
+enum BinaryOperators {
   EQEQ = -9999,
   NE,
   GTE,
@@ -30,379 +31,191 @@ enum Operator {
   LT,
   MULT,
   DIV,
-  INCREMENT,
-  DECREMENT,
-  BANG,
   SUBTRACT,
+  ADDASSIGN,
+  SUBASSIGN,
   ADD,
   NONE
 };
 
-enum stmtType { declStmt, retStmt, exprStmt };
-
-class functionsNode;
-class funcNode;
-class protoNode;
-class argsNode;
-class argNode;
-class compoundStmtNode;
-class simpleListNode;
-class simpleStmtNode;
-class declareNode;
-class exprNode;
-class returnNode;
-class assignExprNode;
-class eqExprNode;
-class cmpExprNode;
-class addExprNode;
-class multdivNode;
-class unaryNode;
-class primaryNode;
-class fnCallNode;
-class callArgsNode;
-class typeNode;
-class programNode;
-
-class ParseTreeNode {
-public:
-  virtual ~ParseTreeNode(){};
+enum UnaryOperators {
+  PREINCREMENT,
+  PREDECREMENT,
+  POSTINCREMENT,
+  POSTDECREMENT,
+  BANG
 };
-class BinaryOpNode : ParseTreeNode {
+
+enum ExprType { PRIMARY, FNCALL, UNARY, BINARY };
+enum StmtType { RETURN, VARDECL, EXPR };
+} // namespace Parse
+
+class ProgramNode;
+class FunctionsNode;
+class FunctionNode;
+class PrototypeNode;
+class ArgumentsNode;
+class ArgNode;
+class CompoundStmt;
+class SimpleListNode;
+class Stmt;
+class DeclNode;
+class Expr;
+class ReturnNode;
+class TypeNode;
+class fnCall;
+class callArgs;
+
+class ProgramNode {
+private:
+  std::unique_ptr<FunctionsNode> funcs;
+  std::unique_ptr<std::unordered_map<std::string, int>> globalSymbols;
+
+public:
+  auto &getFuncs();
+  auto &getGlobs();
+  ProgramNode(std::unique_ptr<FunctionsNode> funcs);
+  ProgramNode(std::unique_ptr<FunctionsNode> funcs,
+              std::unique_ptr<std::unordered_map<std::string, int>> globs);
+};
+
+class TypeNode {
+private:
+  Parse::DataTypes type;
+
+public:
+  TypeNode(Lexer::LexerToken tag);
+};
+
+class FunctionsNode {
+private:
+  std::vector<std::unique_ptr<FunctionNode>> fns;
+
+public:
+  FunctionsNode(std::vector<std::unique_ptr<FunctionNode>> &fnList);
+};
+
+class FunctionNode {
+private:
+  std::unique_ptr<PrototypeNode> proto;
+  std::unique_ptr<CompoundStmt> compound;
+};
+
+class PrototypeNode {
+private:
+  std::unique_ptr<TypeNode> type;
+  std::string &name;
+  std::unique_ptr<ArgumentsNode> args;
+
+public:
+  PrototypeNode(std::unique_ptr<TypeNode> fnType, std::string &name,
+                std::unique_ptr<ArgumentsNode> argsList);
+};
+
+class ArgumentsNode {
+private:
+  std::vector<std::unique_ptr<ArgNode>> argList;
+};
+
+class ArgNode {
+private:
+  std::unique_ptr<TypeNode> type;
+  std::string &argName;
+
+public:
+  ArgNode(std::unique_ptr<TypeNode> type, std::string &id);
+};
+
+class CompoundStmt {
+private:
+  std::vector<std::pair<std::unique_ptr<Stmt>, Parse::StmtType>> stmts;
+
+public:
+  CompoundStmt(
+      std::vector<std::pair<std::unique_ptr<Stmt>, Parse::StmtType>> simples);
+};
+
+class Stmt {
 protected:
-  std::unique_ptr<BinaryOpNode> lhs;
-  std::unique_ptr<BinaryOpNode> rhs;
-  Operator op;
+  Parse::StmtType stmtT;
 
 public:
-  bool isFallthrough() { return rhs == nullptr; }
-  const std::unique_ptr<BinaryOpNode> &getLHS() { return lhs; };
-  const std::unique_ptr<BinaryOpNode> &getRHS() { return rhs; };
-  virtual ~BinaryOpNode(){};
+  Stmt() = delete;
 };
 
-/*
- * program --> functions EOF
- *
- * */
-
-class programNode : public ParseTreeNode {
+class VarDecl : Stmt {
 private:
-  std::unique_ptr<functionsNode> funcs;
+  Parse::DataTypes declType;
+  std::string &name;
+  std::unique_ptr<Expr> expr;
 
 public:
-  programNode(std::unique_ptr<functionsNode> fns);
-  ~programNode() = default;
+  VarDecl(Parse::DataTypes declT, std::string &id,
+          std::unique_ptr<Expr> expression);
+  Parse::DataTypes getDeclType();
+  std::string &getName();
+  std::unique_ptr<Expr> &getExpr();
 };
-/*
- * functions -> func functions
- *            | func
- *
- * */
 
-class functionsNode : public ParseTreeNode {
+class returnNode : Stmt {
 private:
-  std::vector<std::unique_ptr<funcNode>> funcs;
+  std::unique_ptr<Expr> expr;
 
 public:
-  functionsNode();
-  void addFunc(std::unique_ptr<funcNode> func);
-  std::vector<std::unique_ptr<funcNode>> &getFuncs();
-  ~functionsNode() = default;
+  returnNode(std::unique_ptr<Expr> exprNode);
 };
 
-/*
- * func --> type proto compoundstmt
- *
- * */
-
-class funcNode : public ParseTreeNode {
-private:
-  std::unique_ptr<protoNode> proto;
-  std::unique_ptr<compoundStmtNode> compoundStmt;
-
-public:
-  funcNode(std::unique_ptr<protoNode> prototype,
-           std::unique_ptr<compoundStmtNode> compound);
-  ~funcNode() = default;
-  std::unique_ptr<protoNode> &getProto();
-  std::unique_ptr<compoundStmtNode> &getCompound();
-};
-
-// proto --> identifier '(' args ')'
-class protoNode : public ParseTreeNode {
-private:
-  std::unique_ptr<typeNode> returnType;
-  std::unique_ptr<argsNode> argList;
-  std::string id;
-
-public:
-  protoNode(std::unique_ptr<typeNode> ret, std::string name,
-            std::unique_ptr<argsNode> args);
-  ~protoNode() = default;
-  std::unique_ptr<argsNode> &getArgsNode();
-  DataTypes getTypeVal();
-  std::string &getId();
-};
-
-/*
- * args --> arg ',' args
- *       |  arg
- * */
-class argsNode : public ParseTreeNode {
-private:
-  std::vector<std::unique_ptr<argNode>> args;
-
-public:
-  argsNode();
-  ~argsNode() = default;
-  void addArg(std::unique_ptr<argNode> arg);
-  std::vector<std::unique_ptr<argNode>> &getArgs();
-  bool hasArgs();
-};
-
-/*
- * arg --> type identifier
- *
- * */
-class argNode : public ParseTreeNode {
-private:
-  std::unique_ptr<typeNode> type;
-  std::string id;
-
-public:
-  argNode(std::unique_ptr<typeNode> nodeType, std::string identifier);
-  ~argNode() = default;
-  std::string &getId();
-  DataTypes getTypeVal();
-};
-
-/**
-  compoundStmt --> '{' simpleList '}'
-*/
-class compoundStmtNode : public ParseTreeNode {
-private:
-  std::unique_ptr<simpleListNode> simpleList;
-
-public:
-  compoundStmtNode(std::unique_ptr<simpleListNode> simples);
-  ~compoundStmtNode() = default;
-
-  std::unique_ptr<simpleListNode> &getList() { return simpleList; }
-};
-
-/*
- * simpleList --> simpleStmt simpleList
- *             |  simpleStmt
- *
- * */
-
-class simpleListNode : public ParseTreeNode {
-private:
-  std::unique_ptr<simpleStmtNode> simpleStmt;
-  std::unique_ptr<simpleListNode> moreStmts;
-  std::vector<std::unique_ptr<simpleStmtNode>> simpleStmts;
-
-public:
-  simpleListNode();
-  void addStmt(std::unique_ptr<simpleStmtNode> stmt);
-  ~simpleListNode() = default;
-  std::vector<std::unique_ptr<simpleStmtNode>> &getStmts();
-};
-
-/*
- * simpleStmt --> declare
- *              | expr
- *              | return
- * */
-
-class simpleStmtNode : public ParseTreeNode {
-private:
-  std::unique_ptr<ParseTreeNode> stmt;
-  stmtType stmtType;
-
-public:
-  simpleStmtNode(std::unique_ptr<ParseTreeNode> decl, enum stmtType stmtT);
-  enum stmtType getStmtT();
-  std::unique_ptr<ParseTreeNode> &getChild();
-};
-
-class declareNode : public ParseTreeNode {
-private:
-  std::unique_ptr<typeNode> type;
-  std::string id;
-  std::unique_ptr<exprNode> expr;
-
-public:
-  declareNode(std::unique_ptr<typeNode> t, std::string i,
-              std::unique_ptr<exprNode> exp);
-  std::string &getId();
-};
-
-/*
- * return --> 'return' expr ';'
- *
- *
- */
-class returnNode : public ParseTreeNode {
-private:
-  std::unique_ptr<exprNode> expr;
-
-public:
-  returnNode(std::unique_ptr<exprNode> exp);
-};
-
-class typeNode : public ParseTreeNode {
-private:
-  DataTypes type;
-
-public:
-  typeNode(Tok::Token tok);
-  ~typeNode() = default;
-  bool invalid();
-  DataTypes getType();
-};
-
-class exprNode : public ParseTreeNode {
-private:
-  std::unique_ptr<assignExprNode> assign;
-
-public:
-  exprNode(std::unique_ptr<assignExprNode> ass);
-  ~exprNode() = default;
-};
-
-/*
- * assign --> eqExpr
- *          | ID '=' expr
- *
- * */
-class assignExprNode : public ParseTreeNode {
-private:
-  std::unique_ptr<BinaryOpNode> eq;
-  std::string id;
-  std::unique_ptr<exprNode> expr;
-
-public:
-  assignExprNode(std::unique_ptr<eqExprNode> eq_expr);
-  assignExprNode(std::string identifier, std::unique_ptr<exprNode> expr_ptr);
-  ~assignExprNode() = default;
-  std::string &getId();
-};
-
-/*
- * cmpExpr --> addExpr ('<' | '<=' | '>' | '>=') addExpr
- *          |  addExpr
- *
- * */
-
-class cmpExprNode : public BinaryOpNode {
-private:
-public:
-  cmpExprNode(std::unique_ptr<addExprNode> left,
-              std::unique_ptr<addExprNode> right, Tok::Token opr);
-  cmpExprNode(std::unique_ptr<addExprNode> left);
-
-  std::unique_ptr<addExprNode> &getLHS();
-  Operator getOp();
-};
-
-/*
- * eqExpr --> cmpExpr ('==' | '!=') cmpExpr
- *          | cmpExpr
- *
- * */
-class eqExprNode : public BinaryOpNode {
-private:
-public:
-  eqExprNode(std::unique_ptr<cmpExprNode> left,
-             std::unique_ptr<cmpExprNode> right, Tok::Token opr);
-  eqExprNode(std::unique_ptr<cmpExprNode> left);
-  Operator getOp();
-};
-/*
- *  addExpr --> multdiv ('*'| '/') multdiv
- *           |  multdiv
- *
- * */
-
-class addExprNode : public BinaryOpNode {
-public:
-  addExprNode(std::unique_ptr<multdivNode> left, Tok::Token opr,
-              std::unique_ptr<multdivNode> right);
-  addExprNode(std::unique_ptr<multdivNode> left);
-  Operator getOp();
-};
-
-/*
- * multdiv --> unary ('*'| '/') unary
- *          |  unary
- *
- * */
-class multdivNode : public BinaryOpNode {
+class Expr : Stmt {
 protected:
-  std::unique_ptr<unaryNode> lhs;
-  std::unique_ptr<unaryNode> rhs;
-  Operator op;
+  Parse::ExprType exprT;
 
 public:
-  multdivNode(std::unique_ptr<unaryNode> left, Tok::Token opr,
-              std::unique_ptr<unaryNode> right);
-  multdivNode(std::unique_ptr<unaryNode> left);
-  Operator getOp();
+  Parse::ExprType getExprType();
+  Expr() = delete;
 };
 
-class unaryNode : public ParseTreeNode {
+class BinaryOp : Expr {
 private:
-  std::unique_ptr<primaryNode> operand;
-  Operator op;
+  Parse::BinaryOperators op;
+  std::unique_ptr<Expr> lhs;
+  std::unique_ptr<Expr> rhs;
 
 public:
-  unaryNode(Tok::Token opr, std::unique_ptr<primaryNode> rhs);
-  unaryNode(std::unique_ptr<primaryNode> rhs);
+  BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
+           Parse::BinaryOperators opcode);
 };
 
-/*
- * primary --> ID
- *          | NUM
- *          | STRINGLIT
- *          | 'call' fnCall
- *          | '(' expr ')'
- * */
-class primaryNode : public ParseTreeNode {
-public:
-  enum primaryType { EXPR, SYMBOL, LITERAL, FUNCCALL };
-  primaryNode(std::string identifier);
-  primaryNode(std::unique_ptr<exprNode> expr);
-  primaryNode(std::unique_ptr<fnCallNode> fncall);
-  primaryNode(std::string litVal, Tok::Token typ);
-  DataTypes getType();
-
+class UnaryOp : Expr {
 private:
-  std::string id_name;
-  std::string lexed_lit_val;
-  std::unique_ptr<ParseTreeNode> non_terminal_ptr;
-  std::unique_ptr<fnCallNode> fnc;
-  DataTypes type;
-  primaryType primType;
+  Parse::UnaryOperators op;
+  std::unique_ptr<Expr> input;
+
+public:
+  UnaryOp(std::unique_ptr<Expr> inp, Parse::UnaryOperators opc);
 };
 
-/**
-  fnCall -> identifier '(' callArgs ')'
-
-  */
-class fnCallNode : public ParseTreeNode {
-private:
-  std::string fnName;
-  std::unique_ptr<callArgsNode> args;
+class leafNode : Expr {
+protected:
+  Lexer::LexerToken tok;
 
 public:
-  fnCallNode(std::string &name, std::unique_ptr<callArgsNode> calls);
+  std::string &getLexeme();
+  Lexer::Tag getTag();
 };
 
-class callArgsNode : public ParseTreeNode {
+class fnCall : Expr {
 private:
-  std::vector<std::unique_ptr<primaryNode>> callArgs;
+  std::string &name;
+  std::vector<std::unique_ptr<callArgs>> args;
 
 public:
-  callArgsNode(std::vector<std::unique_ptr<primaryNode>> primaries);
+  fnCall(std::string &id, std::vector<std::unique_ptr<callArgs>> arguments);
+};
+
+class callArgs {
+private:
+  std::vector<std::unique_ptr<Expr>> args;
+
+public:
+  callArgs(std::vector<std::unique_ptr<Expr>> a);
 };

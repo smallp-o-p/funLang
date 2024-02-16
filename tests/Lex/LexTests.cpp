@@ -10,17 +10,17 @@
 //>=
 //==
 //!=
-
+using namespace Lexer;
 TEST(LexTests, LexBasicToken) {
-  std::deque<Tok::Token> tok_queue{
-      Tok::PLUS,   Tok::MINUS,  Tok::MULT,   Tok::DIV,    Tok::GTCMP,
-      Tok::LTCMP,  Tok::EQ,     Tok::LPAREN, Tok::RPAREN, Tok::LCURLY,
-      Tok::RCURLY, Tok::BANG,   Tok::COMMA,  Tok::COLON,  Tok::SEMI,
-      Tok::LTECMP, Tok::GTECMP, Tok::EQCMP,  Tok::NECMP,  Tok::ENDFILE};
-  std::unique_ptr<std::vector<TokValCat>> scanned =
+  std::deque<Tag> tok_queue{
+      Tag::PLUS,   Tag::MINUS,  Tag::MULT,   Tag::DIV,    Tag::GTCMP,
+      Tag::LTCMP,  Tag::EQ,     Tag::LPAREN, Tag::RPAREN, Tag::LCURLY,
+      Tag::RCURLY, Tag::BANG,   Tag::COMMA,  Tag::COLON,  Tag::SEMI,
+      Tag::LTECMP, Tag::GTECMP, Tag::EQCMP,  Tag::NECMP,  Tag::ENDFILE};
+  std::unique_ptr<std::vector<LexerToken>> scanned =
       std::move(lex("lex_Basic.txt"));
   EXPECT_NE(scanned, nullptr);
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     std::cout << tok.lexeme << std::endl;
     EXPECT_EQ(tok.syntactic_category, tok_queue.front());
     tok_queue.pop_front();
@@ -28,14 +28,14 @@ TEST(LexTests, LexBasicToken) {
 }
 
 TEST(LexTests, LexKeywords) {
-  std::deque<Tok::Token> tok_queue{
-      Tok::VOID, Tok::BOOL, Tok::CHAR,   Tok::STRING, Tok::I32,   Tok::I64,
-      Tok::F32,  Tok::F64,  Tok::RETURN, Tok::TRUE,   Tok::FALSE, Tok::ENDFILE};
+  std::deque<Tag> tok_queue{Tag::VOID,   Tag::BOOL, Tag::CHAR,  Tag::STRING,
+                            Tag::I32,    Tag::I64,  Tag::F32,   Tag::F64,
+                            Tag::RETURN, Tag::TRUE, Tag::FALSE, Tag::ENDFILE};
 
-  std::unique_ptr<std::vector<TokValCat>> scanned =
+  std::unique_ptr<std::vector<LexerToken>> scanned =
       std::move(lex("lex_Keywords.txt"));
   EXPECT_NE(scanned, nullptr);
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     std::cout << tok.lexeme << std::endl;
     EXPECT_EQ(tok.syntactic_category, tok_queue.front());
     tok_queue.pop_front();
@@ -43,36 +43,36 @@ TEST(LexTests, LexKeywords) {
 }
 
 TEST(LexTests, IntNumLiterals) {
-  std::unique_ptr<std::vector<TokValCat>> scanned =
+  std::unique_ptr<std::vector<LexerToken>> scanned =
       std::move(lex("lex_IntNumLits.txt"));
   EXPECT_NE(scanned, nullptr);
   scanned->pop_back();
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     std::cout << tok.lexeme << std::endl;
-    EXPECT_EQ(tok.syntactic_category, Tok::NUM);
+    EXPECT_EQ(tok.syntactic_category, Tag::NUM);
   }
 }
 
 TEST(LexTests, RealNumLiterals) {
-  TokValCat currentTok;
-  std::unique_ptr<std::vector<TokValCat>> scanned =
+  LexerToken currentTok;
+  std::unique_ptr<std::vector<LexerToken>> scanned =
       std::move(lex("lex_RealNumLits.txt"));
   EXPECT_NE(scanned, nullptr);
   scanned->pop_back();
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     std::cout << tok.lexeme << std::endl;
-    EXPECT_EQ(tok.syntactic_category, Tok::POINTNUM);
+    EXPECT_EQ(tok.syntactic_category, Tag::POINTNUM);
   }
 }
 
 TEST(LexTests, StringLits) {
-  std::deque<Tok::Token> tok_queue{
-      Tok::STRINGLIT, Tok::STRINGLIT, Tok::STRINGLIT, Tok::STRINGLIT,
-      Tok::STRINGLIT, Tok::STRINGLIT, Tok::ENDFILE};
-  std::unique_ptr<std::vector<TokValCat>> scanned =
+  std::deque<Tag> tok_queue{Tag::STRINGLIT, Tag::STRINGLIT, Tag::STRINGLIT,
+                            Tag::STRINGLIT, Tag::STRINGLIT, Tag::STRINGLIT,
+                            Tag::ENDFILE};
+  std::unique_ptr<std::vector<LexerToken>> scanned =
       std::move(lex("lex_StringLits.txt"));
   EXPECT_NE(scanned, nullptr);
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     std::cout << tok.lexeme << std::endl;
     EXPECT_EQ(tok.syntactic_category, tok_queue.front());
     tok_queue.pop_front();
@@ -80,16 +80,16 @@ TEST(LexTests, StringLits) {
 }
 
 TEST(LexTests, ExampleFunc) {
-  std::deque<Tok::Token> toks = {
-      Tok::I32,        Tok::IDENTIFIER, Tok::LPAREN, Tok::I32,
-      Tok::IDENTIFIER, Tok::COMMA,      Tok::I32,    Tok::IDENTIFIER,
-      Tok::RPAREN,     Tok::LCURLY,     Tok::STRING, Tok::IDENTIFIER,
-      Tok::EQ,         Tok::STRINGLIT,  Tok::RETURN, Tok::NUM,
-      Tok::SEMI,       Tok::RCURLY,     Tok::ENDFILE};
-  std::unique_ptr<std::vector<TokValCat>> scanned =
+  std::deque<Tag> toks = {
+      Tag::I32,        Tag::IDENTIFIER, Tag::LPAREN, Tag::I32,
+      Tag::IDENTIFIER, Tag::COMMA,      Tag::I32,    Tag::IDENTIFIER,
+      Tag::RPAREN,     Tag::LCURLY,     Tag::STRING, Tag::IDENTIFIER,
+      Tag::EQ,         Tag::STRINGLIT,  Tag::RETURN, Tag::NUM,
+      Tag::SEMI,       Tag::RCURLY,     Tag::ENDFILE};
+  std::unique_ptr<std::vector<LexerToken>> scanned =
       lex("./lex_ExampleFunc.txt");
   EXPECT_NE(scanned, nullptr);
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     EXPECT_EQ(tok.syntactic_category, toks.front())
         << "Failed at " << tok.lexeme << std::endl;
     std::cout << "Passed" << std::endl;
@@ -98,13 +98,13 @@ TEST(LexTests, ExampleFunc) {
 }
 
 TEST(LexTests, StringMode) {
-  std::deque<Tok::Token> toks = {Tok::I32,  Tok::VOID,   Tok::BOOL,
-                                 Tok::CHAR, Tok::STRING, Tok::I64,
-                                 Tok::F32,  Tok::F64,    Tok::ENDFILE};
+  std::deque<Tag> toks = {Tag::I32,  Tag::VOID,   Tag::BOOL,
+                          Tag::CHAR, Tag::STRING, Tag::I64,
+                          Tag::F32,  Tag::F64,    Tag::ENDFILE};
   auto scanned = lex("i32 void bool char string i64 f32 f64", true);
 
   EXPECT_NE(scanned, nullptr);
-  for (TokValCat tok : *scanned) {
+  for (LexerToken tok : *scanned) {
     std::cout << tok.lexeme << std::endl;
     EXPECT_EQ(tok.syntactic_category, toks.front())
         << "Failed at " << tok.lexeme << std::endl;

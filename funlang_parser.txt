@@ -22,10 +22,7 @@ arg : type ID
     ;
 
 compoundstmt 
-    : '{' simplelist '}'
-    ;
-simplelist
-    : simplestmt+ 
+    : '{' simplestmt+ '}'
     ;
     
 simplestmt 
@@ -83,7 +80,7 @@ fnCall
     ;
     
 callArgs 
-    : (primary (',' primary)*)?
+    : (expr (',' expr)*)?
     ;
 
 type : VOID 

@@ -9,7 +9,7 @@
 uint32_t colNum = 1;
 uint32_t lineNum = 1;
 std::string fileName;
-
+namespace Lexer {
 std::unique_ptr<std::istream> initInp(const std::string &filepath,
                                       bool usingString) {
   if (usingString) {
@@ -42,19 +42,19 @@ std::unique_ptr<std::istream> initInp(const std::string &filepath,
   }
 }
 
-std::unique_ptr<std::vector<TokValCat>> lex(const std::string &filepath,
-                                            bool usingString) {
+std::unique_ptr<std::vector<LexerToken>> lex(const std::string &filepath,
+                                             bool usingString) {
   auto input_init = std::move(initInp(filepath, usingString));
   if (!input_init) {
     return nullptr;
   }
-  std::unique_ptr<std::vector<TokValCat>> tokensPtr =
-      std::make_unique<std::vector<TokValCat>>();
-  TokValCat tokPair;
+  std::unique_ptr<std::vector<LexerToken>> tokensPtr =
+      std::make_unique<std::vector<LexerToken>>();
+  LexerToken tokPair;
   bool failed = false;
   while ((tokPair = getNextTok(input_init)).syntactic_category !=
-         Tok::ENDFILE) {
-    if (tokPair.syntactic_category == Tok::ERR) {
+         Tag::ENDFILE) {
+    if (tokPair.syntactic_category == Tag::ERR) {
       failed = true;
     }
     tokensPtr->push_back(tokPair);
@@ -62,15 +62,15 @@ std::unique_ptr<std::vector<TokValCat>> lex(const std::string &filepath,
   if (failed) {
     return nullptr;
   }
-  tokensPtr->push_back({"\0", Tok::ENDFILE});
+  tokensPtr->push_back({"\0", Tag::ENDFILE});
   if (!usingString) {
     dynamic_cast<std::ifstream *>(input_init.get())->close();
   }
   return std::move(tokensPtr);
 }
 
-TokValCat getNextTok(const std::unique_ptr<std::istream> &inp) {
-  using namespace Tok;
+LexerToken getNextTok(const std::unique_ptr<std::istream> &inp) {
+  using namespace Lexer;
   char c = ' ';
   while (isspace(c)) {
     if (c == '\n') {
@@ -81,52 +81,53 @@ TokValCat getNextTok(const std::unique_ptr<std::istream> &inp) {
   colNum++;
   switch (c) {
   case ',':
-    return TokValCat{",", Tok::COMMA};
+    return LexerToken{",", Tag::COMMA};
   case '{':
-    return TokValCat{"{", LCURLY};
+    return LexerToken{"{", Tag::LCURLY};
   case '}':
-    return TokValCat{"}", RCURLY};
+    return LexerToken{"}", Tag::RCURLY};
   case '(':
-    return TokValCat{"(", LPAREN};
+    return LexerToken{"(", Tag::LPAREN};
   case ')':
-    return TokValCat{")", RPAREN};
+    return LexerToken{")", Tag::RPAREN};
   case '=':
     if (nextIs('=', inp)) {
-      return TokValCat{"==", EQCMP};
+      return LexerToken{"==", Tag::EQCMP};
     } else {
-      return TokValCat{"=", EQ};
+      return LexerToken{"=", Tag::EQ};
     }
   case ':':
-    return TokValCat{":", COLON};
+    return LexerToken{":", Tag::COLON};
   case ';':
-    return TokValCat{";", SEMI};
+    return LexerToken{";", Tag::SEMI};
   case '!':
     if (nextIs('=', inp)) {
-      return TokValCat{"!=", NECMP};
+      return LexerToken{"!=", Tag::NECMP};
     } else {
-      return TokValCat{"!", BANG};
+      return LexerToken{"!", Tag::BANG};
     }
   case '<':
     if (nextIs('=', inp)) {
-      return TokValCat{"<=", LTECMP};
+      return LexerToken{"<=", LTECMP};
     } else {
-      return TokValCat{"<", LTCMP};
+      return LexerToken{"<", LTCMP};
     }
   case '>':
     if (nextIs('=', inp)) {
-      return TokValCat{">=", GTECMP};
+      return LexerToken{">=", GTECMP};
     } else {
-      return TokValCat{">", GTCMP};
+      return LexerToken{">", GTCMP};
     }
   case '+':
-    return nextIs('+', inp) ? TokValCat{"++", PLUSPLUS} : TokValCat{"+", PLUS};
+    return nextIs('+', inp) ? LexerToken{"++", PLUSPLUS}
+                            : LexerToken{"+", PLUS};
   case '-':
-    return nextIs('-', inp) ? TokValCat{"++", Tok::MINUSMINUS}
-                            : TokValCat{"-", MINUS};
+    return nextIs('-', inp) ? LexerToken{"++", Tag::MINUSMINUS}
+                            : LexerToken{"-", MINUS};
   case '*':
-    return TokValCat{"*", MULT};
+    return LexerToken{"*", MULT};
   case '/':
-    return TokValCat{"/", DIV};
+    return LexerToken{"/", DIV};
   case '\"':
     return isString(inp);
   }
@@ -139,11 +140,11 @@ TokValCat getNextTok(const std::unique_ptr<std::istream> &inp) {
     return isIdentifier(inp);
   }
   if (inp->eof()) {
-    return TokValCat{"!!EOF!!", Tok::ENDFILE};
+    return LexerToken{"!!EOF!!", Tag::ENDFILE};
   } else {
     std::cout << "Fatal: Unexpected character '" << c << "' on line " << lineNum
               << std::endl;
-    return TokValCat{"UH OH", Tok::ERR};
+    return LexerToken{"UH OH", Tag::ERR};
   }
 }
 /*
@@ -158,7 +159,7 @@ bool nextIs(char c, const std::unique_ptr<std::istream> &inp) {
   }
   return false;
 }
-TokValCat isString(const std::unique_ptr<std::istream> &inp) {
+LexerToken isString(const std::unique_ptr<std::istream> &inp) {
   char c;
   std::string string_lit = "\"";
 
@@ -168,13 +169,13 @@ TokValCat isString(const std::unique_ptr<std::istream> &inp) {
 
   if (inp->eof()) {
     std::cerr << "Unclosed string literal :(" << std::endl;
-    return TokValCat{"UH OH", Tok::ERR};
+    return LexerToken{"UH OH", Tag::ERR};
   }
   string_lit.push_back('\"');
-  return TokValCat{string_lit, Tok::STRINGLIT};
+  return LexerToken{string_lit, Tag::STRINGLIT};
 }
 
-TokValCat isNum(const std::unique_ptr<std::istream> &inp) {
+LexerToken isNum(const std::unique_ptr<std::istream> &inp) {
   std::string numStr = "";
   char c;
   bool seenDot = false;
@@ -192,12 +193,12 @@ TokValCat isNum(const std::unique_ptr<std::istream> &inp) {
     numStr.push_back('0');
   }
   if (seenDot) {
-    return TokValCat{numStr, Tok::POINTNUM};
+    return LexerToken{numStr, Tag::POINTNUM};
   }
-  return TokValCat{numStr, Tok::NUM};
+  return LexerToken{numStr, Tag::NUM};
 }
 
-TokValCat isIdentifier(const std::unique_ptr<std::istream> &inp) {
+LexerToken isIdentifier(const std::unique_ptr<std::istream> &inp) {
 
   std::string id_str = "";
 
@@ -208,29 +209,31 @@ TokValCat isIdentifier(const std::unique_ptr<std::istream> &inp) {
     id_str.push_back(c);
   }
   if (id_str.compare("void") == 0) {
-    return TokValCat{id_str, Tok::VOID};
+    return LexerToken{id_str, Tag::VOID};
   } else if (id_str.compare("bool") == 0) {
-    return TokValCat{id_str, Tok::BOOL};
+    return LexerToken{id_str, Tag::BOOL};
   } else if (id_str.compare("char") == 0) {
-    return TokValCat{id_str, Tok::CHAR};
+    return LexerToken{id_str, Tag::CHAR};
   } else if (id_str.compare("string") == 0) {
-    return TokValCat{id_str, Tok::STRING};
+    return LexerToken{id_str, Tag::STRING};
   } else if (id_str == "i32") {
-    return TokValCat{id_str, Tok::I32};
+    return LexerToken{id_str, Tag::I32};
   } else if (id_str == "i64") {
-    return TokValCat{id_str, Tok::I64};
+    return LexerToken{id_str, Tag::I64};
   } else if (id_str == "f32") {
-    return TokValCat{id_str, Tok::F32};
+    return LexerToken{id_str, Tag::F32};
   } else if (id_str == "f64") {
-    return TokValCat{id_str, Tok::F64};
+    return LexerToken{id_str, Tag::F64};
   } else if (id_str == "return") {
-    return TokValCat{id_str, Tok::RETURN};
+    return LexerToken{id_str, Tag::RETURN};
   } else if (id_str == "true") {
-    return TokValCat{id_str, Tok::TRUE};
+    return LexerToken{id_str, Tag::TRUE};
   } else if (id_str == "false") {
-    return TokValCat{id_str, Tok::FALSE};
+    return LexerToken{id_str, Tag::FALSE};
   } else if (id_str == "call") {
-    return TokValCat{id_str, Tok::CALL};
+    return LexerToken{id_str, Tag::CALL};
   }
-  return TokValCat{id_str, Tok::IDENTIFIER};
+  return LexerToken{id_str, Tag::IDENTIFIER};
 }
+
+}; // namespace Lexer
