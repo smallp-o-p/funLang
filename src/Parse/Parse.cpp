@@ -161,6 +161,7 @@ std::unique_ptr<CompoundStmt> compoundStmt() {
 
 std::unique_ptr<Stmt> simpleStmt() {
   using namespace Lexer;
+  std::unique_ptr<Stmt> stmt_inq;
   switch (peek().syntactic_category) {
   case Tag::VOID:
   case Tag::BOOL:
@@ -169,42 +170,266 @@ std::unique_ptr<Stmt> simpleStmt() {
   case Tag::F32:
   case Tag::F64:
   case Tag::STRING:
-    return decl();
+    stmt_inq = decl();
+    break;
   case Tag::IDENTIFIER: {
-    if (lookahead(1).syntactic_category == Tag::EQ) {
-      return decl();
+    if (lookahead(1).syntactic_category ==
+        Tag::EQ) { // unsure how we'll handle struct members but we'll find out
+      stmt_inq = decl();
     } else {
-      return expr();
+      stmt_inq = expr();
     }
+    break;
   }
   case Tag::RETURN: {
-    return returnStmt();
+    stmt_inq = returnStmt();
+    break;
   }
   default:
     reportError("Current token '%s' is not viable to expand in Stmt\n",
                 peek().lexeme.c_str());
     return nullptr;
   }
+  if (!stmt_inq) {
+    return nullptr;
+  }
+  if (!match({Lexer::Tag::SEMI})) {
+    reportError("Expected ';' after statement, received '%s'",
+                peek().lexeme.c_str());
+    return nullptr;
+  }
+  return stmt_inq;
 }
-std::unique_ptr<Stmt> decl() {
-  std::unique_ptr<TypeNode> t_node = type();
-  if (!t_node) {
+std::unique_ptr<VarDecl> decl() {
+  std::unique_ptr<TypeNode> type_node = type();
+  if (!type_node) {
     return nullptr;
   }
   if (!match({Lexer::Tag::IDENTIFIER})) {
     reportError("Expected Identifier, received '%s'\n", peek().lexeme.c_str());
     return nullptr;
   }
-  const std::string &id = previous().lexeme;
+  std::string id = previous().lexeme;
 
   if (!match({Lexer::Tag::EQ})) {
     reportError("Expected '=', received '%s'\n", peek().lexeme.c_str());
     return nullptr;
   }
-  std::unique_ptr<Stmt> expr_node = expr();
+  std::unique_ptr<Expr> expr_node = expr();
   if (!expr_node) {
     return nullptr;
   }
+  return std::make_unique<VarDecl>(std::move(type_node), id,
+                                   std::move(expr_node));
+}
+
+std::unique_ptr<returnNode> returnStmt() {
+  std::unique_ptr<Expr> expr_node = expr();
+  return std::make_unique<returnNode>(std::move(expr_node));
+}
+
+std::unique_ptr<Expr> expr() { return assign(); }
+
+std::unique_ptr<Expr> assign() {
+  if (match({Lexer::Tag::IDENTIFIER})) {
+    std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(previous());
+    if (!match({Lexer::Tag::EQ})) {
+      reportError(
+          "Expected '=' in (assumed) variable assignment, received '%s'",
+          peek().lexeme.c_str());
+      return nullptr;
+    }
+    std::unique_ptr<Expr> expr_node = expr();
+    if (!expr_node) {
+      return nullptr;
+    }
+    return std::make_unique<BinaryOp>(std::move(leaf), std::move(expr_node),
+                                      Parse::BinaryOperators::ASSIGN);
+  } else {
+    return eqExpr();
+  }
+}
+
+std::unique_ptr<Expr> eqExpr() {
+  std::unique_ptr<Expr> cmp_node = cmpExpr();
+  if (!cmp_node) {
+    return nullptr;
+  }
+  if (match({Lexer::Tag::EQCMP, Lexer::Tag::NECMP})) {
+    Parse::BinaryOperators opcode =
+        previous().syntactic_category == Lexer::Tag::EQCMP
+            ? Parse::BinaryOperators::EQEQ
+            : Parse::BinaryOperators::NE;
+    std::unique_ptr<Expr> cmp_node2 = cmpExpr();
+
+    if (!cmp_node2) {
+      return nullptr;
+    }
+    return std::make_unique<BinaryOp>(std::move(cmp_node), std::move(cmp_node2),
+                                      opcode);
+  }
+  return cmp_node;
+}
+
+std::unique_ptr<Expr> cmpExpr() {
+  std::unique_ptr<Expr> add_node = addExpr();
+  if (!add_node) {
+    return nullptr;
+  }
+  using namespace Lexer;
+  if (match({Tag::LTCMP, Tag::LTECMP, Tag::GTCMP, Tag::GTECMP})) {
+    using namespace Parse;
+    BinaryOperators opcode;
+    switch (previous().syntactic_category) {
+    case Tag::LTCMP:
+      opcode = BinaryOperators::LT;
+      break;
+    case Tag::LTECMP:
+      opcode = BinaryOperators::LTE;
+      break;
+    case Tag::GTCMP:
+      opcode = BinaryOperators::GT;
+      break;
+    case Tag::GTECMP:
+      opcode = BinaryOperators::GTE;
+      break;
+    default:
+      opcode = BinaryOperators::UNDEFINED;
+      break;
+    }
+    std::unique_ptr<Expr> add_node2 = addExpr();
+    if (!add_node2) {
+      return nullptr;
+    }
+    return std::make_unique<BinaryOp>(std::move(add_node), std::move(add_node2),
+                                      opcode);
+  }
+  return add_node;
+}
+
+std::unique_ptr<Expr> addExpr() {
+  std::unique_ptr<Expr> multdiv_node = multdiv();
+  if (!multdiv_node) {
+    return nullptr;
+  }
+  if (match({Lexer::Tag::PLUS, Lexer::Tag::MINUS})) {
+    Parse::BinaryOperators opcode =
+        previous().syntactic_category == Lexer::Tag::PLUS
+            ? Parse::BinaryOperators::ADD
+            : Parse::BinaryOperators::SUBTRACT;
+    std::unique_ptr<Expr> multdiv_node2 = multdiv();
+    if (!multdiv_node2) {
+      return nullptr;
+    }
+    return std::make_unique<BinaryOp>(std::move(multdiv_node),
+                                      std::move(multdiv_node2), opcode);
+  }
+  return multdiv_node;
+}
+
+std::unique_ptr<Expr> multdiv() {
+  std::unique_ptr<Expr> unary_node = unary();
+
+  if (!unary_node) {
+    return nullptr;
+  }
+  if (match({Lexer::Tag::MULT, Lexer::Tag::DIV})) {
+    Parse::BinaryOperators opcode =
+        previous().syntactic_category == Lexer::Tag::MULT
+            ? Parse::BinaryOperators::MULT
+            : Parse::BinaryOperators::DIV;
+    std::unique_ptr<Expr> unary_node2 = unary();
+    if (!unary_node2) {
+      return nullptr;
+    }
+    return std::make_unique<BinaryOp>(std::move(unary_node),
+                                      std::move(unary_node2), opcode);
+  }
+  return unary_node;
+}
+
+std::unique_ptr<Expr> unary() {
+  using namespace Lexer;
+  Parse::UnaryOperators opcode = Parse::UnaryOperators::NOP;
+  if (match({Lexer::Tag::PLUSPLUS, Lexer::Tag::MINUSMINUS, Lexer::Tag::BANG,
+             Lexer::Tag::MINUS})) {
+    switch (previous().syntactic_category) {
+    case Tag::PLUSPLUS:
+      opcode = Parse::UnaryOperators::PREINCREMENT;
+      break;
+    case Tag::BANG:
+      opcode = Parse::UnaryOperators::BANG;
+      break;
+    case Tag::MINUSMINUS:
+      opcode = Parse::UnaryOperators::PREDECREMENT;
+      break;
+    case Tag::MINUS:
+      opcode = Parse::UnaryOperators::NEGATE;
+      break;
+    default:;
+    }
+  }
+  std::unique_ptr<Expr> primary_node = primary();
+  if (!primary_node) {
+    return nullptr;
+  }
+  if (opcode != Parse::UnaryOperators::NOP) {
+    return std::make_unique<UnaryOp>(std::move(primary_node), opcode);
+  } else {
+    return primary_node;
+  }
+}
+
+std::unique_ptr<Expr> primary() {
+  if (match({Lexer::Tag::LPAREN})) {
+    backup();
+    std::unique_ptr<Expr> expr_node = expr();
+    if (!match({Lexer::Tag::RPAREN})) {
+      reportError("Expected ')', received '%s'\n", peek().lexeme.c_str());
+      return nullptr;
+    }
+    return expr_node;
+  } else if (match({Lexer::Tag::IDENTIFIER})) {
+    if (peek().syntactic_category == Lexer::Tag::LPAREN) {
+      std::unique_ptr<Expr> fncall_node = fnCall();
+      if (!fncall_node) {
+        return nullptr;
+      }
+    } else { /* identifier */
+      std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(previous());
+      return leaf;
+    }
+  } else if (match({Lexer::Tag::POINTNUM, Lexer::Tag::NUM,
+                    Lexer::Tag::STRINGLIT, Lexer::Tag::TRUE,
+                    Lexer::Tag::FALSE})) {
+    return std::make_unique<leafNode>(previous());
+  }
+  reportError("Unexpected token '%s' in primary.\n", peek().lexeme.c_str());
+  return nullptr;
+}
+
+std::unique_ptr<Expr> fnCall() {
+  if (!match({Lexer::Tag::IDENTIFIER})) {
+    return nullptr;
+  }
+  std::string id = previous().lexeme;
+  if (!match({Lexer::Tag::LPAREN})) {
+    reportError("Expected '(', received '%s' in function call declaration \n",
+                peek().lexeme.c_str());
+    return nullptr;
+  }
+  std::unique_ptr<callArgList> callargs_node = callArgs();
+
+  if (!callargs_node) {
+    return nullptr;
+  }
+
+  if (!match({Lexer::Tag::RPAREN})) {
+    reportError("Expected ')', received '%s' in argumment list declaration. \n",
+                peek().lexeme.c_str());
+    return nullptr;
+  }
+  return std::make_unique<fnCallNode>(id, std::move(callargs_node));
 }
 
 int parse() {
