@@ -22,7 +22,7 @@ arg : type ID
     ;
 
 compoundstmt 
-    : '{' simplestmt+ '}'
+    : '{' (simplestmt ';')+ '}'
     ;
     
 simplestmt 
@@ -43,7 +43,7 @@ return : 'return' expr ';';
 
 assign 
     : eqExpr
-    | ID '=' expr
+    | ID ('='|'+=' | '-=') expr
     ;
 eqExpr 
     : cmpExpr ('=='|'!=') cmpExpr
@@ -62,7 +62,7 @@ multdiv
     | unary
     ;
 unary 
-    : ('++'|'--'| '!'| '-') primary
+    : ('++'|'--'| '!'| '-') primary 
     | primary
     ;
 primary 

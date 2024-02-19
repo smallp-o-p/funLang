@@ -35,7 +35,9 @@ enum BinaryOperators {
   ADDASSIGN,
   SUBASSIGN,
   ADD,
-  NONE
+  ASSIGN,
+  NONE,
+  UNDEFINED
 };
 
 enum UnaryOperators {
@@ -43,7 +45,9 @@ enum UnaryOperators {
   PREDECREMENT,
   POSTINCREMENT,
   POSTDECREMENT,
-  BANG
+  BANG,
+  NEGATE,
+  NOP
 };
 
 enum ExprType { PRIMARY, FNCALL, UNARY, BINARY };
@@ -64,7 +68,7 @@ class Expr;
 class ReturnNode;
 class TypeNode;
 class fnCall;
-class callArgs;
+class callArgList;
 
 class ProgramNode {
 private:
@@ -152,7 +156,7 @@ public:
   virtual Parse::StmtType getStmtT();
 };
 
-class VarDecl : Stmt {
+class VarDecl : public Stmt {
 private:
   std::unique_ptr<TypeNode> type;
   std::string &name;
@@ -166,7 +170,7 @@ public:
   std::unique_ptr<Expr> &getExpr();
 };
 
-class returnNode : Stmt {
+class returnNode : public Stmt {
 private:
   std::unique_ptr<Expr> expr;
 
@@ -174,7 +178,7 @@ public:
   returnNode(std::unique_ptr<Expr> exprNode);
 };
 
-class Expr : Stmt {
+class Expr : public Stmt {
 protected:
   Parse::ExprType exprT;
 
@@ -183,7 +187,7 @@ public:
   Expr() = delete;
 };
 
-class BinaryOp : Expr {
+class BinaryOp : public Expr {
 private:
   Parse::BinaryOperators op;
   std::unique_ptr<Expr> lhs;
@@ -194,37 +198,42 @@ public:
            Parse::BinaryOperators opcode);
 };
 
-class UnaryOp : Expr {
+class UnaryOp : public Expr {
 private:
   Parse::UnaryOperators op;
   std::unique_ptr<Expr> input;
 
 public:
+  UnaryOp();
+  void addOp(Parse::UnaryOperators opc);
+  void addInput();
   UnaryOp(std::unique_ptr<Expr> inp, Parse::UnaryOperators opc);
 };
 
-class leafNode : Expr {
+class leafNode : public Expr {
 protected:
   Lexer::LexerToken tok;
 
 public:
   std::string &getLexeme();
   Lexer::Tag getTag();
+
+  leafNode(Lexer::LexerToken tok);
 };
 
-class fnCall : Expr {
+class fnCallNode : public Expr {
 private:
   std::string &name;
-  std::vector<std::unique_ptr<callArgs>> args;
+  std::unique_ptr<callArgList> args;
 
 public:
-  fnCall(std::string &id, std::vector<std::unique_ptr<callArgs>> arguments);
+  fnCallNode(std::string &id, std::unique_ptr<callArgList> arguments);
 };
 
-class callArgs {
+class callArgList {
 private:
   std::vector<std::unique_ptr<Expr>> args;
 
 public:
-  callArgs(std::vector<std::unique_ptr<Expr>> a);
+  callArgList(std::vector<std::unique_ptr<Expr>> a);
 };
