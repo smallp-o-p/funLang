@@ -19,6 +19,7 @@ enum DataTypes {
   f32,
   f64,
   STRING,
+  USERDEFINED,
   INVALID
 };
 
@@ -86,11 +87,10 @@ public:
 class TypeNode {
 private:
   Parse::DataTypes type;
-  std::string &user_defined;
+  std::string user_defined;
 
 public:
-  TypeNode(Lexer::LexerToken tag);
-  TypeNode(Lexer::LexerToken tag, std::string &user);
+  TypeNode(Lexer::LexerToken &tok);
 };
 
 class FunctionsNode {
@@ -114,7 +114,7 @@ public:
 class PrototypeNode {
 private:
   std::unique_ptr<TypeNode> type;
-  std::string &name;
+  std::string name;
   std::unique_ptr<ArgumentsNode> args;
 
 public:
@@ -127,13 +127,13 @@ private:
   std::vector<std::unique_ptr<ArgNode>> argList;
 
 public:
-  ArgumentsNode(std::vector<std::unique_ptr<ArgNode>>);
+  ArgumentsNode(std::vector<std::unique_ptr<ArgNode>> &args);
 };
 
 class ArgNode {
 private:
   std::unique_ptr<TypeNode> type;
-  std::string &argName;
+  std::string argName;
 
 public:
   ArgNode(std::unique_ptr<TypeNode> type, const std::string &id);
@@ -144,7 +144,7 @@ private:
   std::vector<std::unique_ptr<Stmt>> stmts;
 
 public:
-  CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples);
+  CompoundStmt(std::vector<std::unique_ptr<Stmt>> &simples);
 };
 
 class Stmt {
@@ -152,14 +152,15 @@ protected:
   Parse::StmtType stmtT;
 
 public:
+  Stmt(Parse::StmtType t) { stmtT = t; }
   Stmt() = delete;
-  virtual Parse::StmtType getStmtT();
+  virtual Parse::StmtType getStmtT() { return stmtT; };
 };
 
 class VarDecl : public Stmt {
 private:
   std::unique_ptr<TypeNode> type;
-  std::string &name;
+  std::string name;
   std::unique_ptr<Expr> expr;
 
 public:
@@ -167,7 +168,7 @@ public:
           std::unique_ptr<Expr> expression);
   Parse::DataTypes getDeclType();
   std::string &getName();
-  std::unique_ptr<Expr> &getExpr();
+  Expr &getExpr();
 };
 
 class returnNode : public Stmt {
@@ -185,6 +186,7 @@ protected:
 public:
   Parse::ExprType getExprType();
   Expr() = delete;
+  Expr(Parse::ExprType t) : Stmt(Parse::StmtType::EXPR) { exprT = t; }
 };
 
 class BinaryOp : public Expr {
@@ -215,19 +217,19 @@ protected:
   Lexer::LexerToken tok;
 
 public:
-  std::string &getLexeme();
+  std::string_view getLexeme();
   Lexer::Tag getTag();
 
-  leafNode(Lexer::LexerToken tok);
+  leafNode(const Lexer::LexerToken &tok);
 };
 
 class fnCallNode : public Expr {
 private:
-  std::string &name;
+  std::string name;
   std::unique_ptr<callArgList> args;
 
 public:
-  fnCallNode(std::string &id, std::unique_ptr<callArgList> arguments);
+  fnCallNode(const std::string &id, std::unique_ptr<callArgList> arguments);
 };
 
 class callArgList {
@@ -235,5 +237,5 @@ private:
   std::vector<std::unique_ptr<Expr>> args;
 
 public:
-  callArgList(std::vector<std::unique_ptr<Expr>> a);
+  callArgList(std::vector<std::unique_ptr<Expr>> &a);
 };
