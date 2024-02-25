@@ -1,18 +1,41 @@
 #include "Parse.hpp"
 #include "Lex.hpp"
-#include "ParseTree.hpp"
-#include <memory>
 
-std::stack<Lexer::LexerToken> pastToks;
+std::stack<Lexer::Token> pastToks;
 LexedTokensSingleton &toks = LexedTokensSingleton::getInstance();
-bool match(std::vector<Lexer::Tag> tokens) { return toks.match(tokens); }
 bool check(Lexer::Tag tok) { return toks.check(tok); }
-Lexer::LexerToken previous() { return toks.previous(); }
-Lexer::LexerToken advance() { return toks.advance(); }
-Lexer::LexerToken peek() { return toks.peek(); }
-Lexer::LexerToken lookahead(int howMuch) { return toks.lookahead(howMuch); }
+bool match(std::initializer_list<Lexer::Tag> toExpect) {
+  for (auto elem : toExpect) {
+    if (check(elem)) {
+      return true;
+    };
+  }
+  return false;
+}
+Lexer::Token previous() { return toks.previous(); }
+Lexer::Token advance() { return toks.advance(); }
+Lexer::Token peek() { return toks.peek(); }
+Lexer::Token lookahead(int howMuch) { return toks.lookahead(howMuch); }
 void backup() { toks.backup(); }
 bool atEnd() { return toks.atEnd(); }
+
+void recoverFromError(currentNT whereWeFailed) {
+  switch (whereWeFailed) {
+  case STMT: {
+    do {
+      advance(); // discard symbols until we find a semicolon and eat the
+                 // semicolon
+    } while (peek().syntactic_category != Lexer::Tag::SEMI);
+    break;
+  }
+  case FUNCTION: {
+    do {
+      advance();
+    } while (peek().syntactic_category != Lexer::Tag::RCURLY);
+    break;
+  }
+  }
+}
 
 void reportError(const char *format, ...) {
   va_list args;
@@ -23,7 +46,7 @@ void reportError(const char *format, ...) {
 
 int initInstance(const std::string &fp, bool usingString) {
   toks.reset(); // reset for testing purposes
-  std::unique_ptr<std::vector<Lexer::LexerToken>> lexed =
+  std::unique_ptr<std::vector<Lexer::Token>> lexed =
       Lexer::lex(fp, usingString);
 
   if (!lexed) {
@@ -37,7 +60,7 @@ int initInstance(const std::string &fp, bool usingString) {
   return 0;
 }
 
-std::unique_ptr<ProgramNode> program() {
+std::unique_ptr<ProgramNode> Parser::program() {
   // TODO: globals
   std::unique_ptr<FunctionsNode> fns = std::move(functions());
 
@@ -48,7 +71,7 @@ std::unique_ptr<ProgramNode> program() {
   return std::make_unique<ProgramNode>(std::move(fns));
 }
 
-std::unique_ptr<FunctionsNode> functions() {
+std::unique_ptr<FunctionsNode> Parser::functions() {
   std::vector<std::unique_ptr<FunctionNode>> funcList;
   while (true) {
     std::unique_ptr<FunctionNode> fn = function();
@@ -63,7 +86,7 @@ std::unique_ptr<FunctionsNode> functions() {
   }
   return std::make_unique<FunctionsNode>(funcList);
 }
-std::unique_ptr<FunctionNode> function() {
+std::unique_ptr<FunctionNode> Parser::function() {
   std::unique_ptr<PrototypeNode> prototype = proto();
   if (!prototype) {
     reportError("Failed at function()");
@@ -84,7 +107,7 @@ std::unique_ptr<FunctionNode> function() {
                                         std::move(compound));
 }
 
-std::unique_ptr<PrototypeNode> proto() {
+std::unique_ptr<PrototypeNode> Parser::proto() {
   std::unique_ptr<TypeNode> type_node = type();
 
   if (!type_node) {
@@ -110,7 +133,7 @@ std::unique_ptr<PrototypeNode> proto() {
                                          std::move(args));
 }
 
-std::unique_ptr<ArgumentsNode> arguments() {
+std::unique_ptr<ArgumentsNode> Parser::arguments() {
   std::vector<std::unique_ptr<ArgNode>> argList;
 
   while (true) {
@@ -126,7 +149,7 @@ std::unique_ptr<ArgumentsNode> arguments() {
   return std::make_unique<ArgumentsNode>(argList);
 }
 
-std::unique_ptr<ArgNode> arg() {
+std::unique_ptr<ArgNode> Parser::arg() {
   std::unique_ptr<TypeNode> t_node = type();
   if (!t_node) {
     reportError("Expected type in prototype argument declaration\n");
@@ -142,24 +165,28 @@ std::unique_ptr<ArgNode> arg() {
   return std::make_unique<ArgNode>(std::move(t_node), id);
 }
 
-std::unique_ptr<CompoundStmt> compoundStmt() {
+std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
   std::vector<std::unique_ptr<Stmt>> stmts;
-
+  bool failed = false;
   while (true) {
     std::unique_ptr<Stmt> s = simpleStmt();
     if (!s) {
-      return nullptr;
+      failed = true;
+      recoverFromError(currentNT::STMT);
+    } else {
+      stmts.push_back(s);
     }
-    stmts.push_back(s);
-
     if (peek().syntactic_category == Lexer::Tag::RCURLY) {
       break;
     }
   }
+  if (failed) {
+    return nullptr;
+  }
   return std::make_unique<CompoundStmt>(stmts);
 }
 
-std::unique_ptr<Stmt> simpleStmt() {
+std::unique_ptr<Stmt> Parser::simpleStmt() {
   using namespace Lexer;
   std::unique_ptr<Stmt> stmt_inq;
   switch (peek().syntactic_category) {
@@ -200,7 +227,7 @@ std::unique_ptr<Stmt> simpleStmt() {
   }
   return stmt_inq;
 }
-std::unique_ptr<VarDecl> decl() {
+std::unique_ptr<VarDecl> Parser::decl() {
   std::unique_ptr<TypeNode> type_node = type();
   if (!type_node) {
     return nullptr;
@@ -223,14 +250,14 @@ std::unique_ptr<VarDecl> decl() {
                                    std::move(expr_node));
 }
 
-std::unique_ptr<returnNode> returnStmt() {
+std::unique_ptr<returnNode> Parser::returnStmt() {
   std::unique_ptr<Expr> expr_node = expr();
   return std::make_unique<returnNode>(std::move(expr_node));
 }
 
-std::unique_ptr<Expr> expr() { return assign(); }
+std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
-std::unique_ptr<Expr> assign() {
+std::unique_ptr<Expr> Parser::assign() {
   if (match({Lexer::Tag::IDENTIFIER})) {
     std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(previous());
     if (!match({Lexer::Tag::EQ})) {
@@ -244,22 +271,22 @@ std::unique_ptr<Expr> assign() {
       return nullptr;
     }
     return std::make_unique<BinaryOp>(std::move(leaf), std::move(expr_node),
-                                      Parse::BinaryOperators::ASSIGN);
+                                      BinaryOp::BinaryOperators::ASSIGN);
   } else {
     return eqExpr();
   }
 }
 
-std::unique_ptr<Expr> eqExpr() {
+std::unique_ptr<Expr> Parser::eqExpr() {
   std::unique_ptr<Expr> cmp_node = cmpExpr();
   if (!cmp_node) {
     return nullptr;
   }
   if (match({Lexer::Tag::EQCMP, Lexer::Tag::NECMP})) {
-    Parse::BinaryOperators opcode =
+    BinaryOp::BinaryOperators opcode =
         previous().syntactic_category == Lexer::Tag::EQCMP
-            ? Parse::BinaryOperators::EQEQ
-            : Parse::BinaryOperators::NE;
+            ? BinaryOp::BinaryOperators::EQEQ
+            : BinaryOp::BinaryOperators::NE;
     std::unique_ptr<Expr> cmp_node2 = cmpExpr();
 
     if (!cmp_node2) {
@@ -271,30 +298,29 @@ std::unique_ptr<Expr> eqExpr() {
   return cmp_node;
 }
 
-std::unique_ptr<Expr> cmpExpr() {
+std::unique_ptr<Expr> Parser::cmpExpr() {
   std::unique_ptr<Expr> add_node = addExpr();
   if (!add_node) {
     return nullptr;
   }
   using namespace Lexer;
   if (match({Tag::LTCMP, Tag::LTECMP, Tag::GTCMP, Tag::GTECMP})) {
-    using namespace Parse;
-    BinaryOperators opcode;
+    BinaryOp::BinaryOperators opcode;
     switch (previous().syntactic_category) {
     case Tag::LTCMP:
-      opcode = BinaryOperators::LT;
+      opcode = BinaryOp::BinaryOperators::LT;
       break;
     case Tag::LTECMP:
-      opcode = BinaryOperators::LTE;
+      opcode = BinaryOp::BinaryOperators::LTE;
       break;
     case Tag::GTCMP:
-      opcode = BinaryOperators::GT;
+      opcode = BinaryOp::BinaryOperators::GT;
       break;
     case Tag::GTECMP:
-      opcode = BinaryOperators::GTE;
+      opcode = BinaryOp::BinaryOperators::GTE;
       break;
     default:
-      opcode = BinaryOperators::UNDEFINED;
+      opcode = BinaryOp::BinaryOperators::UNDEFINED;
       break;
     }
     std::unique_ptr<Expr> add_node2 = addExpr();
@@ -307,16 +333,16 @@ std::unique_ptr<Expr> cmpExpr() {
   return add_node;
 }
 
-std::unique_ptr<Expr> addExpr() {
+std::unique_ptr<Expr> Parser::addExpr() {
   std::unique_ptr<Expr> multdiv_node = multdiv();
   if (!multdiv_node) {
     return nullptr;
   }
   if (match({Lexer::Tag::PLUS, Lexer::Tag::MINUS})) {
-    Parse::BinaryOperators opcode =
+    BinaryOp::BinaryOperators opcode =
         previous().syntactic_category == Lexer::Tag::PLUS
-            ? Parse::BinaryOperators::ADD
-            : Parse::BinaryOperators::SUBTRACT;
+            ? BinaryOp::BinaryOperators::ADD
+            : BinaryOp::BinaryOperators::SUBTRACT;
     std::unique_ptr<Expr> multdiv_node2 = multdiv();
     if (!multdiv_node2) {
       return nullptr;
@@ -327,17 +353,17 @@ std::unique_ptr<Expr> addExpr() {
   return multdiv_node;
 }
 
-std::unique_ptr<Expr> multdiv() {
+std::unique_ptr<Expr> Parser::multdiv() {
   std::unique_ptr<Expr> unary_node = unary();
 
   if (!unary_node) {
     return nullptr;
   }
   if (match({Lexer::Tag::MULT, Lexer::Tag::DIV})) {
-    Parse::BinaryOperators opcode =
+    BinaryOp::BinaryOperators opcode =
         previous().syntactic_category == Lexer::Tag::MULT
-            ? Parse::BinaryOperators::MULT
-            : Parse::BinaryOperators::DIV;
+            ? BinaryOp::BinaryOperators::MULT
+            : BinaryOp::BinaryOperators::DIV;
     std::unique_ptr<Expr> unary_node2 = unary();
     if (!unary_node2) {
       return nullptr;
@@ -348,23 +374,23 @@ std::unique_ptr<Expr> multdiv() {
   return unary_node;
 }
 
-std::unique_ptr<Expr> unary() {
+std::unique_ptr<Expr> Parser::unary() {
   using namespace Lexer;
-  Parse::UnaryOperators opcode = Parse::UnaryOperators::NOP;
+  UnaryOp::UnaryOperators opcode = UnaryOp::UnaryOperators::NOP;
   if (match({Lexer::Tag::PLUSPLUS, Lexer::Tag::MINUSMINUS, Lexer::Tag::BANG,
              Lexer::Tag::MINUS})) {
     switch (previous().syntactic_category) {
     case Tag::PLUSPLUS:
-      opcode = Parse::UnaryOperators::PREINCREMENT;
+      opcode = UnaryOp::UnaryOperators::PREINCREMENT;
       break;
     case Tag::BANG:
-      opcode = Parse::UnaryOperators::BANG;
+      opcode = UnaryOp::UnaryOperators::BANG;
       break;
     case Tag::MINUSMINUS:
-      opcode = Parse::UnaryOperators::PREDECREMENT;
+      opcode = UnaryOp::UnaryOperators::PREDECREMENT;
       break;
     case Tag::MINUS:
-      opcode = Parse::UnaryOperators::NEGATE;
+      opcode = UnaryOp::UnaryOperators::NEGATE;
       break;
     default:;
     }
@@ -373,14 +399,14 @@ std::unique_ptr<Expr> unary() {
   if (!primary_node) {
     return nullptr;
   }
-  if (opcode != Parse::UnaryOperators::NOP) {
+  if (opcode != UnaryOp::UnaryOperators::NOP) {
     return std::make_unique<UnaryOp>(std::move(primary_node), opcode);
   } else {
     return primary_node;
   }
 }
 
-std::unique_ptr<Expr> primary() {
+std::unique_ptr<Expr> Parser::primary() {
   if (match({Lexer::Tag::LPAREN})) {
     backup();
     std::unique_ptr<Expr> expr_node = expr();
@@ -408,7 +434,7 @@ std::unique_ptr<Expr> primary() {
   return nullptr;
 }
 
-std::unique_ptr<Expr> fnCall() {
+std::unique_ptr<Expr> Parser::fnCall() {
   if (!match({Lexer::Tag::IDENTIFIER})) {
     return nullptr;
   }

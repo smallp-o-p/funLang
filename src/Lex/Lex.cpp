@@ -42,15 +42,15 @@ std::unique_ptr<std::istream> initInp(const std::string &filepath,
   }
 }
 
-std::unique_ptr<std::vector<LexerToken>> lex(const std::string &filepath,
-                                             bool usingString) {
+std::unique_ptr<std::vector<Token>> lex(const std::string &filepath,
+                                        bool usingString) {
   auto input_init = std::move(initInp(filepath, usingString));
   if (!input_init) {
     return nullptr;
   }
-  std::unique_ptr<std::vector<LexerToken>> tokensPtr =
-      std::make_unique<std::vector<LexerToken>>();
-  LexerToken tokPair;
+  std::unique_ptr<std::vector<Token>> tokensPtr =
+      std::make_unique<std::vector<Token>>();
+  Token tokPair;
   bool failed = false;
   while ((tokPair = getNextTok(input_init)).syntactic_category !=
          Tag::ENDFILE) {
@@ -69,7 +69,7 @@ std::unique_ptr<std::vector<LexerToken>> lex(const std::string &filepath,
   return std::move(tokensPtr);
 }
 
-LexerToken getNextTok(const std::unique_ptr<std::istream> &inp) {
+Token getNextTok(const std::unique_ptr<std::istream> &inp) {
   using namespace Lexer;
   char c = ' ';
   while (isspace(c)) {
@@ -81,53 +81,51 @@ LexerToken getNextTok(const std::unique_ptr<std::istream> &inp) {
   colNum++;
   switch (c) {
   case ',':
-    return LexerToken{",", Tag::COMMA};
+    return Token{",", Tag::COMMA};
   case '{':
-    return LexerToken{"{", Tag::LCURLY};
+    return Token{"{", Tag::LCURLY};
   case '}':
-    return LexerToken{"}", Tag::RCURLY};
+    return Token{"}", Tag::RCURLY};
   case '(':
-    return LexerToken{"(", Tag::LPAREN};
+    return Token{"(", Tag::LPAREN};
   case ')':
-    return LexerToken{")", Tag::RPAREN};
+    return Token{")", Tag::RPAREN};
   case '=':
     if (nextIs('=', inp)) {
-      return LexerToken{"==", Tag::EQCMP};
+      return Token{"==", Tag::EQCMP};
     } else {
-      return LexerToken{"=", Tag::EQ};
+      return Token{"=", Tag::EQ};
     }
   case ':':
-    return LexerToken{":", Tag::COLON};
+    return Token{":", Tag::COLON};
   case ';':
-    return LexerToken{";", Tag::SEMI};
+    return Token{";", Tag::SEMI};
   case '!':
     if (nextIs('=', inp)) {
-      return LexerToken{"!=", Tag::NECMP};
+      return Token{"!=", Tag::NECMP};
     } else {
-      return LexerToken{"!", Tag::BANG};
+      return Token{"!", Tag::BANG};
     }
   case '<':
     if (nextIs('=', inp)) {
-      return LexerToken{"<=", LTECMP};
+      return Token{"<=", LTECMP};
     } else {
-      return LexerToken{"<", LTCMP};
+      return Token{"<", LTCMP};
     }
   case '>':
     if (nextIs('=', inp)) {
-      return LexerToken{">=", GTECMP};
+      return Token{">=", GTECMP};
     } else {
-      return LexerToken{">", GTCMP};
+      return Token{">", GTCMP};
     }
   case '+':
-    return nextIs('+', inp) ? LexerToken{"++", PLUSPLUS}
-                            : LexerToken{"+", PLUS};
+    return nextIs('+', inp) ? Token{"++", PLUSPLUS} : Token{"+", PLUS};
   case '-':
-    return nextIs('-', inp) ? LexerToken{"++", Tag::MINUSMINUS}
-                            : LexerToken{"-", MINUS};
+    return nextIs('-', inp) ? Token{"++", Tag::MINUSMINUS} : Token{"-", MINUS};
   case '*':
-    return LexerToken{"*", MULT};
+    return Token{"*", MULT};
   case '/':
-    return LexerToken{"/", DIV};
+    return Token{"/", DIV};
   case '\"':
     return isString(inp);
   }
@@ -140,11 +138,11 @@ LexerToken getNextTok(const std::unique_ptr<std::istream> &inp) {
     return isIdentifier(inp);
   }
   if (inp->eof()) {
-    return LexerToken{"!!EOF!!", Tag::ENDFILE};
+    return Token{"!!EOF!!", Tag::ENDFILE};
   } else {
     std::cout << "Fatal: Unexpected character '" << c << "' on line " << lineNum
               << std::endl;
-    return LexerToken{"UH OH", Tag::ERR};
+    return Token{"UH OH", Tag::ERR};
   }
 }
 /*
@@ -159,7 +157,7 @@ bool nextIs(char c, const std::unique_ptr<std::istream> &inp) {
   }
   return false;
 }
-LexerToken isString(const std::unique_ptr<std::istream> &inp) {
+Token isString(const std::unique_ptr<std::istream> &inp) {
   char c;
   std::string string_lit = "\"";
 
@@ -169,13 +167,13 @@ LexerToken isString(const std::unique_ptr<std::istream> &inp) {
 
   if (inp->eof()) {
     std::cerr << "Unclosed string literal :(" << std::endl;
-    return LexerToken{"UH OH", Tag::ERR};
+    return Token{"UH OH", Tag::ERR};
   }
   string_lit.push_back('\"');
-  return LexerToken{string_lit, Tag::STRINGLIT};
+  return Token{string_lit, Tag::STRINGLIT};
 }
 
-LexerToken isNum(const std::unique_ptr<std::istream> &inp) {
+Token isNum(const std::unique_ptr<std::istream> &inp) {
   std::string numStr = "";
   char c;
   bool seenDot = false;
@@ -193,12 +191,12 @@ LexerToken isNum(const std::unique_ptr<std::istream> &inp) {
     numStr.push_back('0');
   }
   if (seenDot) {
-    return LexerToken{numStr, Tag::POINTNUM};
+    return Token{numStr, Tag::POINTNUM};
   }
-  return LexerToken{numStr, Tag::NUM};
+  return Token{numStr, Tag::NUM};
 }
 
-LexerToken isIdentifier(const std::unique_ptr<std::istream> &inp) {
+Token isIdentifier(const std::unique_ptr<std::istream> &inp) {
 
   std::string id_str = "";
 
@@ -209,31 +207,31 @@ LexerToken isIdentifier(const std::unique_ptr<std::istream> &inp) {
     id_str.push_back(c);
   }
   if (id_str.compare("void") == 0) {
-    return LexerToken{id_str, Tag::VOID};
+    return Token{id_str, Tag::VOID};
   } else if (id_str.compare("bool") == 0) {
-    return LexerToken{id_str, Tag::BOOL};
+    return Token{id_str, Tag::BOOL};
   } else if (id_str.compare("char") == 0) {
-    return LexerToken{id_str, Tag::CHAR};
+    return Token{id_str, Tag::CHAR};
   } else if (id_str.compare("string") == 0) {
-    return LexerToken{id_str, Tag::STRING};
+    return Token{id_str, Tag::STRING};
   } else if (id_str == "i32") {
-    return LexerToken{id_str, Tag::I32};
+    return Token{id_str, Tag::I32};
   } else if (id_str == "i64") {
-    return LexerToken{id_str, Tag::I64};
+    return Token{id_str, Tag::I64};
   } else if (id_str == "f32") {
-    return LexerToken{id_str, Tag::F32};
+    return Token{id_str, Tag::F32};
   } else if (id_str == "f64") {
-    return LexerToken{id_str, Tag::F64};
+    return Token{id_str, Tag::F64};
   } else if (id_str == "return") {
-    return LexerToken{id_str, Tag::RETURN};
+    return Token{id_str, Tag::RETURN};
   } else if (id_str == "true") {
-    return LexerToken{id_str, Tag::TRUE};
+    return Token{id_str, Tag::TRUE};
   } else if (id_str == "false") {
-    return LexerToken{id_str, Tag::FALSE};
+    return Token{id_str, Tag::FALSE};
   } else if (id_str == "call") {
-    return LexerToken{id_str, Tag::CALL};
+    return Token{id_str, Tag::CALL};
   }
-  return LexerToken{id_str, Tag::IDENTIFIER};
+  return Token{id_str, Tag::IDENTIFIER};
 }
 
 }; // namespace Lexer

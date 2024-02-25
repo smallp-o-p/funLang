@@ -3,10 +3,10 @@ target_sources(
     Parse 
     PRIVATE 
         ${CMAKE_CURRENT_LIST_DIR}/Parse.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/ParseTree.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/AST.cpp
     PUBLIC 
         ${CMAKE_CURRENT_LIST_DIR}/Parse.hpp
-        ${CMAKE_CURRENT_LIST_DIR}/ParseTree.hpp
+        ${CMAKE_CURRENT_LIST_DIR}/AST.hpp
     )
 
 target_include_directories(Parse 

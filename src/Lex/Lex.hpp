@@ -48,26 +48,27 @@ enum Tag {
   ERR = 1000,
   ENDFILE = 1001,
 };
-struct LexerToken {
+struct Token {
   std::string lexeme;
   Tag syntactic_category;
 };
+
 extern LexedTokensSingleton &toks;
-std::unique_ptr<std::vector<LexerToken>> lex(const std::string &filepath,
-                                             bool usingString = false);
+std::unique_ptr<std::vector<Token>> lex(const std::string &filepath,
+                                        bool usingString = false);
 std::unique_ptr<std::istream> initInp(const std::string &filepath,
                                       bool usingString = false);
 bool nextIs(char c, const std::unique_ptr<std::istream> &inp);
 static std::string current_identifier_str;
-LexerToken getNextTok(const std::unique_ptr<std::istream> &inp);
-LexerToken isString(const std::unique_ptr<std::istream> &inp);
-LexerToken isNum(const std::unique_ptr<std::istream> &inp);
-LexerToken isIdentifier(const std::unique_ptr<std::istream> &inp);
+Token getNextTok(const std::unique_ptr<std::istream> &inp);
+Token isString(const std::unique_ptr<std::istream> &inp);
+Token isNum(const std::unique_ptr<std::istream> &inp);
+Token isIdentifier(const std::unique_ptr<std::istream> &inp);
 } // namespace Lexer
 // singleton
 class LexedTokensSingleton {
 private:
-  std::unique_ptr<std::vector<Lexer::LexerToken>> tokens;
+  std::unique_ptr<std::vector<Lexer::Token>> tokens;
   uint32_t tok_tracker;
 
   LexedTokensSingleton(){};
@@ -81,11 +82,11 @@ public:
     return instance;
   }
 
-  void setTokens(std::unique_ptr<std::vector<Lexer::LexerToken>> toks) {
+  void setTokens(std::unique_ptr<std::vector<Lexer::Token>> toks) {
     tokens = std::move(toks);
   }
 
-  Lexer::LexerToken advance() {
+  Lexer::Token advance() {
     if (tokens == nullptr) {
       std::cout << "Not initialized." << std::endl;
     }
@@ -96,8 +97,8 @@ public:
     return tokens->at(tok_tracker++);
   }
 
-  Lexer::LexerToken peek() { return tokens->at(tok_tracker); }
-  Lexer::LexerToken previous() { return tokens->at(tok_tracker - 1); }
+  Lexer::Token peek() { return tokens->at(tok_tracker); }
+  Lexer::Token previous() { return tokens->at(tok_tracker - 1); }
   bool check(Lexer::Tag tok) {
     return tokens->at(tok_tracker).syntactic_category == tok;
   }
@@ -115,7 +116,7 @@ public:
     }
     return false;
   }
-  Lexer::LexerToken lookahead(int howMuch) {
+  Lexer::Token lookahead(int howMuch) {
     return tokens->at(tok_tracker + howMuch);
   }
   void reset() {
