@@ -51,6 +51,7 @@ private:
   std::unique_ptr<Expr> primary();
   std::unique_ptr<Expr> fnCall();
   std::unique_ptr<callArgList> callArgs();
+  bool recoverFromError(currentNT whereWeFailed);
 
 public:
   std::unique_ptr<ProgramNode> program();

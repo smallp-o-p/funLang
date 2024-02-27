@@ -1,84 +1,35 @@
 #include "Lex.hpp"
-#include <cstdint>
-#include <fstream>
-#include <istream>
-#include <memory>
-#include <sstream>
-#include <sys/types.h>
 
-uint32_t colNum = 1;
-uint32_t lineNum = 1;
-std::string fileName;
-namespace Lexer {
-std::unique_ptr<std::istream> initInp(const std::string &filepath,
-                                      bool usingString) {
+std::unique_ptr<Lexer> Lexer::init(const std::string &filename,
+                                   bool usingString) {
+  std::unique_ptr<std::istream> i_stream;
+  if (filename.empty()) {
+    std::cout << "Usage: funLang {FILE_PATH_DIR}" << std::endl;
+    return nullptr;
+  }
   if (usingString) {
-    std::cout << "Using input string as input." << std::endl;
-    if (filepath.empty()) {
-      std::cout << "Empty string provided when using string mode." << std::endl;
-      return nullptr;
-    }
-    auto inp_sstream = std::make_unique<std::istringstream>(filepath);
-
-    if (inp_sstream->fail()) {
-      std::cerr << "Failed to process string :(" << std::endl;
-      return nullptr;
-    }
-    return inp_sstream;
+    std::cout << "Using String" << std::endl;
+    i_stream = std::make_unique<std::istringstream>(filename);
   } else {
-    if (filepath.empty()) {
-      std::cout << "Usage: funLang {FILE_PATH_DIR}" << std::endl;
-      return nullptr;
-    } else {
-      fileName = filepath;
-      auto inp_fstream =
-          std::make_unique<std::ifstream>(filepath, std::ifstream::in);
-      if (inp_fstream->fail()) {
-        std::cerr << "Failed to open file :(" << std::endl;
-        return nullptr;
-      }
-      return inp_fstream;
-    }
+    i_stream = std::make_unique<std::ifstream>(filename);
   }
-}
-
-std::unique_ptr<std::vector<Token>> lex(const std::string &filepath,
-                                        bool usingString) {
-  auto input_init = std::move(initInp(filepath, usingString));
-  if (!input_init) {
+  if (i_stream->fail()) {
+    std::cerr << "Failed to process input :(" << std::endl;
     return nullptr;
   }
-  std::unique_ptr<std::vector<Token>> tokensPtr =
-      std::make_unique<std::vector<Token>>();
-  Token tokPair;
-  bool failed = false;
-  while ((tokPair = getNextTok(input_init)).syntactic_category !=
-         Tag::ENDFILE) {
-    if (tokPair.syntactic_category == Tag::ERR) {
-      failed = true;
-    }
-    tokensPtr->push_back(tokPair);
-  }
-  if (failed) {
-    return nullptr;
-  }
-  tokensPtr->push_back({"\0", Tag::ENDFILE});
-  if (!usingString) {
-    dynamic_cast<std::ifstream *>(input_init.get())->close();
-  }
-  return std::move(tokensPtr);
+  return std::make_unique<Lexer>(std::move(i_stream));
 }
 
-Token getNextTok(const std::unique_ptr<std::istream> &inp) {
-  using namespace Lexer;
+Lexer::Token Lexer::getNext() {
   char c = ' ';
   while (isspace(c)) {
     if (c == '\n') {
       lineNum++;
+      colNum = 0;
     }
-    c = inp->get();
+    colNum++;
+    c = in_stream->get();
   }
-  colNum++;
   switch (c) {
   case ',':
     return Token{",", Tag::COMMA};
@@ -91,7 +42,7 @@ Token getNextTok(const std::unique_ptr<std::istream> &inp) {
   case ')':
     return Token{")", Tag::RPAREN};
   case '=':
-    if (nextIs('=', inp)) {
+    if (nextIs('=')) {
       return Token{"==", Tag::EQCMP};
     } else {
       return Token{"=", Tag::EQ};
@@ -101,43 +52,43 @@ Token getNextTok(const std::unique_ptr<std::istream> &inp) {
   case ';':
     return Token{";", Tag::SEMI};
   case '!':
-    if (nextIs('=', inp)) {
+    if (nextIs('=')) {
       return Token{"!=", Tag::NECMP};
     } else {
       return Token{"!", Tag::BANG};
     }
   case '<':
-    if (nextIs('=', inp)) {
+    if (nextIs('=')) {
       return Token{"<=", LTECMP};
     } else {
       return Token{"<", LTCMP};
     }
   case '>':
-    if (nextIs('=', inp)) {
+    if (nextIs('=')) {
       return Token{">=", GTECMP};
     } else {
       return Token{">", GTCMP};
     }
   case '+':
-    return nextIs('+', inp) ? Token{"++", PLUSPLUS} : Token{"+", PLUS};
+    return nextIs('+') ? Token{"++", PLUSPLUS} : Token{"+", PLUS};
   case '-':
-    return nextIs('-', inp) ? Token{"++", Tag::MINUSMINUS} : Token{"-", MINUS};
+    return nextIs('-') ? Token{"++", Tag::MINUSMINUS} : Token{"-", MINUS};
   case '*':
     return Token{"*", MULT};
   case '/':
     return Token{"/", DIV};
   case '\"':
-    return isString(inp);
+    return lexString();
   }
   if (isdigit(c)) {
-    inp->putback(c);
-    return isNum(inp);
+    in_stream->putback(c);
+    return lexNum();
   }
   if (isalpha(c)) {
-    inp->putback(c);
-    return isIdentifier(inp);
+    in_stream->putback(c);
+    return lexIdentifier();
   }
-  if (inp->eof()) {
+  if (in_stream->eof()) {
     return Token{"!!EOF!!", Tag::ENDFILE};
   } else {
     std::cout << "Fatal: Unexpected character '" << c << "' on line " << lineNum
@@ -145,27 +96,28 @@ Token getNextTok(const std::unique_ptr<std::istream> &inp) {
     return Token{"UH OH", Tag::ERR};
   }
 }
+
 /*
  * nextIs(char c) checks if the next character in the input buffer is c, if
  * so it eats the next character and returns true. Does nothing and returns
  * false otherwise.
  * */
-bool nextIs(char c, const std::unique_ptr<std::istream> &inp) {
-  if (inp->peek() == c) {
-    inp->get();
+bool Lexer::nextIs(char c) {
+  if (in_stream->peek() == c) {
+    in_stream->get();
     return true;
   }
   return false;
 }
-Token isString(const std::unique_ptr<std::istream> &inp) {
+Lexer::Token Lexer::lexString() {
   char c;
   std::string string_lit = "\"";
 
-  while ((c = inp->get()) != '\"' && c != EOF) {
+  while ((c = in_stream->get()) != '\"' && c != EOF) {
     string_lit.push_back(c);
   };
 
-  if (inp->eof()) {
+  if (in_stream->eof()) {
     std::cerr << "Unclosed string literal :(" << std::endl;
     return Token{"UH OH", Tag::ERR};
   }
@@ -173,18 +125,18 @@ Token isString(const std::unique_ptr<std::istream> &inp) {
   return Token{string_lit, Tag::STRINGLIT};
 }
 
-Token isNum(const std::unique_ptr<std::istream> &inp) {
+Lexer::Token Lexer::lexNum() {
   std::string numStr = "";
   char c;
   bool seenDot = false;
-  while ((isdigit(inp->peek()) || inp->peek() == '.')) {
-    if (seenDot && inp->peek() == '.') {
+  while ((isdigit(in_stream->peek()) || in_stream->peek() == '.')) {
+    if (seenDot && in_stream->peek() == '.') {
       break;
     }
-    if (inp->peek() == '.' && !seenDot) {
+    if (in_stream->peek() == '.' && !seenDot) {
       seenDot = true;
     }
-    c = inp->get();
+    c = in_stream->get();
     numStr.push_back(c);
   }
   if (numStr.back() == '.') { // allow numbers like 12.
@@ -196,14 +148,14 @@ Token isNum(const std::unique_ptr<std::istream> &inp) {
   return Token{numStr, Tag::NUM};
 }
 
-Token isIdentifier(const std::unique_ptr<std::istream> &inp) {
+Lexer::Token Lexer::lexIdentifier() {
 
   std::string id_str = "";
 
   char c;
 
-  while (isalnum(inp->peek()) || inp->peek() == '_') {
-    c = inp->get();
+  while (isalnum(in_stream->peek()) || in_stream->peek() == '_') {
+    c = in_stream->get();
     id_str.push_back(c);
   }
   if (id_str.compare("void") == 0) {
@@ -228,10 +180,6 @@ Token isIdentifier(const std::unique_ptr<std::istream> &inp) {
     return Token{id_str, Tag::TRUE};
   } else if (id_str == "false") {
     return Token{id_str, Tag::FALSE};
-  } else if (id_str == "call") {
-    return Token{id_str, Tag::CALL};
   }
   return Token{id_str, Tag::IDENTIFIER};
 }
-
-}; // namespace Lexer

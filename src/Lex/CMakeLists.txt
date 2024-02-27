@@ -9,5 +9,6 @@ target_sources(Lex
 target_include_directories(Lex 
     PUBLIC 
         ${CMAKE_CURRENT_LIST_DIR})
-
+        
+target_link_libraries(Lex PUBLIC Basic)
 message("Lexer current directory is: ${CMAKE_CURRENT_LIST_DIR}")

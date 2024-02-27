@@ -6,7 +6,6 @@ auto &ProgramNode::getFuncs() { return funcs; }
 auto &ProgramNode::getGlobs() { return globalSymbols; }
 
 TypeNode::TypeNode(Lexer::Token &tok) {
-  using namespace Lexer;
   switch (tok.syntactic_category) {
   case Lexer::Tag::BOOL:
     type = DataTypes::BOOL;

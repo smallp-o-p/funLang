@@ -1,5 +1,5 @@
 #pragma once
-#include "../Lex/Lex.hpp"
+#include "Lex.hpp"
 #include <map>
 #include <memory>
 #include <stdexcept>

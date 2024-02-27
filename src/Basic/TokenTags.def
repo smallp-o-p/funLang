@@ -1,0 +1,54 @@
+#ifndef TOK
+#define TOK(ID)
+#endif
+#ifndef PUNCTUATOR
+#define PUNCTUATOR(ID, SP) TOK(ID)
+#endif
+#ifndef KEYWORD
+#define KEYWORD(ID, FLAG) TOK(kw_ ## ID)
+#endif
+
+TOK(err)
+TOK(eof)
+TOK(numeric_constant)
+TOK(floating_constant)
+TOK(identifier)
+TOK(string_literal)
+PUNCTUATOR(l_square, "[")
+PUNCTUATOR(r_square, "]")
+PUNCTUATOR(l_paren, "(")
+PUNCTUATOR(r_paren, ")")
+PUNCTUATOR(l_brace, "{")
+PUNCTUATOR(r_brace, "}")
+PUNCTUATOR(star, "*")
+PUNCTUATOR(plus, "+")
+PUNCTUATOR(plusplus, "++")
+PUNCTUATOR(minus, "-")
+PUNCTUATOR(minusminus, "--")
+PUNCTUATOR(exclaim, "!")
+PUNCTUATOR(exclaimequal, "!=")
+PUNCTUATOR(slash, "/")
+PUNCTUATOR(slashequal, "/=")
+PUNCTUATOR(less, "<")
+PUNCTUATOR(lessequal, "<=")
+PUNCTUATOR(greater, ">")
+PUNCTUATOR(greaterequal, ">=")
+PUNCTUATOR(colon, ":")
+PUNCTUATOR(semi, ";")
+PUNCTUATOR(equal, "=")
+PUNCTUATOR(equalequal, "==")
+
+KEYWORD(i32, KEYALL)
+KEYWORD(i64, KEYALL)
+KEYWORD(f32, KEYALL)
+KEYWORD(f64, KEYALL)
+KEYWORD(string, KEYALL)
+KEYWORD(char, KEYALL)
+KEYWORD(void, KEYALL)
+KEYWORD(bool, KEYALL)
+KEYWORD(true, KEYALL)
+KEYWORD(false, KEYALL)
+
+#undef KEYWORD
+#undef PUNCTUATOR
+#undef TOK

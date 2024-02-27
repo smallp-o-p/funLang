@@ -1,8 +1,8 @@
 #include "Parse.hpp"
+#include "AST.hpp"
 #include "Lex.hpp"
 
 std::stack<Lexer::Token> pastToks;
-LexedTokensSingleton &toks = LexedTokensSingleton::getInstance();
 bool check(Lexer::Tag tok) { return toks.check(tok); }
 bool match(std::initializer_list<Lexer::Tag> toExpect) {
   for (auto elem : toExpect) {
@@ -19,22 +19,30 @@ Lexer::Token lookahead(int howMuch) { return toks.lookahead(howMuch); }
 void backup() { toks.backup(); }
 bool atEnd() { return toks.atEnd(); }
 
-void recoverFromError(currentNT whereWeFailed) {
+bool Parser::recoverFromError(currentNT whereWeFailed) {
+  error = true;
   switch (whereWeFailed) {
   case STMT: {
     do {
       advance(); // discard symbols until we find a semicolon and eat the
                  // semicolon
-    } while (peek().syntactic_category != Lexer::Tag::SEMI);
+    } while (peek().syntactic_category != Lexer::Tag::SEMI &&
+             peek().syntactic_category != Lexer::Tag::ENDFILE);
     break;
   }
   case FUNCTION: {
     do {
       advance();
-    } while (peek().syntactic_category != Lexer::Tag::RCURLY);
+    } while (peek().syntactic_category != Lexer::Tag::RCURLY &&
+             peek().syntactic_category != Lexer::Tag::ENDFILE);
     break;
   }
   }
+
+  if (peek().syntactic_category == Lexer::Tag::ENDFILE) {
+    return false;
+  }
+  return true;
 }
 
 void reportError(const char *format, ...) {
@@ -44,26 +52,25 @@ void reportError(const char *format, ...) {
   va_end(args);
 };
 
-int initInstance(const std::string &fp, bool usingString) {
+std::unique_ptr<LexedTokensSingleton> initInstance(const std::string &fp,
+                                                   bool usingString) {
   toks.reset(); // reset for testing purposes
-  std::unique_ptr<std::vector<Lexer::Token>> lexed =
-      Lexer::lex(fp, usingString);
+  std::unique_ptr<LexedTokensSingleton> lexed = Lexer::lex(fp, usingString);
 
   if (!lexed) {
     std::cout << "Failed to lex tokens." << std::endl;
-    return 1;
+    return nullptr;
   }
 
-  toks.setTokens(std::move(lexed));
   std::cout << "Successfully lexed tokens." << std::endl;
-
-  return 0;
 }
 
 std::unique_ptr<ProgramNode> Parser::program() {
   // TODO: globals
   std::unique_ptr<FunctionsNode> fns = std::move(functions());
-
+  if (Parser::error) {
+    return nullptr;
+  }
   if (!match({Lexer::Tag::ENDFILE})) {
     reportError("Expected End of File.");
     return nullptr;
@@ -167,21 +174,18 @@ std::unique_ptr<ArgNode> Parser::arg() {
 
 std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
   std::vector<std::unique_ptr<Stmt>> stmts;
-  bool failed = false;
   while (true) {
     std::unique_ptr<Stmt> s = simpleStmt();
     if (!s) {
-      failed = true;
-      recoverFromError(currentNT::STMT);
+      if (!recoverFromError(currentNT::STMT)) {
+        return nullptr;
+      }
     } else {
       stmts.push_back(s);
     }
     if (peek().syntactic_category == Lexer::Tag::RCURLY) {
       break;
     }
-  }
-  if (failed) {
-    return nullptr;
   }
   return std::make_unique<CompoundStmt>(stmts);
 }
@@ -462,6 +466,8 @@ int parse() {
   if (initInstance("foo") != 0) {
     return 1;
   };
+  Parser theParser = Parser();
+  std::unique_ptr<ProgramNode> head = Parser::program();
 
   return 0;
 }
