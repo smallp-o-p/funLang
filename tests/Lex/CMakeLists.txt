@@ -9,8 +9,7 @@ if(BUILD_TESTING)
 
   add_executable(LexTests EXCLUDE_FROM_ALL LexTests.cpp)
 
-  target_link_libraries(LexTests PRIVATE Lex)
-  target_link_libraries(LexTests PRIVATE GTest::gtest_main)
+  target_link_libraries(LexTests PRIVATE Lex GTest::gtest_main)
   add_test(LexTests LexTests)
   gtest_discover_tests(LexTests)
 endif()

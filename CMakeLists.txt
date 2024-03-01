@@ -28,7 +28,6 @@ include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)
 FetchContent_Declare(
   googletest
   URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip

@@ -1,5 +1,7 @@
 #pragma once
-#include <string>
+
+namespace Basic {
+
 namespace tok {
 enum Tag : unsigned short {
 #define TOK(ID) ID,
@@ -7,7 +9,10 @@ enum Tag : unsigned short {
   NUM_TOKENS
 };
 
-const std::string getTokenName(Tag tag);
-const std::string getPunctuatorSpelling(Tag tag);
-const std::string getKeywordSpelling(Tag tag);
+const char *getTokenName(Tag tag);
+const char *getPunctuatorSpelling(Tag tag);
+const char *getKeywordSpelling(Tag tag);
+
 } // namespace tok
+
+} // namespace Basic

@@ -1,24 +1,36 @@
 #include "Parse.hpp"
 #include "AST.hpp"
 #include "Lex.hpp"
+#include "TokenTags.hpp"
+#include <cstdarg>
+#include <initializer_list>
 
-std::stack<Lexer::Token> pastToks;
-bool check(Lexer::Tag tok) { return toks.check(tok); }
-bool match(std::initializer_list<Lexer::Tag> toExpect) {
-  for (auto elem : toExpect) {
-    if (check(elem)) {
+Token Parser::peek() { return lexer.peek(); };
+bool Parser::check(Basic::tok::Tag tok) { return peek().getTag() == tok; }
+Token Parser::previous() { return lexer.previous(); };
+Token Parser::advance() { return lexer.advance(); };
+bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> toks) {
+  Token consumed = lexer.advance();
+  for (auto tok : toks) {
+    if (consumed.getTag() == tok) {
       return true;
-    };
+    }
   }
   return false;
 }
-Lexer::Token previous() { return toks.previous(); }
-Lexer::Token advance() { return toks.advance(); }
-Lexer::Token peek() { return toks.peek(); }
-Lexer::Token lookahead(int howMuch) { return toks.lookahead(howMuch); }
-void backup() { toks.backup(); }
-bool atEnd() { return toks.atEnd(); }
-
+bool Parser::expect(Basic::tok::Tag tok) {
+  return lexer.advance().getTag() == tok;
+}
+Token Parser::lookahead(uint32_t howMuch) { return lexer.lookahead(howMuch); };
+void Parser::reportExpectError(Basic::tok::Tag expected, bool punctuator) {
+  std::cout << "Expected ";
+  if (punctuator) {
+    std::cout << Basic::tok::getPunctuatorSpelling(expected);
+  } else {
+    std::cout << Basic::tok::getKeywordSpelling(expected);
+  }
+  std::cout << ", received '" << previous().getLexeme() << "'" << std::endl;
+}
 bool Parser::recoverFromError(currentNT whereWeFailed) {
   error = true;
   switch (whereWeFailed) {
@@ -26,20 +38,19 @@ bool Parser::recoverFromError(currentNT whereWeFailed) {
     do {
       advance(); // discard symbols until we find a semicolon and eat the
                  // semicolon
-    } while (peek().syntactic_category != Lexer::Tag::SEMI &&
-             peek().syntactic_category != Lexer::Tag::ENDFILE);
+    } while (peek().getTag() != Basic::tok::Tag::semi &&
+             peek().getTag() != Basic::tok::Tag::eof);
     break;
   }
   case FUNCTION: {
     do {
       advance();
-    } while (peek().syntactic_category != Lexer::Tag::RCURLY &&
-             peek().syntactic_category != Lexer::Tag::ENDFILE);
+    } while (peek().getTag() != Basic::tok::Tag::r_brace &&
+             peek().getTag() != Basic::tok::Tag::eof);
     break;
   }
   }
-
-  if (peek().syntactic_category == Lexer::Tag::ENDFILE) {
+  if (peek().getTag() == Basic::tok::Tag::eof) {
     return false;
   }
   return true;
@@ -52,26 +63,13 @@ void reportError(const char *format, ...) {
   va_end(args);
 };
 
-std::unique_ptr<LexedTokensSingleton> initInstance(const std::string &fp,
-                                                   bool usingString) {
-  toks.reset(); // reset for testing purposes
-  std::unique_ptr<LexedTokensSingleton> lexed = Lexer::lex(fp, usingString);
-
-  if (!lexed) {
-    std::cout << "Failed to lex tokens." << std::endl;
-    return nullptr;
-  }
-
-  std::cout << "Successfully lexed tokens." << std::endl;
-}
-
 std::unique_ptr<ProgramNode> Parser::program() {
   // TODO: globals
   std::unique_ptr<FunctionsNode> fns = std::move(functions());
   if (Parser::error) {
     return nullptr;
   }
-  if (!match({Lexer::Tag::ENDFILE})) {
+  if (!expect(Basic::tok::Tag::eof)) {
     reportError("Expected End of File.");
     return nullptr;
   }
@@ -87,7 +85,7 @@ std::unique_ptr<FunctionsNode> Parser::functions() {
       return nullptr;
     }
     funcList.push_back(std::move(fn));
-    if (check(Lexer::Tag::ENDFILE)) {
+    if (check(Basic::tok::Tag::eof)) {
       break;
     }
   }
@@ -106,8 +104,9 @@ std::unique_ptr<FunctionNode> Parser::function() {
     return nullptr;
   }
 
-  if (!match({Lexer::Tag::RCURLY})) {
-    reportError("Expected '}', received %s", peek().lexeme.c_str());
+  if (!expect(Basic::tok::Tag::r_brace)) {
+    reportError("Expected '}', received '%s'\n",
+                previous().getLexeme().c_str());
     return nullptr;
   }
   return std::make_unique<FunctionNode>(std::move(prototype),
@@ -120,14 +119,16 @@ std::unique_ptr<PrototypeNode> Parser::proto() {
   if (!type_node) {
     return nullptr;
   }
-  if (!match({Lexer::Tag::IDENTIFIER})) {
-    reportError("Expected IDENTIFIER, received '%s'\n", peek().lexeme.c_str());
+  if (!expect(Basic::tok::identifier)) {
+    reportError("Expected IDENTIFIER, received '%s'\n",
+                peek().getLexeme().c_str());
     return nullptr;
   }
-  std::string id = previous().lexeme;
+  std::string id = previous().getLexeme();
 
-  if (!match({Lexer::Tag::LPAREN})) {
-    reportError("Expected '(', received '%s'\n", peek().lexeme.c_str());
+  if (!expect(Basic::tok::Tag::l_paren)) {
+    reportError("Expected '(', received '%s'\n",
+                previous().getLexeme().c_str());
     return nullptr;
   }
   std::unique_ptr<ArgumentsNode> args = arguments();
@@ -149,7 +150,7 @@ std::unique_ptr<ArgumentsNode> Parser::arguments() {
       return nullptr;
     }
     argList.push_back(argument);
-    if (peek().syntactic_category == Lexer::Tag::RPAREN) {
+    if (check(Basic::tok::Tag::r_paren)) {
       break;
     }
   }
@@ -163,11 +164,11 @@ std::unique_ptr<ArgNode> Parser::arg() {
     return nullptr;
   }
 
-  if (!match({Lexer::Tag::IDENTIFIER})) {
-    reportError("Expected Identifier, received '%s'", peek().lexeme.c_str());
+  if (!expect(Basic::tok::Tag::identifier)) {
+    reportExpectError(Basic::tok::Tag::identifier, false);
     return nullptr;
   }
-  const std::string &id = previous().lexeme;
+  const std::string &id = previous().getLexeme();
 
   return std::make_unique<ArgNode>(std::move(t_node), id);
 }
@@ -183,7 +184,7 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
     } else {
       stmts.push_back(s);
     }
-    if (peek().syntactic_category == Lexer::Tag::RCURLY) {
+    if (check(Basic::tok::Tag::r_brace)) {
       break;
     }
   }
@@ -191,42 +192,42 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
 }
 
 std::unique_ptr<Stmt> Parser::simpleStmt() {
-  using namespace Lexer;
+  using namespace Basic;
   std::unique_ptr<Stmt> stmt_inq;
-  switch (peek().syntactic_category) {
-  case Tag::VOID:
-  case Tag::BOOL:
-  case Tag::I32:
-  case Tag::I64:
-  case Tag::F32:
-  case Tag::F64:
-  case Tag::STRING:
+  switch (peek().getTag()) {
+  case Basic::tok::Tag::kw_void:
+  case tok::Tag::kw_bool:
+  case tok::Tag::kw_i32:
+  case tok::Tag::kw_i64:
+  case tok::Tag::kw_f32:
+  case tok::Tag::kw_f64:
+  case tok::Tag::kw_string:
     stmt_inq = decl();
     break;
-  case Tag::IDENTIFIER: {
-    if (lookahead(1).syntactic_category ==
-        Tag::EQ) { // unsure how we'll handle struct members but we'll find out
+  case tok::Tag::identifier: {
+    if (peek().getTag() == tok::Tag::equal) { // unsure how we'll handle struct
+                                              // members but we'll find out
       stmt_inq = decl();
     } else {
       stmt_inq = expr();
     }
     break;
   }
-  case Tag::RETURN: {
+  case tok::Tag::kw_return: {
     stmt_inq = returnStmt();
     break;
   }
   default:
     reportError("Current token '%s' is not viable to expand in Stmt\n",
-                peek().lexeme.c_str());
+                peek().getLexeme().c_str());
     return nullptr;
   }
   if (!stmt_inq) {
     return nullptr;
   }
-  if (!match({Lexer::Tag::SEMI})) {
+  if (!expect(Basic::tok::Tag::semi)) {
     reportError("Expected ';' after statement, received '%s'",
-                peek().lexeme.c_str());
+                peek().getLexeme().c_str());
     return nullptr;
   }
   return stmt_inq;
@@ -236,14 +237,16 @@ std::unique_ptr<VarDecl> Parser::decl() {
   if (!type_node) {
     return nullptr;
   }
-  if (!match({Lexer::Tag::IDENTIFIER})) {
-    reportError("Expected Identifier, received '%s'\n", peek().lexeme.c_str());
+  if (!expect(Basic::tok::Tag::identifier)) {
+    reportError("Expected Identifier, received '%s'\n",
+                previous().getLexeme().c_str());
     return nullptr;
   }
-  std::string id = previous().lexeme;
+  std::string id = previous().getLexeme();
 
-  if (!match({Lexer::Tag::EQ})) {
-    reportError("Expected '=', received '%s'\n", peek().lexeme.c_str());
+  if (!expect(Basic::tok::Tag::equal)) {
+    reportError("Expected '=', received '%s'\n",
+                previous().getLexeme().c_str());
     return nullptr;
   }
   std::unique_ptr<Expr> expr_node = expr();
@@ -262,12 +265,12 @@ std::unique_ptr<returnNode> Parser::returnStmt() {
 std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
-  if (match({Lexer::Tag::IDENTIFIER})) {
+  if (expect(Basic::tok::Tag::identifier)) {
     std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(previous());
-    if (!match({Lexer::Tag::EQ})) {
+    if (!expect(Basic::tok::Tag::equal)) {
       reportError(
           "Expected '=' in (assumed) variable assignment, received '%s'",
-          peek().lexeme.c_str());
+          peek().getLexeme().c_str());
       return nullptr;
     }
     std::unique_ptr<Expr> expr_node = expr();
@@ -275,7 +278,7 @@ std::unique_ptr<Expr> Parser::assign() {
       return nullptr;
     }
     return std::make_unique<BinaryOp>(std::move(leaf), std::move(expr_node),
-                                      BinaryOp::BinaryOperators::ASSIGN);
+                                      Basic::BinaryOperations::assign);
   } else {
     return eqExpr();
   }
@@ -286,11 +289,11 @@ std::unique_ptr<Expr> Parser::eqExpr() {
   if (!cmp_node) {
     return nullptr;
   }
-  if (match({Lexer::Tag::EQCMP, Lexer::Tag::NECMP})) {
-    BinaryOp::BinaryOperators opcode =
-        previous().syntactic_category == Lexer::Tag::EQCMP
-            ? BinaryOp::BinaryOperators::EQEQ
-            : BinaryOp::BinaryOperators::NE;
+  if (isOneOf({Basic::tok::Tag::equalequal, Basic::tok::Tag::exclaimequal})) {
+    Basic::BinaryOperations opcode =
+        previous().getTag() == Basic::tok::Tag::equalequal
+            ? Basic::BinaryOperations::equals
+            : Basic::BinaryOperations::notequals;
     std::unique_ptr<Expr> cmp_node2 = cmpExpr();
 
     if (!cmp_node2) {
@@ -307,24 +310,24 @@ std::unique_ptr<Expr> Parser::cmpExpr() {
   if (!add_node) {
     return nullptr;
   }
-  using namespace Lexer;
-  if (match({Tag::LTCMP, Tag::LTECMP, Tag::GTCMP, Tag::GTECMP})) {
-    BinaryOp::BinaryOperators opcode;
-    switch (previous().syntactic_category) {
-    case Tag::LTCMP:
-      opcode = BinaryOp::BinaryOperators::LT;
+  if (isOneOf({Basic::tok::Tag::less, Basic::tok::Tag::lessequal,
+               Basic::tok::Tag::greater, Basic::tok::Tag::greaterequal})) {
+    Basic::BinaryOperations opcode;
+    switch (previous().getTag()) {
+    case Basic::tok::Tag::less:
+      opcode = Basic::BinaryOperations::lt;
       break;
-    case Tag::LTECMP:
-      opcode = BinaryOp::BinaryOperators::LTE;
+    case Basic::tok::Tag::lessequal:
+      opcode = Basic::BinaryOperations::ltequals;
       break;
-    case Tag::GTCMP:
-      opcode = BinaryOp::BinaryOperators::GT;
+    case Basic::tok::Tag::greater:
+      opcode = Basic::BinaryOperations::gt;
       break;
-    case Tag::GTECMP:
-      opcode = BinaryOp::BinaryOperators::GTE;
+    case Basic::tok::Tag::greaterequal:
+      opcode = Basic::BinaryOperations::gtequals;
       break;
     default:
-      opcode = BinaryOp::BinaryOperators::UNDEFINED;
+      return nullptr;
       break;
     }
     std::unique_ptr<Expr> add_node2 = addExpr();
@@ -342,11 +345,11 @@ std::unique_ptr<Expr> Parser::addExpr() {
   if (!multdiv_node) {
     return nullptr;
   }
-  if (match({Lexer::Tag::PLUS, Lexer::Tag::MINUS})) {
-    BinaryOp::BinaryOperators opcode =
-        previous().syntactic_category == Lexer::Tag::PLUS
-            ? BinaryOp::BinaryOperators::ADD
-            : BinaryOp::BinaryOperators::SUBTRACT;
+  if (isOneOf({Basic::tok::Tag::plus, Basic::tok::Tag::minus})) {
+    Basic::BinaryOperations opcode =
+        previous().getTag() == Basic::tok::Tag::plus
+            ? Basic::BinaryOperations::plus
+            : Basic::BinaryOperations::minus;
     std::unique_ptr<Expr> multdiv_node2 = multdiv();
     if (!multdiv_node2) {
       return nullptr;
@@ -363,11 +366,11 @@ std::unique_ptr<Expr> Parser::multdiv() {
   if (!unary_node) {
     return nullptr;
   }
-  if (match({Lexer::Tag::MULT, Lexer::Tag::DIV})) {
-    BinaryOp::BinaryOperators opcode =
-        previous().syntactic_category == Lexer::Tag::MULT
-            ? BinaryOp::BinaryOperators::MULT
-            : BinaryOp::BinaryOperators::DIV;
+  if (isOneOf({Basic::tok::Tag::star, Basic::tok::Tag::slash})) {
+    Basic::BinaryOperations opcode =
+        previous().getTag() == Basic::tok::Tag::star
+            ? Basic::BinaryOperations::multiply
+            : Basic::BinaryOperations::divide;
     std::unique_ptr<Expr> unary_node2 = unary();
     if (!unary_node2) {
       return nullptr;
@@ -379,22 +382,22 @@ std::unique_ptr<Expr> Parser::multdiv() {
 }
 
 std::unique_ptr<Expr> Parser::unary() {
-  using namespace Lexer;
-  UnaryOp::UnaryOperators opcode = UnaryOp::UnaryOperators::NOP;
-  if (match({Lexer::Tag::PLUSPLUS, Lexer::Tag::MINUSMINUS, Lexer::Tag::BANG,
-             Lexer::Tag::MINUS})) {
-    switch (previous().syntactic_category) {
-    case Tag::PLUSPLUS:
-      opcode = UnaryOp::UnaryOperators::PREINCREMENT;
+  using namespace Basic;
+  UnaryOperations opcode = UnaryOperations::NUM_UNARY;
+  if (isOneOf(
+          {tok::plusplus, tok::minusminus, tok::exclaim, tok::Tag::minus})) {
+    switch (previous().getTag()) {
+    case tok::plusplus:
+      opcode = UnaryOperations::preInc;
       break;
-    case Tag::BANG:
-      opcode = UnaryOp::UnaryOperators::BANG;
+    case tok::exclaim:
+      opcode = UnaryOperations::lNot;
       break;
-    case Tag::MINUSMINUS:
-      opcode = UnaryOp::UnaryOperators::PREDECREMENT;
+    case tok::minusminus:
+      opcode = UnaryOperations::preDec;
       break;
-    case Tag::MINUS:
-      opcode = UnaryOp::UnaryOperators::NEGATE;
+    case tok::minus:
+      opcode = UnaryOperations::unaryMinus;
       break;
     default:;
     }
@@ -403,7 +406,7 @@ std::unique_ptr<Expr> Parser::unary() {
   if (!primary_node) {
     return nullptr;
   }
-  if (opcode != UnaryOp::UnaryOperators::NOP) {
+  if (opcode != UnaryOperations::NUM_UNARY) {
     return std::make_unique<UnaryOp>(std::move(primary_node), opcode);
   } else {
     return primary_node;
@@ -411,41 +414,41 @@ std::unique_ptr<Expr> Parser::unary() {
 }
 
 std::unique_ptr<Expr> Parser::primary() {
-  if (match({Lexer::Tag::LPAREN})) {
-    backup();
+  if (check(Basic::tok::l_paren)) {
     std::unique_ptr<Expr> expr_node = expr();
-    if (!match({Lexer::Tag::RPAREN})) {
-      reportError("Expected ')', received '%s'\n", peek().lexeme.c_str());
+    if (!expect(Basic::tok::r_paren)) {
+      reportError("Expected ')', received '%s'\n", peek().getLexeme().c_str());
       return nullptr;
     }
     return expr_node;
-  } else if (match({Lexer::Tag::IDENTIFIER})) {
-    if (peek().syntactic_category == Lexer::Tag::LPAREN) {
+  } else if (check(Basic::tok::identifier)) {
+    if (lookahead(2).getTag() == Basic::tok::Tag::l_paren) {
       std::unique_ptr<Expr> fncall_node = fnCall();
       if (!fncall_node) {
         return nullptr;
       }
     } else { /* identifier */
-      std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(previous());
+      std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(advance());
       return leaf;
     }
-  } else if (match({Lexer::Tag::POINTNUM, Lexer::Tag::NUM,
-                    Lexer::Tag::STRINGLIT, Lexer::Tag::TRUE,
-                    Lexer::Tag::FALSE})) {
+  } else if (isOneOf({Basic::tok::floating_constant,
+                      Basic::tok::numeric_constant, Basic::tok::string_literal,
+                      Basic::tok::kw_true, Basic::tok::kw_false})) {
     return std::make_unique<leafNode>(previous());
   }
-  reportError("Unexpected token '%s' in primary.\n", peek().lexeme.c_str());
+  reportError("Unexpected token '%s' in primary.\n",
+              peek().getLexeme().c_str());
   return nullptr;
 }
 
 std::unique_ptr<Expr> Parser::fnCall() {
-  if (!match({Lexer::Tag::IDENTIFIER})) {
+  if (!expect(Basic::tok::identifier)) {
     return nullptr;
   }
-  std::string id = previous().lexeme;
-  if (!match({Lexer::Tag::LPAREN})) {
+  const std::string id = previous().getLexeme();
+  if (!expect(Basic::tok::l_paren)) {
     reportError("Expected '(', received '%s' in function call declaration \n",
-                peek().lexeme.c_str());
+                peek().getLexeme().c_str());
     return nullptr;
   }
   std::unique_ptr<callArgList> callargs_node = callArgs();
@@ -454,20 +457,10 @@ std::unique_ptr<Expr> Parser::fnCall() {
     return nullptr;
   }
 
-  if (!match({Lexer::Tag::RPAREN})) {
+  if (!expect(Basic::tok::r_paren)) {
     reportError("Expected ')', received '%s' in argumment list declaration. \n",
-                peek().lexeme.c_str());
+                peek().getLexeme().c_str());
     return nullptr;
   }
   return std::make_unique<fnCallNode>(id, std::move(callargs_node));
-}
-
-int parse() {
-  if (initInstance("foo") != 0) {
-    return 1;
-  };
-  Parser theParser = Parser();
-  std::unique_ptr<ProgramNode> head = Parser::program();
-
-  return 0;
 }

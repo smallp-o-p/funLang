@@ -1,12 +1,10 @@
 #pragma once
 #include "Lex.hpp"
-#include <map>
+#include "OperationKinds.hpp"
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
-#include <variant>
 
 class ProgramNode;
 class FunctionsNode;
@@ -39,7 +37,7 @@ public:
   auto &getFuncs();
   auto &getGlobs();
   ProgramNode(std::unique_ptr<FunctionsNode> fncs)
-      : funcs(std::move(fncs)), globalSymbols(nullptr){};
+      : funcs(std::move(fncs)), globalSymbols(nullptr) {};
   ProgramNode(std::unique_ptr<FunctionsNode> fncs,
               std::unique_ptr<std::unordered_map<std::string, int>> globs)
       : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
@@ -67,7 +65,7 @@ private:
   std::string user_defined;
 
 public:
-  TypeNode(Lexer::Token &tok);
+  TypeNode(Token &tok);
   virtual void accept(NodeVisitor &v) override;
 };
 
@@ -89,7 +87,7 @@ private:
 public:
   FunctionNode(std::unique_ptr<PrototypeNode> pro,
                std::unique_ptr<CompoundStmt> compoundStmt)
-      : proto(std::move(pro)), compound(std::move(compoundStmt)){};
+      : proto(std::move(pro)), compound(std::move(compoundStmt)) {};
   virtual void accept(NodeVisitor &v) override;
 };
 
@@ -165,74 +163,46 @@ public:
 
 class Expr : public Stmt {
 public:
-  Expr(){};
+  Expr() {};
 };
 
 class BinaryOp : public Expr {
 public:
-  enum BinaryOperators {
-    EQEQ = -9999,
-    NE,
-    GTE,
-    LTE,
-    GT,
-    LT,
-    MULT,
-    DIV,
-    SUBTRACT,
-    ADDASSIGN,
-    SUBASSIGN,
-    ADD,
-    ASSIGN,
-    NONE,
-    UNDEFINED
-  };
-
 private:
-  BinaryOperators op;
+  Basic::BinaryOperations op;
   std::unique_ptr<Expr> lhs;
   std::unique_ptr<Expr> rhs;
 
 public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
-           BinaryOperators opcode)
+           Basic::BinaryOperations opcode)
       : lhs(std::move(left)), rhs(std::move(right)), op(opcode) {}
   virtual void accept(NodeVisitor &v) override;
 };
 
 class UnaryOp : public Expr {
 public:
-  enum UnaryOperators {
-    PREINCREMENT,
-    PREDECREMENT,
-    POSTINCREMENT,
-    POSTDECREMENT,
-    BANG,
-    NEGATE,
-    NOP
-  };
-
 private:
-  UnaryOperators op;
+  Basic::UnaryOperations op;
   std::unique_ptr<Expr> input;
 
 public:
-  void addOp(UnaryOperators opc);
+  void addOp(Basic::UnaryOperations opc);
   void addInput();
-  UnaryOp(std::unique_ptr<Expr> inp, UnaryOperators opc)
+  UnaryOp(std::unique_ptr<Expr> inp, Basic::UnaryOperations opc)
       : input(std::move(inp)), op(opc) {}
   virtual void accept(NodeVisitor &v) override;
 };
 
 class leafNode : public Expr {
 protected:
-  Lexer::Token tok;
+  Token tok;
 
 public:
   std::string_view getLexeme();
-  Lexer::Tag getTag();
+  Basic::tok::Tag getTag();
 
-  leafNode(const Lexer::Token &token) : tok(token) {}
+  leafNode(const Token &token) : tok(token) {}
 
   virtual void accept(NodeVisitor &v) override;
 };

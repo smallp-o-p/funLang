@@ -7,8 +7,8 @@ target_sources(Lex
         ${CMAKE_CURRENT_LIST_DIR}/Lex.hpp)
 
 target_include_directories(Lex 
-    PUBLIC 
+    PUBLIC
+        ${LLVM_INCLUDE_DIRS} 
         ${CMAKE_CURRENT_LIST_DIR})
-        
-target_link_libraries(Lex PUBLIC Basic)
+target_link_libraries(Lex PUBLIC Basic ${llvm_libs})
 message("Lexer current directory is: ${CMAKE_CURRENT_LIST_DIR}")

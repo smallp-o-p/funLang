@@ -1,36 +1,30 @@
 #pragma once
 #include "AST.hpp"
 #include "Lex.hpp"
-#include <cstdarg>
-#include <cstdio>
+#include "TokenTags.hpp"
 #include <initializer_list>
-#include <iostream>
 #include <memory>
-#include <stack>
-#include <unordered_map>
-#include <utility>
-#include <vector>
 
 enum currentNT { STMT, FUNCTION }; // what non-terminal we failed to parse
-int initInstance(const std::string &fp, bool usingString = false);
-bool atEnd();
-bool match(std::initializer_list<Lexer::Tag> toExpect);
-bool check(Lexer::Tag tok);
-Lexer::Token peek();
-Lexer::Token previous();
-Lexer::Token advance();
-Lexer::Token lookahead(int howMuch);
-void backup();
-void reportError(const char *format, ...);
-void recoverFromError(currentNT whereWeFailed);
 
 class Parser {
 private:
-  LexedTokensSingleton &lexer;
+  Lexer &lexer;
   bool error;
 
 private:
-  Parser(LexedTokensSingleton &lex) : lexer(lex), error(false) {}
+  int initInstance(const std::string &fp, bool usingString = false);
+  bool atEnd();
+  bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect);
+  Token peek();
+  Token previous();
+  Token advance();
+  bool expect(Basic::tok::Tag tok);
+  bool check(Basic::tok::Tag tok);
+  Token lookahead(uint32_t howMuch);
+  void reportError(const char *format, ...);
+  Parser(Lexer &lex) : lexer(lex), error(false) {}
+  void reportExpectError(Basic::tok::Tag expected, bool punctuator);
   std::unique_ptr<FunctionsNode> functions();
   std::unique_ptr<FunctionNode> function();
   std::unique_ptr<TypeNode> type();

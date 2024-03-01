@@ -1,0 +1,27 @@
+#ifndef BINARY_OPERATION
+#define BINARY_OPERATION(ID, SP)
+#endif
+#ifndef UNARY_OPERATION
+#define UNARY_OPERATION(ID, SP)
+#endif
+
+BINARY_OPERATION(plus, "+")
+BINARY_OPERATION(minus, "-")
+BINARY_OPERATION(multiply, "*")
+BINARY_OPERATION(divide, "/")
+BINARY_OPERATION(assign, "=")
+BINARY_OPERATION(equals, "==")
+BINARY_OPERATION(notequals, "!=")
+BINARY_OPERATION(lt, "<")
+BINARY_OPERATION(gt, ">")
+BINARY_OPERATION(ltequals, "<=")
+BINARY_OPERATION(gtequals, ">=")
+UNARY_OPERATION(unaryMinus, "-")
+UNARY_OPERATION(preInc, "++")
+UNARY_OPERATION(postInc, "++")
+UNARY_OPERATION(preDec, "--")
+UNARY_OPERATION(postDec, "--")
+UNARY_OPERATION(lNot, "!")
+
+#undef BINARY_OPERATION
+#undef UNARY_OPERATION

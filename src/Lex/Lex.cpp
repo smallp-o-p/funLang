@@ -1,5 +1,8 @@
 #include "Lex.hpp"
-
+#include "TokenTags.hpp"
+#include <cstdint>
+#include <fstream>
+#include <sstream>
 std::unique_ptr<Lexer> Lexer::init(const std::string &filename,
                                    bool usingString) {
   std::unique_ptr<std::istream> i_stream;
@@ -20,63 +23,65 @@ std::unique_ptr<Lexer> Lexer::init(const std::string &filename,
   return std::make_unique<Lexer>(std::move(i_stream));
 }
 
-Lexer::Token Lexer::getNext() {
+Token Lexer::getNext() {
   char c = ' ';
   while (isspace(c)) {
     if (c == '\n') {
       lineNum++;
-      colNum = 0;
+      colNum = 1;
     }
     colNum++;
     c = in_stream->get();
   }
   switch (c) {
   case ',':
-    return Token{",", Tag::COMMA};
+    return formKwToken(Basic::tok::Tag::comma);
   case '{':
-    return Token{"{", Tag::LCURLY};
+    return formKwToken(Basic::tok::l_brace);
   case '}':
-    return Token{"}", Tag::RCURLY};
+    return formKwToken(Basic::tok::r_brace);
   case '(':
-    return Token{"(", Tag::LPAREN};
+    return formKwToken(Basic::tok::Tag::l_paren);
   case ')':
-    return Token{")", Tag::RPAREN};
+    return formKwToken(Basic::tok::Tag::r_paren);
   case '=':
     if (nextIs('=')) {
-      return Token{"==", Tag::EQCMP};
+      return formKwToken(Basic::tok::Tag::equalequal);
     } else {
-      return Token{"=", Tag::EQ};
+      return formKwToken(Basic::tok::Tag::equal);
     }
   case ':':
-    return Token{":", Tag::COLON};
+    return formKwToken(Basic::tok::Tag::colon);
   case ';':
-    return Token{";", Tag::SEMI};
+    return formKwToken(Basic::tok::Tag::semi);
   case '!':
     if (nextIs('=')) {
-      return Token{"!=", Tag::NECMP};
+      return formKwToken(Basic::tok::Tag::exclaimequal);
     } else {
-      return Token{"!", Tag::BANG};
+      return formKwToken(Basic::tok::Tag::exclaim);
     }
   case '<':
     if (nextIs('=')) {
-      return Token{"<=", LTECMP};
+      return formKwToken(Basic::tok::Tag::lessequal);
     } else {
-      return Token{"<", LTCMP};
+      return formKwToken(Basic::tok::Tag::less);
     }
   case '>':
     if (nextIs('=')) {
-      return Token{">=", GTECMP};
+      return formKwToken(Basic::tok::Tag::greaterequal);
     } else {
-      return Token{">", GTCMP};
+      return formKwToken(Basic::tok::Tag::greater);
     }
   case '+':
-    return nextIs('+') ? Token{"++", PLUSPLUS} : Token{"+", PLUS};
+    return nextIs('+') ? formKwToken(Basic::tok::Tag::plusplus)
+                       : formKwToken(Basic::tok::Tag::plus);
   case '-':
-    return nextIs('-') ? Token{"++", Tag::MINUSMINUS} : Token{"-", MINUS};
+    return nextIs('-') ? formKwToken(Basic::tok::Tag::minusminus)
+                       : formKwToken(Basic::tok::minus);
   case '*':
-    return Token{"*", MULT};
+    return formKwToken(Basic::tok::Tag::star);
   case '/':
-    return Token{"/", DIV};
+    return formKwToken(Basic::tok::Tag::slash);
   case '\"':
     return lexString();
   }
@@ -89,19 +94,49 @@ Lexer::Token Lexer::getNext() {
     return lexIdentifier();
   }
   if (in_stream->eof()) {
-    return Token{"!!EOF!!", Tag::ENDFILE};
+    return formKwToken(Basic::tok::Tag::eof);
   } else {
     std::cout << "Fatal: Unexpected character '" << c << "' on line " << lineNum
               << std::endl;
-    return Token{"UH OH", Tag::ERR};
+    return formKwToken(Basic::tok::Tag::err);
   }
 }
+/**
+  Consume the next token and return it. Check for any retrieved but unconsumed
+  tokens.
+*/
+Token Lexer::advance() {
+  Token tok = unconsumed.empty() ? getNext() : unconsumed.front();
+  if (!unconsumed.empty()) {
+    unconsumed.pop_front();
+  }
+  tokens.push_back(tok);
+  tok_tracker++;
+  return tok;
+}
 
-/*
- * nextIs(char c) checks if the next character in the input buffer is c, if
- * so it eats the next character and returns true. Does nothing and returns
- * false otherwise.
- * */
+/**
+Lookahead of 1 token.
+*/
+Token Lexer::peek() {
+  if (!unconsumed.empty()) {
+    return unconsumed.front();
+  } else {
+    unconsumed.push_back(getNext());
+  }
+  return unconsumed.back();
+}
+
+/**
+Lookahead of n tokens.
+*/
+Token Lexer::lookahead(uint32_t howMuch) {
+  while (unconsumed.size() < howMuch) {
+    unconsumed.push_back(getNext());
+  }
+  return unconsumed.at(howMuch);
+}
+
 bool Lexer::nextIs(char c) {
   if (in_stream->peek() == c) {
     in_stream->get();
@@ -109,24 +144,35 @@ bool Lexer::nextIs(char c) {
   }
   return false;
 }
-Lexer::Token Lexer::lexString() {
+
+Token Lexer::lexString() {
+  uint32_t howLong, howTall = 0;
   char c;
   std::string string_lit = "\"";
 
   while ((c = in_stream->get()) != '\"' && c != EOF) {
+    if (c == '\n') {
+      howTall++;
+      colNum = 0;
+    } else {
+      howLong++;
+    }
     string_lit.push_back(c);
   };
 
   if (in_stream->eof()) {
     std::cerr << "Unclosed string literal :(" << std::endl;
-    return Token{"UH OH", Tag::ERR};
+    return formKwToken(Basic::tok::err);
   }
   string_lit.push_back('\"');
-  return Token{string_lit, Tag::STRINGLIT};
+  colNum += howLong;
+  lineNum += howTall;
+  return formToken(string_lit, Basic::tok::string_literal);
 }
 
-Lexer::Token Lexer::lexNum() {
+Token Lexer::lexNum() {
   std::string numStr = "";
+  uint32_t howLong = -1; // we pushed back a character
   char c;
   bool seenDot = false;
   while ((isdigit(in_stream->peek()) || in_stream->peek() == '.')) {
@@ -143,43 +189,23 @@ Lexer::Token Lexer::lexNum() {
     numStr.push_back('0');
   }
   if (seenDot) {
-    return Token{numStr, Tag::POINTNUM};
+    return formToken(numStr, Basic::tok::Tag::floating_constant);
   }
-  return Token{numStr, Tag::NUM};
+  colNum += howLong;
+  return formToken(numStr, Basic::tok::Tag::numeric_constant);
 }
 
-Lexer::Token Lexer::lexIdentifier() {
-
+Token Lexer::lexIdentifier() {
   std::string id_str = "";
-
   char c;
 
   while (isalnum(in_stream->peek()) || in_stream->peek() == '_') {
     c = in_stream->get();
     id_str.push_back(c);
   }
-  if (id_str.compare("void") == 0) {
-    return Token{id_str, Tag::VOID};
-  } else if (id_str.compare("bool") == 0) {
-    return Token{id_str, Tag::BOOL};
-  } else if (id_str.compare("char") == 0) {
-    return Token{id_str, Tag::CHAR};
-  } else if (id_str.compare("string") == 0) {
-    return Token{id_str, Tag::STRING};
-  } else if (id_str == "i32") {
-    return Token{id_str, Tag::I32};
-  } else if (id_str == "i64") {
-    return Token{id_str, Tag::I64};
-  } else if (id_str == "f32") {
-    return Token{id_str, Tag::F32};
-  } else if (id_str == "f64") {
-    return Token{id_str, Tag::F64};
-  } else if (id_str == "return") {
-    return Token{id_str, Tag::RETURN};
-  } else if (id_str == "true") {
-    return Token{id_str, Tag::TRUE};
-  } else if (id_str == "false") {
-    return Token{id_str, Tag::FALSE};
+  Basic::tok::Tag kw = findKeyword(id_str);
+  if (kw != Basic::tok::Tag::identifier) {
+    return formKwToken(kw);
   }
-  return Token{id_str, Tag::IDENTIFIER};
+  return formToken(id_str, findKeyword(id_str));
 }
