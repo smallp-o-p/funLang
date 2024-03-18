@@ -1,4 +1,5 @@
 #include "TokenTags.hpp"
+
 namespace Basic {
 enum BinaryOperations : unsigned short {
 #define BINARY_OPERATION(ID, SP) ID,

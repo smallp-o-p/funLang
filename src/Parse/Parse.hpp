@@ -9,13 +9,13 @@ enum currentNT { STMT, FUNCTION }; // what non-terminal we failed to parse
 
 class Parser {
 private:
-  Lexer &lexer;
+  std::unique_ptr<Lexer> lexer;
   bool error;
 
-private:
-  int initInstance(const std::string &fp, bool usingString = false);
+public:
+  Parser(std::unique_ptr<Lexer> lex) : lexer(std::move(lex)), error(false) {}
   bool atEnd();
-  bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect);
+  bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect, bool peeking);
   Token peek();
   Token previous();
   Token advance();
@@ -23,8 +23,9 @@ private:
   bool check(Basic::tok::Tag tok);
   Token lookahead(uint32_t howMuch);
   void reportError(const char *format, ...);
-  Parser(Lexer &lex) : lexer(lex), error(false) {}
   void reportExpectError(Basic::tok::Tag expected, bool punctuator);
+
+public:
   std::unique_ptr<FunctionsNode> functions();
   std::unique_ptr<FunctionNode> function();
   std::unique_ptr<TypeNode> type();

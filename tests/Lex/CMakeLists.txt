@@ -1,4 +1,5 @@
 if(BUILD_TESTING)
+  set(CMAKE_BUILD_TYPE Debug)
   include(GoogleTest)
   configure_file(lex_Basic.txt ${CMAKE_CURRENT_BINARY_DIR})
   configure_file(lex_IntNumLits.txt ${CMAKE_CURRENT_BINARY_DIR})
@@ -8,8 +9,6 @@ if(BUILD_TESTING)
   configure_file(lex_ExampleFunc.txt ${CMAKE_CURRENT_BINARY_DIR})
 
   add_executable(LexTests EXCLUDE_FROM_ALL LexTests.cpp)
-
   target_link_libraries(LexTests PRIVATE Lex GTest::gtest_main)
   add_test(LexTests LexTests)
-  gtest_discover_tests(LexTests)
 endif()

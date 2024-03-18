@@ -18,7 +18,6 @@ const char *tok::getPunctuatorSpelling(Tag tag) {
   }
   return nullptr;
 }
-
 const char *tok::getKeywordSpelling(Tag tag) {
   switch (tag) {
 #define KEYWORD(ID, FLAG)                                                      \

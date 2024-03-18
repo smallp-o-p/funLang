@@ -1,37 +1,11 @@
 #include "Lex.hpp"
 #include "TokenTags.hpp"
 #include <cstdint>
-#include <fstream>
-#include <sstream>
-std::unique_ptr<Lexer> Lexer::init(const std::string &filename,
-                                   bool usingString) {
-  std::unique_ptr<std::istream> i_stream;
-  if (filename.empty()) {
-    std::cout << "Usage: funLang {FILE_PATH_DIR}" << std::endl;
-    return nullptr;
-  }
-  if (usingString) {
-    std::cout << "Using String" << std::endl;
-    i_stream = std::make_unique<std::istringstream>(filename);
-  } else {
-    i_stream = std::make_unique<std::ifstream>(filename);
-  }
-  if (i_stream->fail()) {
-    std::cerr << "Failed to process input :(" << std::endl;
-    return nullptr;
-  }
-  return std::make_unique<Lexer>(std::move(i_stream));
-}
 
 Token Lexer::getNext() {
-  char c = ' ';
-  while (isspace(c)) {
-    if (c == '\n') {
-      lineNum++;
-      colNum = 1;
-    }
-    colNum++;
-    c = in_stream->get();
+  char c = *bufPtr++;
+  while (iswspace(c)) {
+    c = *bufPtr++;
   }
   switch (c) {
   case ',':
@@ -83,24 +57,78 @@ Token Lexer::getNext() {
   case '/':
     return formKwToken(Basic::tok::Tag::slash);
   case '\"':
+    --bufPtr;
     return lexString();
   }
   if (isdigit(c)) {
-    in_stream->putback(c);
+    --bufPtr;
     return lexNum();
   }
   if (isalpha(c)) {
-    in_stream->putback(c);
+    --bufPtr;
     return lexIdentifier();
   }
-  if (in_stream->eof()) {
+  if (!c) {
     return formKwToken(Basic::tok::Tag::eof);
   } else {
-    std::cout << "Fatal: Unexpected character '" << c << "' on line " << lineNum
-              << std::endl;
     return formKwToken(Basic::tok::Tag::err);
   }
 }
+
+bool Lexer::nextIs(char c) {
+  if (*(bufPtr) == c) { // bufPtr is already looking at the next character
+    bufPtr++;
+    return true;
+  }
+  return false;
+}
+
+Token Lexer::lexString() {
+  auto start = bufPtr;
+  while (*bufPtr != '\"' && *bufPtr) {
+    bufPtr++;
+  };
+  if (!*bufPtr) {
+    std::cerr << "Unclosed string literal :(" << std::endl;
+    return formKwToken(Basic::tok::err);
+  }
+  return formToken(std::string(start, bufPtr), Basic::tok::string_literal);
+}
+
+Token Lexer::lexNum() {
+  auto start = bufPtr;
+  bool seenDot = false;
+  while (*bufPtr && (isdigit(*bufPtr) || *bufPtr == '.')) {
+    if (seenDot && *bufPtr == '.') {
+      break;
+    }
+    if (*bufPtr == '.' && !seenDot) {
+      seenDot = true;
+    }
+    bufPtr++;
+  }
+  if (!*bufPtr) {
+    return formKwToken(Basic::tok::Tag::err);
+  }
+  if (seenDot) {
+    return formToken(std::string(start, bufPtr),
+                     Basic::tok::Tag::floating_constant);
+  }
+  return formToken(std::string(start, bufPtr),
+                   Basic::tok::Tag::numeric_constant);
+}
+
+Token Lexer::lexIdentifier() {
+  auto start = bufPtr;
+
+  while (isalnum(*bufPtr) || *bufPtr == '_') {
+    bufPtr++;
+  }
+  std::string temp = std::string(start, bufPtr);
+  Basic::tok::Tag kw = findKeyword(temp);
+  return formToken(temp, findKeyword(temp));
+}
+
 /**
   Consume the next token and return it. Check for any retrieved but unconsumed
   tokens.
@@ -134,78 +162,5 @@ Token Lexer::lookahead(uint32_t howMuch) {
   while (unconsumed.size() < howMuch) {
     unconsumed.push_back(getNext());
   }
-  return unconsumed.at(howMuch);
-}
-
-bool Lexer::nextIs(char c) {
-  if (in_stream->peek() == c) {
-    in_stream->get();
-    return true;
-  }
-  return false;
-}
-
-Token Lexer::lexString() {
-  uint32_t howLong, howTall = 0;
-  char c;
-  std::string string_lit = "\"";
-
-  while ((c = in_stream->get()) != '\"' && c != EOF) {
-    if (c == '\n') {
-      howTall++;
-      colNum = 0;
-    } else {
-      howLong++;
-    }
-    string_lit.push_back(c);
-  };
-
-  if (in_stream->eof()) {
-    std::cerr << "Unclosed string literal :(" << std::endl;
-    return formKwToken(Basic::tok::err);
-  }
-  string_lit.push_back('\"');
-  colNum += howLong;
-  lineNum += howTall;
-  return formToken(string_lit, Basic::tok::string_literal);
-}
-
-Token Lexer::lexNum() {
-  std::string numStr = "";
-  uint32_t howLong = -1; // we pushed back a character
-  char c;
-  bool seenDot = false;
-  while ((isdigit(in_stream->peek()) || in_stream->peek() == '.')) {
-    if (seenDot && in_stream->peek() == '.') {
-      break;
-    }
-    if (in_stream->peek() == '.' && !seenDot) {
-      seenDot = true;
-    }
-    c = in_stream->get();
-    numStr.push_back(c);
-  }
-  if (numStr.back() == '.') { // allow numbers like 12.
-    numStr.push_back('0');
-  }
-  if (seenDot) {
-    return formToken(numStr, Basic::tok::Tag::floating_constant);
-  }
-  colNum += howLong;
-  return formToken(numStr, Basic::tok::Tag::numeric_constant);
-}
-
-Token Lexer::lexIdentifier() {
-  std::string id_str = "";
-  char c;
-
-  while (isalnum(in_stream->peek()) || in_stream->peek() == '_') {
-    c = in_stream->get();
-    id_str.push_back(c);
-  }
-  Basic::tok::Tag kw = findKeyword(id_str);
-  if (kw != Basic::tok::Tag::identifier) {
-    return formKwToken(kw);
-  }
-  return formToken(id_str, findKeyword(id_str));
+  return unconsumed.at(howMuch - 1);
 }

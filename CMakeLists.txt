@@ -3,7 +3,6 @@ project(funLang
     VERSION 0.0.1
     DESCRIPTION "A beginner's programming language"
 )
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

@@ -1,35 +1,38 @@
 #include "AST.hpp"
 #include "Lex.hpp"
-#include <string_view>
-#include <unordered_map>
+#include "TokenTags.hpp"
 auto &ProgramNode::getFuncs() { return funcs; }
 auto &ProgramNode::getGlobs() { return globalSymbols; }
 
-TypeNode::TypeNode(Lexer::Token &tok) {
-  switch (tok.syntactic_category) {
-  case Lexer::Tag::BOOL:
+TypeNode::TypeNode(Token tok) {
+  using namespace Basic;
+  switch (tok.getTag()) {
+  case tok::Tag::kw_bool:
     type = DataTypes::BOOL;
     break;
-  case Lexer::Tag::I32:
+  case tok::Tag::kw_i32:
     type = DataTypes::i32;
     break;
-  case Lexer::Tag::I64:
+  case tok::Tag::kw_i64:
     type = DataTypes::i64;
     break;
-  case Lexer::Tag::STRING:
+  case tok::Tag::kw_string:
     type = DataTypes::STRING;
-  case Lexer::Tag::F32:
+  case tok::Tag::kw_f32:
     type = DataTypes::f32;
     break;
-  case Lexer::Tag::F64:
+  case tok::Tag::kw_f64:
     type = DataTypes::f64;
     break;
-  case Lexer::Tag::IDENTIFIER:
-    type = DataTypes::USERDEFINED;
-    user_defined = tok.lexeme;
+  case tok::Tag::identifier:
+    type = DataTypes::IDENT;
+    user_defined = tok.getIdentifier();
+    break;
+  case tok::Tag::kw_void:
+    type = DataTypes::VOID;
     break;
   default:
-    type = DataTypes::VOID;
+    type = DataTypes::INVALID;
     break;
   }
 }
@@ -37,4 +40,4 @@ TypeNode::TypeNode(Lexer::Token &tok) {
 std::string &VarDecl::getName() { return name; }
 Expr &VarDecl::getExpr() { return *expr; }
 
-std::string_view leafNode::getLexeme() { return tok.lexeme; }
+const std::string &leafNode::getLexeme() { return tok.getIdentifier(); }

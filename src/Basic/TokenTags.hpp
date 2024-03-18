@@ -12,7 +12,7 @@ enum Tag : unsigned short {
 const char *getTokenName(Tag tag);
 const char *getPunctuatorSpelling(Tag tag);
 const char *getKeywordSpelling(Tag tag);
-
+const char *getKwPunctuatorSpelling(Tag tag);
 } // namespace tok
 
 } // namespace Basic

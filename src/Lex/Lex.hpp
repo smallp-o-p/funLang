@@ -1,4 +1,5 @@
 #pragma once
+#include "Diag.hpp"
 #include "TokenTags.hpp"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -8,6 +9,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <istream>
+#include <llvm/Support/SourceMgr.h>
 #include <memory>
 #include <string>
 #include <sys/types.h>
@@ -19,33 +21,36 @@ class Token {
 private:
   std::string lexeme;
   Basic::tok::Tag syntactic_category;
-  uint32_t colNum, lineNum;
-  Token(const std::string &lexeme, Basic::tok::Tag syntactic_category,
-        uint32_t col, uint32_t line)
-      : lexeme(lexeme), syntactic_category(syntactic_category), colNum(col),
-        lineNum(line) {}
-  Token(Basic::tok::Tag syn_cat, uint32_t col, uint32_t line) {
+
+private:
+  Token(const std::string &lexeme, Basic::tok::Tag syntactic_category)
+      : lexeme(lexeme), syntactic_category(syntactic_category) {}
+  Token(Basic::tok::Tag syn_cat) {
     assert((syn_cat != Basic::tok::identifier &&
             syn_cat != Basic::tok::NUM_TOKENS) &&
            "Attempted to invoke Token enum-only constructor with identifer "
            "or num_tokens\n");
     syntactic_category = syn_cat;
-    colNum = col;
-    lineNum = line;
   }
 
 public:
+  Basic::tok::Tag getTag() const { return syntactic_category; }
+  const std::string &getIdentifier() {
+    assert(syntactic_category == Basic::tok::identifier &&
+           "Cannot get identifier of non-identifier token.");
+    return lexeme;
+  }
   void prettyPrint() {
     std::cout << Basic::tok::getTokenName(syntactic_category) << ": " << lexeme
               << std::endl;
   }
-  Basic::tok::Tag getTag() { return syntactic_category; }
-  std::string &getLexeme() { return lexeme; }
+  bool is(Basic::tok::Tag K) const { return K == syntactic_category; }
 };
 
 class Lexer {
 private:
   llvm::StringMap<Basic::tok::Tag> keywordMap;
+
   std::vector<Token> tokens;    // keep track of old tokens for error messages
   std::deque<Token> unconsumed; // unconsumed tokens, only here cause we peeked
                                 // or did some lookahead
@@ -53,19 +58,16 @@ private:
                             // token, might not be necessary
   std::unique_ptr<std::istream> in_stream;
 
-  uint32_t colNum = 1;
-  uint32_t lineNum = 1;
   Token lexString();
   Token lexNum();
   Token lexIdentifier();
   Token getNext();
   bool nextIs(char c);
-  Token formToken(std::string &name, Basic::tok::Tag kind) {
-    return Token(name, kind, colNum, lineNum);
+
+  Token formToken(std::string name, Basic::tok::Tag kind) {
+    return Token(name, kind);
   };
-  Token formKwToken(Basic::tok::Tag kind) {
-    return Token(kind, colNum, lineNum);
-  }
+  Token formKwToken(Basic::tok::Tag kind) { return Token(kind); }
   void addKeyword(const std::string &kw, Basic::tok::Tag tag) {
     keywordMap.insert(std::make_pair(kw, tag));
   }
@@ -82,13 +84,23 @@ private:
 #include "TokenTags.def"
   }
 
+private:
+  llvm::SourceMgr &srcManager;
+  DiagEngine diagnostics;
+  llvm::StringRef curBuf;
+  llvm::StringRef::iterator bufPtr;
+  uint32_t currentBuffer = 0;
+
 public:
-  Lexer(std::unique_ptr<std::istream> in) : in_stream(std::move(in)) {
+  Lexer(llvm::SourceMgr &srcMgr, DiagEngine &diags)
+      : srcManager(srcMgr), diagnostics(diags) {
+    currentBuffer = srcMgr.getMainFileID();
+    curBuf = srcMgr.getMemoryBuffer(currentBuffer)->getBuffer();
+    bufPtr = curBuf.begin();
     addKeywords();
   }
+
   Token advance();
-  static std::unique_ptr<Lexer> init(const std::string &filename,
-                                     bool usingString = false);
   Token peek(); // equivalent to lookahead(1)
   Token previous() { return tokens.at(tok_tracker); };
   bool match(std::initializer_list<Basic::tok::Tag> toks);
