@@ -13,11 +13,12 @@ class DiagEngine {
   static const std::string getDiagText(unsigned diagID);
   static llvm::SourceMgr::DiagKind getDiagKind(unsigned diagID);
 
-  llvm::SourceMgr &srcMgr;
+  std::shared_ptr<llvm::SourceMgr> srcMgr;
   uint32_t numErrors;
 
 public:
-  DiagEngine(llvm::SourceMgr &srcMgr) : srcMgr(srcMgr), numErrors(0) {}
+  DiagEngine(std::shared_ptr<llvm::SourceMgr> srcMgr)
+      : srcMgr(srcMgr), numErrors(0) {}
 
   uint32_t getNumErrors() { return numErrors; }
 
@@ -27,7 +28,7 @@ public:
         llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
             .str();
     llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
-    srcMgr.PrintMessage(loc, kind, msg);
+    srcMgr->PrintMessage(loc, kind, msg);
     numErrors += (kind == llvm::SourceMgr::DK_Error);
   }
 };

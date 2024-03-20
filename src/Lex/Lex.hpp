@@ -8,7 +8,6 @@
 #include <deque>
 #include <initializer_list>
 #include <iostream>
-#include <istream>
 #include <llvm/Support/SourceMgr.h>
 #include <memory>
 #include <string>
@@ -40,6 +39,8 @@ public:
            "Cannot get identifier of non-identifier token.");
     return lexeme;
   }
+
+  const std::string_view getLexeme() { return lexeme; }
   void prettyPrint() {
     std::cout << Basic::tok::getTokenName(syntactic_category) << ": " << lexeme
               << std::endl;
@@ -56,8 +57,6 @@ private:
                                 // or did some lookahead
   int32_t tok_tracker = -1; // should be pointing to the most recently consumed
                             // token, might not be necessary
-  std::unique_ptr<std::istream> in_stream;
-
   Token lexString();
   Token lexNum();
   Token lexIdentifier();
@@ -85,17 +84,17 @@ private:
   }
 
 private:
-  llvm::SourceMgr &srcManager;
+  std::shared_ptr<llvm::SourceMgr> srcManager;
   DiagEngine diagnostics;
   llvm::StringRef curBuf;
   llvm::StringRef::iterator bufPtr;
   uint32_t currentBuffer = 0;
 
 public:
-  Lexer(llvm::SourceMgr &srcMgr, DiagEngine &diags)
+  Lexer(std::shared_ptr<llvm::SourceMgr> srcMgr, DiagEngine &diags)
       : srcManager(srcMgr), diagnostics(diags) {
-    currentBuffer = srcMgr.getMainFileID();
-    curBuf = srcMgr.getMemoryBuffer(currentBuffer)->getBuffer();
+    currentBuffer = srcMgr->getMainFileID();
+    curBuf = srcMgr->getMemoryBuffer(currentBuffer)->getBuffer();
     bufPtr = curBuf.begin();
     addKeywords();
   }

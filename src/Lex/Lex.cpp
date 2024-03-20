@@ -57,7 +57,6 @@ Token Lexer::getNext() {
   case '/':
     return formKwToken(Basic::tok::Tag::slash);
   case '\"':
-    --bufPtr;
     return lexString();
   }
   if (isdigit(c)) {
@@ -84,9 +83,8 @@ bool Lexer::nextIs(char c) {
 }
 
 Token Lexer::lexString() {
-  auto start = bufPtr;
-  while (*bufPtr != '\"' && *bufPtr) {
-    bufPtr++;
+  auto start = bufPtr - 1;
+  while (*bufPtr && *bufPtr++ != '\"') {
   };
   if (!*bufPtr) {
     std::cerr << "Unclosed string literal :(" << std::endl;
