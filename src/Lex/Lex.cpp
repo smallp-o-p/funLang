@@ -3,128 +3,117 @@
 #include <cstdint>
 
 Token Lexer::getNext() {
-  char c = *bufPtr++;
-  while (iswspace(c)) {
-    c = *bufPtr++;
+  while (*bufPtr && iswspace(*bufPtr)) {
+	++bufPtr;
   }
-  switch (c) {
-  case ',':
-    return formKwToken(Basic::tok::Tag::comma);
-  case '{':
-    return formKwToken(Basic::tok::l_brace);
-  case '}':
-    return formKwToken(Basic::tok::r_brace);
-  case '(':
-    return formKwToken(Basic::tok::Tag::l_paren);
-  case ')':
-    return formKwToken(Basic::tok::Tag::r_paren);
+  switch (*bufPtr) {
+  case ',':return formToken(bufPtr + 1, Basic::tok::Tag::comma);
+  case '{':return formToken(bufPtr + 1, Basic::tok::l_brace);
+  case '}':return formToken(bufPtr + 1, Basic::tok::r_brace);
+  case '(':return formToken(bufPtr + 1, Basic::tok::Tag::l_paren);
+  case ')':return formToken(bufPtr + 1, Basic::tok::Tag::r_paren);
   case '=':
-    if (nextIs('=')) {
-      return formKwToken(Basic::tok::Tag::equalequal);
-    } else {
-      return formKwToken(Basic::tok::Tag::equal);
-    }
-  case ':':
-    return formKwToken(Basic::tok::Tag::colon);
-  case ';':
-    return formKwToken(Basic::tok::Tag::semi);
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::equalequal);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::equal);
+	}
+  case ':':return formToken(bufPtr + 1, Basic::tok::Tag::colon);
+  case ';':return formToken(bufPtr + 1, Basic::tok::Tag::semi);
   case '!':
-    if (nextIs('=')) {
-      return formKwToken(Basic::tok::Tag::exclaimequal);
-    } else {
-      return formKwToken(Basic::tok::Tag::exclaim);
-    }
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::exclaimequal);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::exclaim);
+	}
   case '<':
-    if (nextIs('=')) {
-      return formKwToken(Basic::tok::Tag::lessequal);
-    } else {
-      return formKwToken(Basic::tok::Tag::less);
-    }
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::lessequal);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::less);
+	}
   case '>':
-    if (nextIs('=')) {
-      return formKwToken(Basic::tok::Tag::greaterequal);
-    } else {
-      return formKwToken(Basic::tok::Tag::greater);
-    }
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::greaterequal);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::greater);
+	}
   case '+':
-    return nextIs('+') ? formKwToken(Basic::tok::Tag::plusplus)
-                       : formKwToken(Basic::tok::Tag::plus);
+	return nextIs('+') ? formToken(bufPtr + 2, Basic::tok::Tag::plusplus)
+					   : formToken(bufPtr + 1, Basic::tok::Tag::plus);
   case '-':
-    return nextIs('-') ? formKwToken(Basic::tok::Tag::minusminus)
-                       : formKwToken(Basic::tok::minus);
-  case '*':
-    return formKwToken(Basic::tok::Tag::star);
-  case '/':
-    return formKwToken(Basic::tok::Tag::slash);
-  case '\"':
-    return lexString();
+	return nextIs('-') ? formToken(bufPtr + 2, Basic::tok::Tag::minusminus)
+					   : formToken(bufPtr + 1, Basic::tok::minus);
+  case '*':return formToken(bufPtr + 1, Basic::tok::Tag::star);
+  case '/':return formToken(bufPtr + 1, Basic::tok::Tag::slash);
+  case '\"':return lexString();
+  default: {
+	if (isdigit(*bufPtr)) {
+	  return lexNum();
+	}
+	if (isalpha(*bufPtr)) {
+	  return lexIdentifier();
+	}
+	if (!*bufPtr) {
+	  return formToken(bufPtr, Basic::tok::Tag::eof);
+	} else {
+	  diagnostics.reportErr(getCurLoc(), diag::err_unexpected_char, *bufPtr);
+	  return formErr();
+	}
   }
-  if (isdigit(c)) {
-    --bufPtr;
-    return lexNum();
-  }
-  if (isalpha(c)) {
-    --bufPtr;
-    return lexIdentifier();
-  }
-  if (!c) {
-    return formKwToken(Basic::tok::Tag::eof);
-  } else {
-    return formKwToken(Basic::tok::Tag::err);
   }
 }
 
 bool Lexer::nextIs(char c) {
-  if (*(bufPtr) == c) { // bufPtr is already looking at the next character
-    bufPtr++;
-    return true;
+  if (*(bufPtr + 1)==c) {
+	return true;
   }
   return false;
 }
 
 Token Lexer::lexString() {
-  auto start = bufPtr - 1;
-  while (*bufPtr && *bufPtr++ != '\"') {
-  };
-  if (!*bufPtr) {
-    std::cerr << "Unclosed string literal :(" << std::endl;
-    return formKwToken(Basic::tok::err);
+  auto end = bufPtr + 1;
+  while (*end && *end++!='\"') {
   }
-  return formToken(std::string(start, bufPtr), Basic::tok::string_literal);
+  if (!*end) {
+	std::cerr << "Unclosed string literal :(" << std::endl;
+	diagnostics.reportErr(getLocFrom(bufPtr), diag::err_unterminated_char_or_string);
+	return formErr();
+  }
+  return formToken(end, Basic::tok::string_literal);
 }
 
 Token Lexer::lexNum() {
-  auto start = bufPtr;
+  auto end = bufPtr;
   bool seenDot = false;
-  while (*bufPtr && (isdigit(*bufPtr) || *bufPtr == '.')) {
-    if (seenDot && *bufPtr == '.') {
-      break;
-    }
-    if (*bufPtr == '.' && !seenDot) {
-      seenDot = true;
-    }
-    bufPtr++;
+  while (*end && (isdigit(*end) || *end=='.')) {
+	if (seenDot && *end=='.') {
+	  break;
+	}
+	if (*end=='.' && !seenDot) {
+	  seenDot = true;
+	}
+	end++;
   }
-  if (!*bufPtr) {
-    return formKwToken(Basic::tok::Tag::err);
+  if (!*end) {
+	return formErr();
   }
   if (seenDot) {
-    return formToken(std::string(start, bufPtr),
-                     Basic::tok::Tag::floating_constant);
+	return formToken(end,
+					 Basic::tok::Tag::floating_constant);
   }
-  return formToken(std::string(start, bufPtr),
-                   Basic::tok::Tag::numeric_constant);
+  return formToken(end,
+				   Basic::tok::Tag::numeric_constant);
 }
 
 Token Lexer::lexIdentifier() {
-  auto start = bufPtr;
+  auto end = bufPtr;
 
-  while (isalnum(*bufPtr) || *bufPtr == '_') {
-    bufPtr++;
+  while (isalnum(*end) || *end=='_') {
+	end++;
   }
-  std::string temp = std::string(start, bufPtr);
-  Basic::tok::Tag kw = findKeyword(temp);
-  return formToken(temp, findKeyword(temp));
+  std::string temp = std::string(bufPtr, end);
+  return formToken(end, findKeyword(temp));
 }
 
 /**
@@ -134,7 +123,7 @@ Token Lexer::lexIdentifier() {
 Token Lexer::advance() {
   Token tok = unconsumed.empty() ? getNext() : unconsumed.front();
   if (!unconsumed.empty()) {
-    unconsumed.pop_front();
+	unconsumed.pop_front();
   }
   tokens.push_back(tok);
   tok_tracker++;
@@ -146,9 +135,9 @@ Lookahead of 1 token.
 */
 Token Lexer::peek() {
   if (!unconsumed.empty()) {
-    return unconsumed.front();
+	return unconsumed.front();
   } else {
-    unconsumed.push_back(getNext());
+	unconsumed.push_back(getNext());
   }
   return unconsumed.back();
 }
@@ -157,8 +146,30 @@ Token Lexer::peek() {
 Lookahead of n tokens.
 */
 Token Lexer::lookahead(uint32_t howMuch) {
-  while (unconsumed.size() < howMuch) {
-    unconsumed.push_back(getNext());
+  while (howMuch > unconsumed.size()) {
+	unconsumed.push_back(getNext());
   }
   return unconsumed.at(howMuch - 1);
 }
+Basic::tok::Tag Lexer::findKeyword(std::string_view name) {
+  auto result = keywordMap.find(name);
+  if (result!=keywordMap.end()) {
+	return result->second;
+  }
+  return Basic::tok::Tag::identifier;
+}
+
+bool Lexer::atEnd() {
+  return !*bufPtr;
+}
+Token Lexer::formToken(const char *tokEnd, Basic::tok::Tag kind) {
+  Token tok = Token{llvm::StringRef(bufPtr, static_cast<size_t>(tokEnd - bufPtr)), kind};
+  bufPtr = tokEnd;
+  return tok;
+}
+Token Lexer::formErr() {
+  bufPtr++;
+  return {llvm::StringRef(""), Basic::tok::Tag::err};
+}
+Token::Token(llvm::StringRef lexeme, Basic::tok::Tag syntactic_category)
+	: lexeme(lexeme), syntactic_category(syntactic_category) {}

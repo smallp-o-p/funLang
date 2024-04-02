@@ -1,8 +1,9 @@
 #ifndef DIAG
 #define DIAG(ID, Level, Msg)
+#endif
 
-#endif 
-
+DIAG(err_unexpected_char, Error, "Unexpected character '{0}'.")
 DIAG(err_unterminated_char_or_string, Error, "Missing a terminating character.")
-DIAG(err_expected, Error, "Expected {0}, but received {1}")
+DIAG(err_expected, Error, "Expected '{0}', but received '{1}'")
 
+#undef DIAG

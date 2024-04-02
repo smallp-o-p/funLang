@@ -28,6 +28,7 @@ public:
 
   template<typename... args>
   void reportErr(llvm::SMLoc loc, uint32_t diagID, args &&...arguments) {
+	assert(loc.isValid() && "SMLoc returned invalid.");
 	std::string msg =
 		llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
 			.str();
