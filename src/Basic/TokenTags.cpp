@@ -4,7 +4,7 @@ static const char *const tokNames[] = {
 #define TOK(ID) #ID,
 #define KEYWORD(ID, FLAG) #ID,
 #include "TokenTags.def"
-    nullptr};
+	nullptr};
 
 const char *tok::getTokenName(Tag tag) { return tokNames[tag]; }
 const char *tok::getPunctuatorSpelling(Tag tag) {
@@ -13,19 +13,18 @@ const char *tok::getPunctuatorSpelling(Tag tag) {
   case ID:                                                                     \
     return SP;
 #include "TokenTags.def"
-  default:
-    break;
+  default:break;
   }
   return nullptr;
 }
+
 const char *tok::getKeywordSpelling(Tag tag) {
   switch (tag) {
 #define KEYWORD(ID, FLAG)                                                      \
   case kw_##ID:                                                                \
     return #ID;
 #include "TokenTags.def"
-  default:
-    break;
+  default:break;
   }
   return nullptr;
 }

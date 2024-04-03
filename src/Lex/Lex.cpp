@@ -120,20 +120,19 @@ Token Lexer::lexIdentifier() {
   Consume the next token and return it. Check for any retrieved but unconsumed
   tokens.
 */
-Token Lexer::advance() {
+Token &Lexer::advance() {
   Token tok = unconsumed.empty() ? getNext() : unconsumed.front();
   if (!unconsumed.empty()) {
 	unconsumed.pop_front();
   }
   tokens.push_back(tok);
-  tok_tracker++;
-  return tok;
+  return tokens.back();
 }
 
 /**
 Lookahead of 1 token.
 */
-Token Lexer::peek() {
+Token &Lexer::peek() {
   if (!unconsumed.empty()) {
 	return unconsumed.front();
   } else {
@@ -145,12 +144,13 @@ Token Lexer::peek() {
 /**
 Lookahead of n tokens.
 */
-Token Lexer::lookahead(uint32_t howMuch) {
+Token &Lexer::lookahead(uint32_t howMuch) {
   while (howMuch > unconsumed.size()) {
 	unconsumed.push_back(getNext());
   }
   return unconsumed.at(howMuch - 1);
 }
+
 Basic::tok::Tag Lexer::findKeyword(std::string_view name) {
   auto result = keywordMap.find(name);
   if (result!=keywordMap.end()) {
@@ -162,14 +162,17 @@ Basic::tok::Tag Lexer::findKeyword(std::string_view name) {
 bool Lexer::atEnd() {
   return !*bufPtr;
 }
+
 Token Lexer::formToken(const char *tokEnd, Basic::tok::Tag kind) {
   Token tok = Token{llvm::StringRef(bufPtr, static_cast<size_t>(tokEnd - bufPtr)), kind};
   bufPtr = tokEnd;
   return tok;
 }
+
 Token Lexer::formErr() {
   bufPtr++;
   return {llvm::StringRef(""), Basic::tok::Tag::err};
 }
+
 Token::Token(llvm::StringRef lexeme, Basic::tok::Tag syntactic_category)
 	: lexeme(lexeme), syntactic_category(syntactic_category) {}

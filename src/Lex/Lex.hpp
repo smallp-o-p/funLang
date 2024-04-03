@@ -26,10 +26,10 @@ public:
 
   Basic::tok::Tag getTag() const { return syntactic_category; }
 
-  const char *getIdentifier() {
+  llvm::StringRef getIdentifier() {
 	assert(syntactic_category==Basic::tok::identifier &&
 		"Cannot get identifier of non-identifier token.");
-	return lexeme.data();
+	return lexeme;
   }
 
   llvm::StringRef getLexeme() { return lexeme; }
@@ -41,6 +41,13 @@ public:
 
   llvm::SMLoc getFromPtr() {
 	return llvm::SMLoc::getFromPointer(lexeme.data());
+  }
+
+  llvm::SMRange getLocRange() {
+	llvm::SMLoc end = llvm::SMLoc::getFromPointer(lexeme.data() + lexeme.size());
+	assert(end.isValid());
+	return {llvm::SMLoc::getFromPointer(lexeme.data()),
+			end};
   }
 
   bool is(Basic::tok::Tag K) const { return K==syntactic_category; }
@@ -63,12 +70,8 @@ private:
   }
 
   Basic::tok::Tag findKeyword(std::string_view name);
-
   std::vector<Token> tokens;    // keep track of old tokens for error messages
-  std::deque<Token> unconsumed; // unconsumed tokens, only here cause we peeked
-  // or did some lookahead
-  int32_t tok_tracker = -1; // should be pointing to the most recently consumed
-  // token, might not be necessary
+  std::deque<Token> unconsumed; // unconsumed tokens that are stored if we looked ahead.
   Token lexString();
   Token lexNum();
   Token lexIdentifier();
@@ -81,7 +84,6 @@ private:
   llvm::StringRef curBuf;
   llvm::StringRef::iterator bufPtr;
   uint32_t currentBuffer = 0;
-
 public:
   Lexer(const std::shared_ptr<llvm::SourceMgr> &srcMgr, DiagEngine &diags)
 	  : srcManager(srcMgr), diagnostics(diags) {
@@ -99,9 +101,9 @@ public:
 	return llvm::SMLoc::getFromPointer(ptr - 1);
   }
 
-  Token advance();
-  Token peek(); // equivalent to lookahead(1)
-  Token previous() { return tokens.at(tok_tracker); };
-  Token lookahead(uint32_t howMuch);
+  Token &advance();
+  Token &peek(); // equivalent to lookahead(1)
+  Token &previous() { return tokens.back(); };
+  Token &lookahead(uint32_t howMuch);
   bool atEnd();
 };
