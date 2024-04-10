@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+
 class TypeProperties;
 class ProgramNode;
 class FunctionsNode;
@@ -13,13 +14,12 @@ class PrototypeNode;
 class ArgumentsNode;
 class ArgNode;
 class CompoundStmt;
-class SimpleListNode;
 class Stmt;
-class DeclNode;
+class VarDecl;
 class Expr;
-class ReturnNode;
+class returnNode;
 class TypeNode;
-class fnCall;
+class fnCallNode;
 class callArgList;
 class NodeVisitor;
 
@@ -181,7 +181,7 @@ public:
   TypeNode::DataTypes getDeclType();
   llvm::StringRef getName();
   Expr &getExpr();
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class returnNode : public Stmt {
@@ -190,7 +190,7 @@ private:
 
 public:
   returnNode(std::unique_ptr<Expr> exprNode) : expr(std::move(exprNode)) {}
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class Expr : public Stmt {
@@ -217,7 +217,7 @@ public:
 		   Basic::BinaryOperations opcode)
 	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
 		Expr(ExprKind::BINARY) {}
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class UnaryOp : public Expr {
@@ -231,7 +231,7 @@ public:
   void addInput();
   UnaryOp(std::unique_ptr<Expr> inp, Basic::UnaryOperations opc)
 	  : input(std::move(inp)), op(opc), Expr(ExprKind::UNARY) {}
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class leafNode : public Expr {
@@ -244,7 +244,7 @@ public:
 
   leafNode(Token &token) : tok(token), Expr(ExprKind::PRIMARY) {}
 
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class fnCallNode : public Expr {
@@ -255,7 +255,7 @@ private:
 public:
   fnCallNode(Token &id, std::unique_ptr<callArgList> arguments)
 	  : name(id), args(std::move(arguments)), Expr(ExprKind::FNCALL) {}
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class callArgList : public Node {
@@ -264,5 +264,5 @@ private:
 
 public:
   callArgList(std::vector<std::unique_ptr<Expr>> a) : args(std::move(a)) {}
-  virtual void accept(NodeVisitor &v) override {};
+  void accept(NodeVisitor &v) override {};
 };
