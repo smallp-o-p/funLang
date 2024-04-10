@@ -25,59 +25,84 @@ class NodeVisitor;
 
 class Node {
 public:
-  virtual ~Node() {}
+  virtual ~Node() = default;
   virtual void accept(NodeVisitor &visitor) = 0;
 };
+
 class ProgramNode : public Node {
 private:
   std::unique_ptr<FunctionsNode> funcs;
   std::unique_ptr<std::unordered_map<std::string, int>> globalSymbols;
-
 public:
-  auto &getFuncs();
+  std::unordered_map<std::string, std::unique_ptr<FunctionNode>> & getFuncs();
   auto &getGlobs();
-  ProgramNode(std::unique_ptr<FunctionsNode> fncs)
-      : funcs(std::move(fncs)), globalSymbols(nullptr) {};
+  explicit ProgramNode(std::unique_ptr<FunctionsNode> fncs)
+	  : funcs(std::move(fncs)), globalSymbols(nullptr) {};
   ProgramNode(std::unique_ptr<FunctionsNode> fncs,
-              std::unique_ptr<std::unordered_map<std::string, int>> globs)
-      : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
+			  std::unique_ptr<std::unordered_map<std::string, int>> globs)
+	  : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
 
-  virtual void accept(NodeVisitor &visitor) override {}
+  void accept(NodeVisitor &visitor) override {}
 };
 
 class TypeNode : public Node {
 public:
   enum DataTypes {
-    VOID = 10000,
-    CHAR,
-    BOOL,
-    i32,
-    i64,
-    f32,
-    f64,
-    STRING,
-    IDENT,
-    INVALID
+	VOID = 10000,
+	CHAR,
+	BOOL,
+	i32,
+	i64,
+	f32,
+	f64,
+	STRING,
+	IDENT,
+	INVALID
   };
 
 private:
   DataTypes type;
-  std::string user_defined;
+  Token &identifier;
 
 public:
-  TypeNode(Token tok);
+  explicit TypeNode(Token &tok);
   DataTypes getType() { return type; }
-  virtual void accept(NodeVisitor &v) override {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class FunctionsNode : public Node {
 private:
-  std::vector<std::unique_ptr<FunctionNode>> fns;
+  std::unordered_map<std::string, std::unique_ptr<FunctionNode>> fnMap;
 
 public:
-  FunctionsNode(std::vector<std::unique_ptr<FunctionNode>> fnList)
-      : fns(std::move(fnList)) {}
-  virtual void accept(NodeVisitor &v) override {}
+  explicit FunctionsNode(std::unordered_map<std::string, std::unique_ptr<FunctionNode>> fnMap)
+	  : fnMap(std::move(fnMap)) {}
+  void accept(NodeVisitor &v) override {}
+
+  std::unordered_map<std::string, std::unique_ptr<FunctionNode>> &getFnMap();
+};
+
+class PrototypeNode : public Node {
+private:
+  std::unique_ptr<TypeNode> type;
+  Token &name;
+  std::unique_ptr<ArgumentsNode> args;
+
+public:
+  PrototypeNode(std::unique_ptr<TypeNode> fnType, Token &name,
+				std::unique_ptr<ArgumentsNode> argsList)
+	  : type(std::move(fnType)), name(name), args(std::move(argsList)) {}
+  void accept(NodeVisitor &v) override {}
+
+  const std::unique_ptr<TypeNode> &getTypeNode() const {
+	return type;
+  }
+  llvm::StringRef getName() const {
+	return name.getLexeme();
+  }
+  const std::unique_ptr<ArgumentsNode> &getArgs() const {
+	return args;
+  }
 };
 
 class FunctionNode : public Node {
@@ -87,22 +112,19 @@ private:
 
 public:
   FunctionNode(std::unique_ptr<PrototypeNode> pro,
-               std::unique_ptr<CompoundStmt> compoundStmt)
-      : proto(std::move(pro)), compound(std::move(compoundStmt)) {};
+			   std::unique_ptr<CompoundStmt> compoundStmt)
+	  : proto(std::move(pro)), compound(std::move(compoundStmt)) {};
   virtual void accept(NodeVisitor &v) override {}
-};
+  const std::unique_ptr<PrototypeNode> &getProto() const {
+	return proto;
+  }
 
-class PrototypeNode : public Node {
-private:
-  std::unique_ptr<TypeNode> type;
-  std::string name;
-  std::unique_ptr<ArgumentsNode> args;
-
-public:
-  PrototypeNode(std::unique_ptr<TypeNode> fnType, std::string_view n,
-                std::unique_ptr<ArgumentsNode> argsList)
-      : type(std::move(fnType)), name(n), args(std::move(argsList)) {}
-  virtual void accept(NodeVisitor &v) override {}
+  llvm::StringRef getName() {
+	return proto->getName();
+  }
+  const std::unique_ptr<CompoundStmt> &getCompound() const {
+	return compound;
+  }
 };
 
 class ArgumentsNode : public Node {
@@ -111,19 +133,23 @@ private:
 
 public:
   ArgumentsNode(std::vector<std::unique_ptr<ArgNode>> &args)
-      : argList(std::move(args)) {}
-  virtual void accept(NodeVisitor &v) override {}
+	  : argList(std::move(args)) {}
+  void accept(NodeVisitor &v) override {}
+  const std::vector<std::unique_ptr<ArgNode>> &getArgList() const {
+	return argList;
+  }
+
 };
 
 class ArgNode : public Node {
 private:
   std::unique_ptr<TypeNode> type;
-  std::string argName;
+  Token &argName;
 
 public:
-  ArgNode(std::unique_ptr<TypeNode> type, const std::string_view &id)
-      : type(std::move(type)), argName(id) {}
-  virtual void accept(NodeVisitor &v) override {}
+  ArgNode(std::unique_ptr<TypeNode> type, Token &id)
+	  : type(std::move(type)), argName(id) {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class CompoundStmt : public Node {
@@ -132,8 +158,8 @@ private:
 
 public:
   CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
-      : stmts(std::move(simples)) {}
-  virtual void accept(NodeVisitor &v) override {}
+	  : stmts(std::move(simples)) {}
+  void accept(NodeVisitor &v) override {}
 };
 
 class Stmt : public Node {
@@ -144,15 +170,15 @@ public:
 class VarDecl : public Stmt {
 private:
   std::unique_ptr<TypeNode> type;
-  std::string name;
+  Token &name;
   std::unique_ptr<Expr> expr;
 
 public:
-  VarDecl(std::unique_ptr<TypeNode> t, std::string_view id,
-          std::unique_ptr<Expr> expression)
-      : type(std::move(t)), name(id), expr(std::move(expression)) {}
+  VarDecl(std::unique_ptr<TypeNode> t, Token &id,
+		  std::unique_ptr<Expr> expression)
+	  : type(std::move(t)), name(id), expr(std::move(expression)) {}
   TypeNode::DataTypes getDeclType();
-  std::string &getName();
+  llvm::StringRef getName();
   Expr &getExpr();
   virtual void accept(NodeVisitor &v) override {}
 };
@@ -187,9 +213,9 @@ private:
 
 public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
-           Basic::BinaryOperations opcode)
-      : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
-        Expr(ExprKind::BINARY) {}
+		   Basic::BinaryOperations opcode)
+	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
+		Expr(ExprKind::BINARY) {}
   virtual void accept(NodeVisitor &v) override {}
 };
 
@@ -203,31 +229,31 @@ public:
   void addOp(Basic::UnaryOperations opc);
   void addInput();
   UnaryOp(std::unique_ptr<Expr> inp, Basic::UnaryOperations opc)
-      : input(std::move(inp)), op(opc), Expr(ExprKind::UNARY) {}
+	  : input(std::move(inp)), op(opc), Expr(ExprKind::UNARY) {}
   virtual void accept(NodeVisitor &v) override {}
 };
 
 class leafNode : public Expr {
 protected:
-  Token tok;
+  Token &tok;
 
 public:
-  const std::string &getLexeme();
+  llvm::StringRef getLexeme();
   Basic::tok::Tag getTag();
 
-  leafNode(const Token &token) : tok(token), Expr(ExprKind::PRIMARY) {}
+  leafNode(Token &token) : tok(token), Expr(ExprKind::PRIMARY) {}
 
   virtual void accept(NodeVisitor &v) override {}
 };
 
 class fnCallNode : public Expr {
 private:
-  std::string name;
+  Token &name;
   std::unique_ptr<callArgList> args;
 
 public:
-  fnCallNode(const std::string_view id, std::unique_ptr<callArgList> arguments)
-      : name(id), args(std::move(arguments)), Expr(ExprKind::FNCALL) {}
+  fnCallNode(Token &id, std::unique_ptr<callArgList> arguments)
+	  : name(id), args(std::move(arguments)), Expr(ExprKind::FNCALL) {}
   virtual void accept(NodeVisitor &v) override {}
 };
 
