@@ -7,8 +7,8 @@ string returnStringLit(){
 }
 
 i32 main(){
-    bool test = call returnTrue();
-    string string1 = call returnStringLit();
+    bool test = returnTrue();
+    string string1 = returnStringLit();
 
     bool fun = (100 == 101);
 

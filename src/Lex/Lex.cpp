@@ -39,13 +39,33 @@ Token Lexer::getNext() {
 	  return formToken(bufPtr + 1, Basic::tok::Tag::greater);
 	}
   case '+':
-	return nextIs('+') ? formToken(bufPtr + 2, Basic::tok::Tag::plusplus)
-					   : formToken(bufPtr + 1, Basic::tok::Tag::plus);
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::plusequal);
+	} else if (nextIs('+')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::plusplus);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::plus);
+	}
   case '-':
-	return nextIs('-') ? formToken(bufPtr + 2, Basic::tok::Tag::minusminus)
-					   : formToken(bufPtr + 1, Basic::tok::minus);
-  case '*':return formToken(bufPtr + 1, Basic::tok::Tag::star);
-  case '/':return formToken(bufPtr + 1, Basic::tok::Tag::slash);
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::minusequal);
+	} else if (nextIs('-')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::minusminus);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::minus);
+	}
+  case '*':
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::starequal);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::star);
+	}
+  case '/':
+	if (nextIs('=')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::slashequal);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::slash);
+	}
   case '\"':return lexString();
   default: {
 	if (isdigit(*bufPtr)) {

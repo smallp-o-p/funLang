@@ -262,13 +262,28 @@ std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
   std::unique_ptr<Expr> eq_node = eqExpr();
-  if (check(Basic::tok::Tag::equal)) {
-	std::unique_ptr<Expr> expr_node = expr();
+  Basic::BinaryOperations opc = Basic::BinaryOperations::equals;
+  if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal, Basic::tok::Tag::minusequal,
+			   Basic::tok::Tag::starequal, Basic::tok::Tag::slashequal})) {
+	switch (advance().getTag()) {
+	case Basic::tok::Tag::equal: opc = Basic::BinaryOperations::assign;
+	  break;
+	case Basic::tok::Tag::plusequal: opc = Basic::BinaryOperations::plusassign;
+	  break;
+	case Basic::tok::Tag::minusequal: opc = Basic::BinaryOperations::minusassign;
+	  break;
+	case Basic::tok::Tag::starequal: opc = Basic::BinaryOperations::multassign;
+	  break;
+	case Basic::tok::Tag::slashequal: opc = Basic::BinaryOperations::divassign;
+	  break;
+	default: return nullptr;
+	}
+	std::unique_ptr<Expr> expr_node = eqExpr();
 	if (!expr_node) {
 	  return nullptr;
 	}
 	return std::make_unique<BinaryOp>(std::move(eq_node), std::move(expr_node),
-									  Basic::BinaryOperations::assign);
+									  opc);
   } else {
 	return eq_node;
   }

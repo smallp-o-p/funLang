@@ -28,10 +28,14 @@ LTCMP : '<';
 GTCMP : '>'; 
 PLUS : '+';
 PLUSPLUS : '++';
-MINUSMINUS : '--';
+PLUSEQ : '+=';
 MINUS : '-';
+MINUSMINUS : '--';
+MINUSEQ : '-=';
 MULT : '*';
-DIV : '/'; 
+MULTEQ : '*=';
+DIV : '/';
+DIVEQ : '/=';
 BANG : '!';
 STRINGLIT : "[]*"
 INT : [0-9]+ ;

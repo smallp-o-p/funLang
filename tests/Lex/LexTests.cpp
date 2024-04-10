@@ -47,7 +47,8 @@ TEST(LexTests, LexBasicToken) {
 	  tok::greater, tok::less, tok::equal, tok::l_paren,
 	  tok::r_paren, tok::l_brace, tok::r_brace, tok::exclaim,
 	  tok::comma, tok::colon, tok::semi, tok::lessequal,
-	  tok::greaterequal, tok::equalequal, tok::exclaimequal};
+	  tok::greaterequal, tok::equalequal, tok::exclaimequal, tok::plusequal,
+	  tok::minusequal, tok::starequal, tok::slashequal};
   for (auto tok : expected) {
 	Token lexed_token = lexer->advance();
 	EXPECT_EQ(lexed_token.getTag(), tok)

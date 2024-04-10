@@ -1,9 +1,30 @@
 grammar funlang_parser;
 
 program
-    : functions EOF
+    : topLevelDecls EOF
     ;
-    
+
+topLevelDecls
+    : functions
+    | structs
+    | impls
+    ;
+
+structs
+    : struct+
+    ;
+
+impls
+    : impl+
+    ;
+
+struct
+    : 'struct' ID '{' args '}'
+    ;
+
+impl
+    : 'impl '{' functions '}'
+
 functions
     : func+
     ; 
@@ -42,29 +63,35 @@ expr
 return : 'return' expr ';'; 
 
 assign 
-    : eqExpr
-    | ID ('='|'+=' | '-=') expr
+    : eqExpr ('='|'+='|'-=') eqExpr
+    | eqExpr
     ;
+
 eqExpr 
     : cmpExpr ('=='|'!=') cmpExpr
     | cmpExpr
-    ; 
+    ;
+
 cmpExpr
     : addExpr ('<'|'<='|'>' | '>=') addExpr
     | addExpr
-    ; 
+    ;
+
 addExpr
     : multdiv ('+'|'-') multdiv
     | multdiv
     ;
+
 multdiv
     : unary ('*'|'/') unary
     | unary
     ;
+
 unary 
     : ('++'|'--'| '!'| '-') primary 
     | primary
     ;
+
 primary 
     : ID
     | NUM

@@ -34,7 +34,7 @@ private:
   std::unique_ptr<FunctionsNode> funcs;
   std::unique_ptr<std::unordered_map<std::string, int>> globalSymbols;
 public:
-  std::unordered_map<std::string, std::unique_ptr<FunctionNode>> & getFuncs();
+  std::unordered_map<std::string, std::unique_ptr<FunctionNode>> &getFuncs();
   auto &getGlobs();
   explicit ProgramNode(std::unique_ptr<FunctionsNode> fncs)
 	  : funcs(std::move(fncs)), globalSymbols(nullptr) {};
@@ -160,6 +160,7 @@ public:
   CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
 	  : stmts(std::move(simples)) {}
   void accept(NodeVisitor &v) override {}
+  std::vector<std::unique_ptr<Stmt>> &getStmts();
 };
 
 class Stmt : public Node {
