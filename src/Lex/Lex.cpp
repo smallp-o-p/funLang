@@ -138,7 +138,7 @@ Token &Lexer::peek() {
   } else {
 	unconsumed.push_back(getNext());
   }
-  return unconsumed.back();
+  return unconsumed.front();
 }
 
 /**
