@@ -10,21 +10,21 @@ enum currentNT { STMT, FUNCTION }; // what non-terminal we failed to parse
 class Parser {
 private:
   std::unique_ptr<Lexer> lexer;
+  DiagEngine diags;
   bool error;
 
 public:
-  Parser(std::unique_ptr<Lexer> lex) : lexer(std::move(lex)), error(false) {}
+  Parser(std::unique_ptr<Lexer> lex, DiagEngine &diags)
+	  : lexer(std::move(lex)), error(false), diags(diags) {}
   bool atEnd();
   bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect, bool peeking);
   Token peek();
-  Token previous();
-  Token advance();
+  Token &previous();
+  Token & advance();
   bool expect(Basic::tok::Tag tok);
   bool check(Basic::tok::Tag tok);
   Token lookahead(uint32_t howMuch);
-  void reportError(const char *format, ...);
-  void reportExpectError(Basic::tok::Tag expected, bool punctuator);
-
+  void reportExpect(Basic::tok::Tag expected, Token received);
 public:
   std::unique_ptr<FunctionsNode> functions();
   std::unique_ptr<FunctionNode> function();
