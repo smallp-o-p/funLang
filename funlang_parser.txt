@@ -98,11 +98,11 @@ primary
     | POINTNUM
     | 'true'
     | 'false'
-    | fnCall
+    | FnCall
     | '(' expr ')'
     ;
     
-fnCall 
+FnCall
     : ID '(' callArgs ')'
     ;
     
