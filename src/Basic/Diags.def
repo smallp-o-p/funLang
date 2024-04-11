@@ -5,5 +5,8 @@
 DIAG(err_unexpected_char, Error, "Unexpected character '{0}'.")
 DIAG(err_unterminated_char_or_string, Error, "Missing a terminating character.")
 DIAG(err_expected, Error, "Expected '{0}', but received '{1}'")
-
+DIAG(err_var_redefinition, Error, "Redefinition of variable '{0}' in same scope.")
+DIAG(note_var_redefinition, Note, "{0} Variable originally defined here")
+DIAG(err_wrong_number_of_parameters, Error, "Function {0} takes {1} parameters, but {2} passed.")
+DIAG(err_incompatiable_type_passed, Error, "Formal argument {0} is of type {1}, but expression of type {1} was passed.")
 #undef DIAG
