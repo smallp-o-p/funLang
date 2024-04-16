@@ -35,7 +35,7 @@ TEST(ParseTesting, FuncWStmts) {
 TEST(ParseTesting, TwoFuncs) {
   auto parser_ptr = makeParser("./FnsParseTest3.txt");
   EXPECT_NE(nullptr, parser_ptr);
-  std::unique_ptr<ProgramNode> program = parser_ptr->program();
+  std::unique_ptr<CompilationUnit> program = parser_ptr->program();
   EXPECT_NE(nullptr, program);
   if (!program) {
 	FAIL();
@@ -50,7 +50,7 @@ TEST(ParseTesting, TwoFuncs) {
 TEST(ParseTesting, ManyFunc) {
   auto parser_ptr = makeParser("./FnsParseTest4.fun");
   EXPECT_NE(nullptr, parser_ptr);
-  std::unique_ptr<ProgramNode> program = parser_ptr->program();
+  std::unique_ptr<CompilationUnit> program = parser_ptr->program();
   EXPECT_NE(nullptr, program);
   if (!program) {
 	FAIL();
