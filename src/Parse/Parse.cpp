@@ -62,22 +62,22 @@ bool Parser::recoverFromError(currentNT whereWeFailed) {
   return true;
 }
 
-std::unique_ptr<ProgramNode> Parser::program() {
+std::unique_ptr<CompilationUnit> Parser::program() {
   // TODO: globals
-  std::unique_ptr<FunctionsNode> fns = std::move(functions());
+  std::unique_ptr<FunctionsNode> fns = functions();
   if (Parser::error) {
 	return nullptr;
   }
   if (!expect(Basic::tok::Tag::eof)) {
 	return nullptr;
   }
-  return std::make_unique<ProgramNode>(std::move(fns));
+  return std::make_unique<CompilationUnit>(std::move(fns));
 }
 
 std::unique_ptr<FunctionsNode> Parser::functions() {
-  std::unordered_map<std::string, std::unique_ptr<FunctionNode>> funcList;
+  std::unordered_map<std::string, std::shared_ptr<FunctionNode>> funcList;
   while (true) {
-	std::unique_ptr<FunctionNode> fn = function();
+	std::shared_ptr<FunctionNode> fn = function();
 	if (!fn) {
 	  return nullptr;
 	}
@@ -89,7 +89,7 @@ std::unique_ptr<FunctionsNode> Parser::functions() {
   return std::make_unique<FunctionsNode>(std::move(funcList));
 }
 
-std::unique_ptr<FunctionNode> Parser::function() {
+std::shared_ptr<FunctionNode> Parser::function() {
   std::unique_ptr<PrototypeNode> prototype = proto();
   if (!prototype) {
 	return nullptr;
@@ -198,12 +198,12 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   case tok::Tag::kw_i64:
   case tok::Tag::kw_f32:
   case tok::Tag::kw_f64:
-  case tok::Tag::kw_string:stmt_inq = decl();
+  case tok::Tag::kw_string:stmt_inq = declStmt();
 	break;
   case tok::Tag::identifier: {
 	if (check(tok::Tag::equal)) { // unsure how we'll handle struct
 	  // members but we'll find out
-	  stmt_inq = decl();
+	  stmt_inq = declStmt();
 	} else {
 	  stmt_inq = expr();
 	}
@@ -224,7 +224,7 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   }
   return stmt_inq;
 }
-std::unique_ptr<VarDecl> Parser::decl() {
+std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   std::unique_ptr<TypeNode> type_node = type();
   if (!type_node) {
 	return nullptr;
@@ -241,8 +241,8 @@ std::unique_ptr<VarDecl> Parser::decl() {
   if (!expr_node) {
 	return nullptr;
   }
-  return std::make_unique<VarDecl>(std::move(type_node), id,
-								   std::move(expr_node));
+  return std::make_unique<VarDeclStmt>(std::move(type_node), id,
+									   std::move(expr_node));
 }
 
 std::unique_ptr<returnNode> Parser::returnStmt() {

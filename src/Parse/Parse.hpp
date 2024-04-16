@@ -20,21 +20,21 @@ public:
   bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect, bool peeking);
   Token peek();
   Token &previous();
-  Token & advance();
+  Token &advance();
   bool expect(Basic::tok::Tag tok);
   bool check(Basic::tok::Tag tok);
   Token lookahead(uint32_t howMuch);
   void reportExpect(Basic::tok::Tag expected, Token received);
 public:
   std::unique_ptr<FunctionsNode> functions();
-  std::unique_ptr<FunctionNode> function();
+  std::shared_ptr<FunctionNode> function();
   std::unique_ptr<TypeNode> type();
   std::unique_ptr<PrototypeNode> proto();
   std::unique_ptr<ArgumentsNode> arguments();
   std::unique_ptr<ArgNode> arg();
   std::unique_ptr<CompoundStmt> compoundStmt();
   std::unique_ptr<Stmt> simpleStmt();
-  std::unique_ptr<VarDecl> decl();
+  std::unique_ptr<VarDeclStmt> declStmt();
   std::unique_ptr<returnNode> returnStmt();
   std::unique_ptr<Expr> expr();
   std::unique_ptr<Expr> assign();
@@ -49,5 +49,5 @@ public:
   bool recoverFromError(currentNT whereWeFailed);
 
 public:
-  std::unique_ptr<ProgramNode> program();
+  std::unique_ptr<CompilationUnit> program();
 };
