@@ -27,7 +27,23 @@ public:
   uint32_t getNumErrors() const { return numErrors; }
 
   template<typename... args>
-  void reportErr(llvm::SMLoc loc, uint32_t diagID, args &&...arguments);
+  void reportErr(llvm::SMLoc loc, uint32_t diagID, args &&...arguments) {
+	assert(loc.isValid() && "SMLoc returned invalid.");
+	std::string msg =
+		llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
+			.str();
+	llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
+	srcMgr->PrintMessage(loc, kind, msg);
+	numErrors += (kind==llvm::SourceMgr::DK_Error);
+  }
+
   template<typename... args>
-  void addNote(llvm::SMLoc loc, uint32_t diagID, args &&...arguments);
+  void addNote(llvm::SMLoc loc, uint32_t diagID, args &&...arguments) {
+	assert(loc.isValid() && "SMLoc returned invalid.");
+	std::string msg =
+		llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
+			.str();
+	llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
+	srcMgr->PrintMessage(loc, kind, msg);
+  }
 };

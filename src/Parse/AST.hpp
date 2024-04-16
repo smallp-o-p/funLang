@@ -84,8 +84,7 @@ private:
 public:
   explicit Decl(DeclKind kind) : kind(kind) {}
   DeclKind getKind() const { return kind; }
-  void accept(NodeVisitor &v) override;
-
+  void accept(NodeVisitor &v) override {};
 };
 
 class FunctionsNode : public Node {
