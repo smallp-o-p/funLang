@@ -1,9 +1,10 @@
 #include "AST.hpp"
 #include "Lex.hpp"
 #include "TokenTags.hpp"
-std::unordered_map<std::string, std::unique_ptr<FunctionNode>> &ProgramNode::getFuncs() { return funcs->getFnMap(); }
-auto &ProgramNode::getGlobs() { return globalSymbols; }
-std::unordered_map<std::string, std::unique_ptr<FunctionNode>> &FunctionsNode::getFnMap() {
+std::unordered_map<std::string,
+				   std::shared_ptr<FunctionNode>> &CompilationUnit::getFuncs() { return funcs->getFnMap(); }
+auto &CompilationUnit::getGlobs() { return globalSymbols; }
+std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &FunctionsNode::getFnMap() {
   return fnMap;
 }
 TypeNode::TypeNode(Token &tok) : identifier(tok) {
@@ -30,9 +31,12 @@ TypeNode::TypeNode(Token &tok) : identifier(tok) {
   }
 }
 
-llvm::StringRef VarDecl::getName() { return name.getIdentifier(); }
+llvm::StringRef VarDeclStmt::getName() { return name.getIdentifier(); }
 
-Expr &VarDecl::getExpr() { return *expr; }
+Expr &VarDeclStmt::getExpr() { return *expr; }
+Token &VarDeclStmt::getTok() {
+  return name;
+}
 
 llvm::StringRef leafNode::getLexeme() { return tok.getLexeme(); }
 
@@ -42,4 +46,7 @@ Basic::tok::Tag leafNode::getTag() {
 
 std::vector<std::unique_ptr<Stmt>> &CompoundStmt::getStmts() {
   return stmts;
+}
+size_t PrototypeNode::getNumArgs() {
+  return args->getArgList().size();
 }
