@@ -22,12 +22,15 @@ bool Parser::expect(Basic::tok::Tag tok) {
 }
 
 void Parser::reportExpect(Basic::tok::Tag expected, Token received) {
-  diags.reportErr(received.getFromPtr(),
-				  diag::err_expected,
-				  Basic::tok::getTokenName(expected),
-				  received.getLexeme());
+  diags.emitDiagMsg(received.getFromPtr(),
+					diag::err_expected,
+					Basic::tok::getTokenName(expected),
+					received.getLexeme());
 }
 
+void Parser::emitWarning(unsigned int diagID, llvm::SMLoc loc, llvm::StringRef name) {
+  diags.emitDiagMsg(loc, diagID, name);
+}
 Token Parser::lookahead(uint32_t howMuch) { return lexer->lookahead(howMuch); }
 
 std::unique_ptr<TypeNode> Parser::type() {
@@ -81,7 +84,13 @@ std::unique_ptr<FunctionsNode> Parser::functions() {
 	if (!fn) {
 	  return nullptr;
 	}
-	funcList.insert(std::make_pair(fn->getName(), std::move(fn)));
+	if (funcList.find(fn->getName().str())!=funcList.cend()) {
+	  emitWarning(diag::warn_function_redefinition,
+				  llvm::SMLoc::getFromPointer(fn->getName().data()),
+				  fn->getName());
+	} else {
+	  funcList.insert(std::make_pair(fn->getName(), std::move(fn)));
+	}
 	if (check(Basic::tok::Tag::eof)) {
 	  break;
 	}

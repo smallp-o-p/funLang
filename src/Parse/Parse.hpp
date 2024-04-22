@@ -2,8 +2,10 @@
 #include "AST.hpp"
 #include "Lex.hpp"
 #include "TokenTags.hpp"
+#include "Diag.hpp"
 #include <initializer_list>
 #include <memory>
+#include <utility>
 
 enum currentNT { STMT, FUNCTION }; // what non-terminal we failed to parse
 
@@ -25,6 +27,7 @@ public:
   bool check(Basic::tok::Tag tok);
   Token lookahead(uint32_t howMuch);
   void reportExpect(Basic::tok::Tag expected, Token received);
+  void emitWarning(unsigned int diagID, llvm::SMLoc loc, llvm::StringRef name);
 public:
   std::unique_ptr<FunctionsNode> functions();
   std::shared_ptr<FunctionNode> function();
