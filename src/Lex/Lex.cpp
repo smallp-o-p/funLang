@@ -77,7 +77,7 @@ Token Lexer::getNext() {
 	if (!*bufPtr) {
 	  return formToken(bufPtr, Basic::tok::Tag::eof);
 	} else {
-	  diagnostics.reportErr(getCurLoc(), diag::err_unexpected_char, *bufPtr);
+	  diagnostics.emitDiagMsg(getCurLoc(), diag::err_unexpected_char, *bufPtr);
 	  return formErr();
 	}
   }
@@ -97,7 +97,7 @@ Token Lexer::lexString() {
   }
   if (!*end) {
 	std::cerr << "Unclosed string literal :(" << std::endl;
-	diagnostics.reportErr(getLocFrom(bufPtr), diag::err_unterminated_char_or_string);
+	diagnostics.emitDiagMsg(getLocFrom(bufPtr), diag::err_unterminated_char_or_string);
 	return formErr();
   }
   return formToken(end, Basic::tok::string_literal);
