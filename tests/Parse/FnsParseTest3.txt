@@ -10,3 +10,7 @@ i32 main(){
 
   return combined_expr_test;  
 }
+
+i32 main() {
+    i32 x = fun(1,2);
+}
