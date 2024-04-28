@@ -1,38 +1,38 @@
 # funLang
-A statically typed programming language implemented with
-LLVM's C++ API designed as the next step once you've completed the Kaleidoscope tutorial.
+A statically typed programming language implemented with the LLVM ecosystem created for fun and as a substantial next step to Kaleidoscope.
 
-FunLang is parsed using a recursive-descent parser.
-Hopefully it provides you with enough of a base to expand upon as you learn more about LLVM.
+FunLang is implemented with LLVM's srcManager for the front-end stuff like error reporting and source file management. I expect it to go through a few rounds of MLIR to represent some of the cool features I have in mind before finally emitting LLVM IR that can be run where LLVM is supported.  
 
 Rest of the stuff to come lol
 # Scope of The Project 
 
 To keep this language simple and easy enough to follow, the set of features
-will be somewhat limited, however I do expect it to be Turing Complete,
-you're free to add more as you wish.
-## Features❗
+will be basic, imagine C with some creature-comforts that I really like picked from other languages like Rust and Zig.
 
-<ul>
-  <li> Typed variable declarations and use of those variables </li>
-    <ul>
-      <li> Maybe type casting </li>
-    </ul>
-  <li> Basic Operations
-      <ul> Comparisons </ul>
-      <ul> Arithmetic </ul>
-  </li>
-  <li> Control Flow
-    <ul> If statements</ul>
-    <ul> For/While loops</ul>
-  </li>
-</ul>
+## Features (to implement)❗
+
+- Strong type system
+  - Error return types for error handling
+- Operations
+  - All the basic ones you expect, arithmetic, comparisons
+  - Operator overloading   
+- Data Types
+  - Construct your own data types with *structs*
+  - Data-backed *enums*   
+- Control Flow
+  - *If-else* statements
+  - *For*, *while*, *infinite* loops    
+
+## Examples
+
+soon (tm)
+
 
 ## Current Progress/The Plan 📝
 
 | Section                           | Implementation            | Tests                     | Documentation/Write-up |
 |-----------------------------------|---------------------------|---------------------------|------------------------|
 | Lexer                             | Done ✅                   | Done ✅                   | In Progress ⚠️          |
-| Parser                            | Done ✅                    | Done ✅                   | Not Started ❌         |
+| Parser/Syntax-Driven Translation thing                            | In Progress ⚠️            | In Progress  ⚠️                 | Not Started ❌         |
 | Code Generation                   | In Progress ⚠️            | Not Started ❌           | Not Started ❌         |
 | Not Thrown-together System Design | In Progress ⚠️ (Perpetual) | In Progress ⚠️ (Perpetual) |                        |
