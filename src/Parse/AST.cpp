@@ -1,6 +1,7 @@
 #include "AST.hpp"
 #include "Lex.hpp"
-#include "TokenTags.hpp"
+#include "Basic.hpp"
+#include "Sema.hpp"
 std::unordered_map<std::string,
 				   std::shared_ptr<FunctionNode>> &CompilationUnit::getFuncs() { return funcs->getFnMap(); }
 auto &CompilationUnit::getGlobs() { return globalSymbols; }
@@ -10,23 +11,23 @@ std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &FunctionsNode::g
 TypeNode::TypeNode(Token &tok) : identifier(tok) {
   using namespace Basic;
   switch (tok.getTag()) {
-  case tok::Tag::kw_bool:type = DataTypes::BOOL;
+  case tok::Tag::kw_bool:type = Data::Type::bool_;
 	break;
-  case tok::Tag::kw_i32:type = DataTypes::i32;
+  case tok::Tag::kw_i32:type = Data::Type::i32;
 	break;
-  case tok::Tag::kw_i64:type = DataTypes::i64;
+  case tok::Tag::kw_i64:type = Data::Type::i64;
 	break;
-  case tok::Tag::kw_string:type = DataTypes::STRING;
-  case tok::Tag::kw_f32:type = DataTypes::f32;
+  case tok::Tag::kw_string:type = Data::Type::string;
+  case tok::Tag::kw_f32:type = Data::Type::f32;
 	break;
-  case tok::Tag::kw_f64:type = DataTypes::f64;
+  case tok::Tag::kw_f64:type = Data::Type::f64;
 	break;
-  case tok::Tag::identifier:type = DataTypes::IDENT;
+  case tok::Tag::identifier:type = Data::Type::ident;
 	identifier = tok;
 	break;
-  case tok::Tag::kw_void:type = DataTypes::VOID;
+  case tok::Tag::kw_void:type = Data::Type::void_;
 	break;
-  default:type = DataTypes::INVALID;
+  default:type = Data::Type::invalid;
 	break;
   }
 }
@@ -49,4 +50,16 @@ std::vector<std::unique_ptr<Stmt>> &CompoundStmt::getStmts() {
 }
 size_t PrototypeNode::getNumArgs() {
   return args->getArgList().size();
+}
+
+void Expr::accept(funLang::SemaAnalyzer &v) {
+  v.actOnExpr(*this);
+}
+
+void Expr::setType(Basic::Data::Type toSet) {
+
+}
+Basic::Data::Type Expr::getResultingType() {
+  assert(resultingType!=Basic::Data::Type::invalid && "Type not evaluated for expr\n");
+  return resultingType;
 }

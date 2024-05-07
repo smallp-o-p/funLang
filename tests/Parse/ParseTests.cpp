@@ -1,5 +1,7 @@
 #include "gtest/gtest.h"
 #include "Parse.hpp"
+#include "Sema.hpp"
+
 std::unique_ptr<Parser> makeParser(const std::string &filename) {
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
 	  llvm::MemoryBuffer::getFile(filename);
@@ -28,7 +30,7 @@ TEST(ParseTesting, FuncWStmts) {
   auto func = parser_ptr->function();
   EXPECT_NE(nullptr, func);
   auto &args = func->getProto()->getArgs()->getArgList();
-  EXPECT_EQ(func->getProto()->getTypeNode()->getType(), TypeNode::i32);
+  EXPECT_EQ(func->getProto()->getTypeNode()->getType(), Basic::Data::i32);
   EXPECT_EQ(args.size(), 1);
 }
 

@@ -1,5 +1,5 @@
 #include "Lex.hpp"
-#include "TokenTags.hpp"
+#include "Basic.hpp"
 #include <cstdint>
 
 Token Lexer::getNext() {
@@ -18,7 +18,12 @@ Token Lexer::getNext() {
 	} else {
 	  return formToken(bufPtr + 1, Basic::tok::Tag::equal);
 	}
-  case ':':return formToken(bufPtr + 1, Basic::tok::Tag::colon);
+  case ':':
+	if (nextIs(':')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::coloncolon);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::colon);
+	}
   case ';':return formToken(bufPtr + 1, Basic::tok::Tag::semi);
   case '!':
 	if (nextIs('=')) {

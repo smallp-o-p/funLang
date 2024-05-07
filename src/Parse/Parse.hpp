@@ -1,8 +1,9 @@
 #pragma once
 #include "AST.hpp"
 #include "Lex.hpp"
-#include "TokenTags.hpp"
+#include "Basic.hpp"
 #include "Diag.hpp"
+#include "Sema.hpp"
 #include <initializer_list>
 #include <memory>
 #include <utility>

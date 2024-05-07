@@ -1,7 +1,7 @@
 #include "Parse.hpp"
 #include "AST.hpp"
 #include "Lex.hpp"
-#include "TokenTags.hpp"
+#include "Basic.hpp"
 #include <initializer_list>
 #include <memory>
 
@@ -13,29 +13,28 @@ bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> toExpect,
 					 bool peeking = true) {
   Token consumed = peeking ? lexer->peek() : lexer->advance();
 
-  return std::any_of(toExpect.begin(),
-					 toExpect.end(),
-					 [consumed](Basic::tok::Tag tok) { return tok==consumed.getTag(); });
+  return std::any_of(
+	  toExpect.begin(), toExpect.end(),
+	  [consumed](Basic::tok::Tag tok) { return tok==consumed.getTag(); });
 }
 bool Parser::expect(Basic::tok::Tag tok) {
   return lexer->advance().getTag()==tok;
 }
 
 void Parser::reportExpect(Basic::tok::Tag expected, Token received) {
-  diags.emitDiagMsg(received.getFromPtr(),
-					diag::err_expected,
-					Basic::tok::getTokenName(expected),
-					received.getLexeme());
+  diags.emitDiagMsg(received.getFromPtr(), diag::err_expected,
+					Basic::tok::getTokenName(expected), received.getLexeme());
 }
 
-void Parser::emitWarning(unsigned int diagID, llvm::SMLoc loc, llvm::StringRef name) {
+void Parser::emitWarning(unsigned int diagID, llvm::SMLoc loc,
+						 llvm::StringRef name) {
   diags.emitDiagMsg(loc, diagID, name);
 }
 Token Parser::lookahead(uint32_t howMuch) { return lexer->lookahead(howMuch); }
 
 std::unique_ptr<TypeNode> Parser::type() {
   std::unique_ptr<TypeNode> type_ptr = std::make_unique<TypeNode>(advance());
-  if (type_ptr->getType()==TypeNode::DataTypes::INVALID) {
+  if (type_ptr->getType()==Basic::Data::Type::invalid) {
 	return nullptr;
   } else {
 	return type_ptr;
@@ -84,12 +83,12 @@ std::unique_ptr<FunctionsNode> Parser::functions() {
 	if (!fn) {
 	  return nullptr;
 	}
-	if (funcList.find(fn->getName().str())!=funcList.cend()) {
+	if (funcList.find(fn->getName().getLexeme().str())!=funcList.cend()) {
 	  emitWarning(diag::warn_function_redefinition,
-				  llvm::SMLoc::getFromPointer(fn->getName().data()),
-				  fn->getName());
+				  llvm::SMLoc::getFromPointer(fn->getName().getLexeme().data()),
+				  fn->getName().getLexeme());
 	} else {
-	  funcList.insert(std::make_pair(fn->getName(), std::move(fn)));
+	  funcList.insert(std::make_pair(fn->getName().getLexeme(), std::move(fn)));
 	}
 	if (check(Basic::tok::Tag::eof)) {
 	  break;
@@ -271,21 +270,22 @@ std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
   std::unique_ptr<Expr> eq_node = eqExpr();
-  Basic::BinaryOperations opc = Basic::BinaryOperations::equals;
-  if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal, Basic::tok::Tag::minusequal,
-			   Basic::tok::Tag::starequal, Basic::tok::Tag::slashequal})) {
+  Basic::Op::Binary opc = Basic::Op::Binary::equals;
+  if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
+			   Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
+			   Basic::tok::Tag::slashequal})) {
 	switch (advance().getTag()) {
-	case Basic::tok::Tag::equal: opc = Basic::BinaryOperations::assign;
+	case Basic::tok::Tag::equal:opc = Basic::Op::Binary::assign;
 	  break;
-	case Basic::tok::Tag::plusequal: opc = Basic::BinaryOperations::plusassign;
+	case Basic::tok::Tag::plusequal:opc = Basic::Op::Binary::plusassign;
 	  break;
-	case Basic::tok::Tag::minusequal: opc = Basic::BinaryOperations::minusassign;
+	case Basic::tok::Tag::minusequal:opc = Basic::Op::Binary::minusassign;
 	  break;
-	case Basic::tok::Tag::starequal: opc = Basic::BinaryOperations::multassign;
+	case Basic::tok::Tag::starequal:opc = Basic::Op::Binary::multassign;
 	  break;
-	case Basic::tok::Tag::slashequal: opc = Basic::BinaryOperations::divassign;
+	case Basic::tok::Tag::slashequal:opc = Basic::Op::Binary::divassign;
 	  break;
-	default: return nullptr;
+	default:return nullptr;
 	}
 	std::unique_ptr<Expr> expr_node = eqExpr();
 	if (!expr_node) {
@@ -304,10 +304,10 @@ std::unique_ptr<Expr> Parser::eqExpr() {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::equalequal, Basic::tok::Tag::exclaimequal})) {
-	Basic::BinaryOperations opcode =
+	Basic::Op::Binary opcode =
 		advance().getTag()==Basic::tok::Tag::equalequal
-		? Basic::BinaryOperations::equals
-		: Basic::BinaryOperations::notequals;
+		? Basic::Op::Binary::equals
+		: Basic::Op::Binary::notequals;
 	std::unique_ptr<Expr> cmp_node2 = cmpExpr();
 
 	if (!cmp_node2) {
@@ -326,17 +326,17 @@ std::unique_ptr<Expr> Parser::cmpExpr() {
   }
   if (isOneOf({Basic::tok::Tag::less, Basic::tok::Tag::lessequal,
 			   Basic::tok::Tag::greater, Basic::tok::Tag::greaterequal})) {
-	Basic::BinaryOperations opcode;
+	Basic::Op::Binary opcode;
 	switch (advance().getTag()) {
-	case Basic::tok::Tag::less:opcode = Basic::BinaryOperations::lt;
+	case Basic::tok::Tag::less:opcode = Basic::Op::lt;
 	  break;
-	case Basic::tok::Tag::lessequal:opcode = Basic::BinaryOperations::ltequals;
+	case Basic::tok::Tag::lessequal:opcode = Basic::Op::ltequals;
 	  break;
-	case Basic::tok::Tag::greater:opcode = Basic::BinaryOperations::gt;
+	case Basic::tok::Tag::greater:opcode = Basic::Op::gt;
 	  break;
-	case Basic::tok::Tag::greaterequal:opcode = Basic::BinaryOperations::gtequals;
+	case Basic::tok::Tag::greaterequal:opcode = Basic::Op::gtequals;
 	  break;
-	default: return nullptr;
+	default:return nullptr;
 	}
 	std::unique_ptr<Expr> add_node2 = addExpr();
 	if (!add_node2) {
@@ -354,10 +354,9 @@ std::unique_ptr<Expr> Parser::addExpr() {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::plus, Basic::tok::Tag::minus})) {
-	Basic::BinaryOperations opcode =
-		advance().getTag()==Basic::tok::Tag::plus
-		? Basic::BinaryOperations::plus
-		: Basic::BinaryOperations::minus;
+	Basic::Op::Binary opcode = advance().getTag()==Basic::tok::Tag::plus
+							   ? Basic::Op::plus
+							   : Basic::Op::minus;
 	std::unique_ptr<Expr> multdiv_node2 = multdiv();
 	if (!multdiv_node2) {
 	  return nullptr;
@@ -375,10 +374,9 @@ std::unique_ptr<Expr> Parser::multdiv() {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::star, Basic::tok::Tag::slash})) {
-	Basic::BinaryOperations opcode =
-		advance().getTag()==Basic::tok::Tag::star
-		? Basic::BinaryOperations::multiply
-		: Basic::BinaryOperations::divide;
+	Basic::Op::Binary opcode = advance().getTag()==Basic::tok::Tag::star
+							   ? Basic::Op::multiply
+							   : Basic::Op::divide;
 	std::unique_ptr<Expr> unary_node2 = unary();
 	if (!unary_node2) {
 	  return nullptr;
@@ -391,17 +389,17 @@ std::unique_ptr<Expr> Parser::multdiv() {
 
 std::unique_ptr<Expr> Parser::unary() {
   using namespace Basic;
-  UnaryOperations opcode = UnaryOperations::NUM_UNARY;
+  Op::Unary opcode = Basic::Op::Unary::NUM_UNARY;
   if (isOneOf(
 	  {tok::plusplus, tok::minusminus, tok::exclaim, tok::Tag::minus})) {
 	switch (advance().getTag()) {
-	case tok::plusplus: opcode = UnaryOperations::preInc;
+	case tok::plusplus:opcode = Basic::Op::Unary::preInc;
 	  break;
-	case tok::exclaim: opcode = UnaryOperations::lNot;
+	case tok::exclaim:opcode = Basic::Op::Unary::lNot;
 	  break;
-	case tok::minusminus: opcode = UnaryOperations::preDec;
+	case tok::minusminus:opcode = Basic::Op::Unary::preDec;
 	  break;
-	case tok::minus: opcode = UnaryOperations::unaryMinus;
+	case tok::minus:opcode = Basic::Op::Unary::unaryMinus;
 	  break;
 	default:;
 	}
@@ -410,7 +408,7 @@ std::unique_ptr<Expr> Parser::unary() {
   if (!primary_node) {
 	return nullptr;
   }
-  if (opcode!=UnaryOperations::NUM_UNARY) {
+  if (opcode!=Basic::Op::Unary::NUM_UNARY) {
 	return std::make_unique<UnaryOp>(std::move(primary_node), opcode);
   } else {
 	return primary_node;

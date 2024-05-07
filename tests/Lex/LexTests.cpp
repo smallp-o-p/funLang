@@ -1,5 +1,5 @@
 #include "Lex.hpp"
-#include "TokenTags.hpp"
+#include "Basic.hpp"
 #include "gtest/gtest.h"
 #include <llvm/Support/InitLLVM.h>
 #include <llvm/Support/SMLoc.h>

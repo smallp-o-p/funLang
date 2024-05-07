@@ -1,0 +1,15 @@
+#ifndef DATA
+#define DATA(ID, SP)
+#endif
+
+DATA(i32, "i32")
+DATA(i64, "i64")
+DATA(f32, "f32")
+DATA(f64, "f64")
+DATA(bool_, "bool")
+DATA(string, "string")
+DATA(void_, "void")
+DATA(ident, "")
+DATA(invalid, "")
+
+#undef DATA

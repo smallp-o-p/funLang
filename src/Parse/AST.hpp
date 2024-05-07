@@ -1,6 +1,6 @@
 #pragma once
 #include "Lex.hpp"
-#include "OperationKinds.hpp"
+#include "Basic.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -15,19 +15,29 @@ class ArgumentsNode;
 class ArgNode;
 class CompoundStmt;
 class Stmt;
+class matchStmt;
+class forStmt;
+class whileStmt;
+class loopStmt;
 class Decl;
+class structDecl;
 class VarDeclStmt;
 class Expr;
 class returnNode;
 class TypeNode;
 class fnCallNode;
 class callArgList;
-class NodeVisitor;
+
+namespace funLang {
+
+class SemaAnalyzer;
+
+};
 
 class Node {
 public:
   virtual ~Node() = default;
-  virtual void accept(NodeVisitor &visitor) = 0;
+  virtual void accept(funLang::SemaAnalyzer &visitor) = 0;
 };
 
 class CompilationUnit : public Node {
@@ -43,32 +53,29 @@ public:
 				  std::unique_ptr<std::unordered_map<std::string, int>> globs)
 	  : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
 
-  void accept(NodeVisitor &visitor) override {}
+  void accept(funLang::SemaAnalyzer &visitor) override {}
 };
 
 class TypeNode : public Node {
-public:
-  enum DataTypes {
-	VOID = 10000,
-	CHAR,
-	BOOL,
-	i32,
-	i64,
-	f32,
-	f64,
-	STRING,
-	IDENT,
-	INVALID
-  };
-
 private:
-  DataTypes type;
+  Basic::Data::Type type;
   Token &identifier;
 
 public:
   explicit TypeNode(Token &tok);
-  DataTypes getType() { return type; }
-  void accept(NodeVisitor &v) override {}
+  Basic::Data::Type getType() { return type; }
+  Token &getCustomTypeToken() { return identifier; }
+
+  void accept(funLang::SemaAnalyzer &v) override {}
+
+  bool operator==(const TypeNode &other) {
+	if (type==other.type) {
+	  if (type==Basic::Data::Type::ident && other.type==Basic::Data::Type::ident) {
+		return identifier.getIdentifier()==other.identifier.getIdentifier();
+	  }
+	}
+	return false;
+  }
 };
 
 class Decl : public Node {
@@ -84,7 +91,7 @@ private:
 public:
   explicit Decl(DeclKind kind) : kind(kind) {}
   DeclKind getKind() const { return kind; }
-  void accept(NodeVisitor &v) override {};
+  void accept(funLang::SemaAnalyzer &v) override {};
 };
 
 class FunctionsNode : public Node {
@@ -94,7 +101,7 @@ private:
 public:
   explicit FunctionsNode(std::unordered_map<std::string, std::shared_ptr<FunctionNode>> fnMap)
 	  : fnMap(std::move(fnMap)) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 
   std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &getFnMap();
 
@@ -113,13 +120,13 @@ public:
   PrototypeNode(std::unique_ptr<TypeNode> fnType, Token &name,
 				std::unique_ptr<ArgumentsNode> argsList)
 	  : type(std::move(fnType)), name(name), args(std::move(argsList)) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 
   const std::unique_ptr<TypeNode> &getTypeNode() const {
 	return type;
   }
-  llvm::StringRef getName() const {
-	return name.getLexeme();
+  Token &getName() const {
+	return name;
   }
   const std::unique_ptr<ArgumentsNode> &getArgs() const {
 	return args;
@@ -138,12 +145,12 @@ public:
   FunctionNode(std::unique_ptr<PrototypeNode> pro,
 			   std::unique_ptr<CompoundStmt> compoundStmt)
 	  : proto(std::move(pro)), compound(std::move(compoundStmt)), Decl(DK_FN) {};
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
   const std::unique_ptr<PrototypeNode> &getProto() const {
 	return proto;
   }
 
-  llvm::StringRef getName() {
+  Token &getName() {
 	return proto->getName();
   }
   const std::unique_ptr<CompoundStmt> &getCompound() const {
@@ -162,7 +169,7 @@ private:
 public:
   ArgumentsNode(std::vector<std::unique_ptr<ArgNode>> &args)
 	  : argList(std::move(args)) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
   const std::vector<std::unique_ptr<ArgNode>> &getArgList() {
 	return argList;
   }
@@ -176,7 +183,7 @@ private:
 public:
   ArgNode(std::unique_ptr<TypeNode> type, Token &id)
 	  : type(std::move(type)), argName(id) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class CompoundStmt : public Node {
@@ -184,9 +191,9 @@ private:
   std::vector<std::unique_ptr<Stmt>> stmts;
 
 public:
-  CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
+  explicit CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
 	  : stmts(std::move(simples)) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
   std::vector<std::unique_ptr<Stmt>> &getStmts();
 };
 
@@ -221,7 +228,7 @@ public :
 	return expr;
   }
 
-  static bool classof(Decl *D) {
+  static bool classof(const Decl *D) {
 	return D->getKind()==DK_VAR;
   }
 };
@@ -236,11 +243,12 @@ public:
   VarDeclStmt(std::unique_ptr<TypeNode> t, Token &id,
 			  std::unique_ptr<Expr> expression)
 	  : type(std::move(t)), name(id), expr(std::move(expression)), Stmt(SK_VARDECL) {}
-  TypeNode::DataTypes getDeclType();
+  Basic::Data::Type getDeclType();
   llvm::StringRef getName();
   Token &getTok();
   Expr &getExpr();
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {
+  }
   std::shared_ptr<VarDecl> toDecl() { return std::make_shared<VarDecl>(*type, name, *expr); };
 };
 
@@ -250,7 +258,7 @@ private:
 
 public:
   returnNode(std::unique_ptr<Expr> exprNode) : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class Expr : public Stmt {
@@ -259,36 +267,44 @@ public:
 
 public:
   ExprKind kind;
+protected:
+  Basic::Data::Type resultingType;
 
 public:
-  explicit Expr(ExprKind k) : kind(k), Stmt(SK_EXPR) {};
+  explicit Expr(ExprKind k) : kind(k), Stmt(SK_EXPR), resultingType(Basic::Data::Type::invalid) {};
+
+  void accept(funLang::SemaAnalyzer &v);
+
+  void setType(Basic::Data::Type toSet);
+
+  Basic::Data::Type getResultingType();
 };
 
 class BinaryOp : public Expr {
 public:
 private:
-  Basic::BinaryOperations op;
+  Basic::Op::Binary op;
   std::unique_ptr<Expr> lhs;
   std::unique_ptr<Expr> rhs;
 
 public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
-		   Basic::BinaryOperations opcode)
+		   Basic::Op::Binary opcode)
 	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
 		Expr(ExprKind::EXPR_BINARY) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class UnaryOp : public Expr {
 public:
 private:
-  Basic::UnaryOperations op;
+  Basic::Op::Unary op;
   std::unique_ptr<Expr> input;
 
 public:
-  UnaryOp(std::unique_ptr<Expr> inp, Basic::UnaryOperations opc)
+  UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
 	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class leafNode : public Expr {
@@ -301,7 +317,7 @@ public:
 
   leafNode(Token &token) : tok(token), Expr(ExprKind::EXPR_PRIMARY) {}
 
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class fnCallNode : public Expr {
@@ -320,7 +336,7 @@ private:
 public:
   fnCallNode(Token &id, std::unique_ptr<callArgList> arguments)
 	  : name(id), args(std::move(arguments)), Expr(ExprKind::EXPR_FNCALL) {}
-  void accept(NodeVisitor &v) override {}
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class callArgList : public Node {
@@ -336,5 +352,5 @@ public:
   std::vector<std::unique_ptr<Expr>> &getArgsVec() {
 	return args;
   };
-  void accept(NodeVisitor &v) override {};
+  void accept(funLang::SemaAnalyzer &v) override {};
 };
