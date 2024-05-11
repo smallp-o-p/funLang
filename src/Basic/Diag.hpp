@@ -35,9 +35,18 @@ public:
 			.str();
 	llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
 	srcMgr->PrintMessage(loc, kind, msg);
-	if (diagID < diag::last_err) {
-	  numErrors += (kind==llvm::SourceMgr::DK_Error);
-	}
+
+	numErrors += (kind==llvm::SourceMgr::DK_Error);
   }
 
+  template<typename... args>
+  void emitDiagMsgRange(llvm::SMLoc left, llvm::SMLoc right, uint32_t diagID, args &&...arguments) {
+	assert(left.isValid() && right.isValid() && "SMLoc left or right returned invalid.");
+	std::string msg = llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
+		.str();
+	llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
+	srcMgr->PrintMessage(left, kind, msg, {llvm::SMRange(left, right)});
+
+	numErrors += (kind==llvm::SourceMgr::DK_Error);
+  }
 };
