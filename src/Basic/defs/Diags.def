@@ -14,6 +14,7 @@ DIAG(err_incompatible_type_var_decl,
 	 Error,
 	 "Type of declared variable {0} is {1}, however expression results in a type of {2}")
 DIAG(err_incompatible_binary_operands, Error, "Type of LHS {0} is incompatible with type of RHS {1}")
+DIAG(err_unary, Error, "Unary operation {0} does not correspond with unary operand type {1}")
 DIAG(last_err, Error, "last err")
 DIAG(warn_function_redefinition,
 	 Warning,

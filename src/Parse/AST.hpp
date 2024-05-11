@@ -23,10 +23,13 @@ class Decl;
 class structDecl;
 class VarDeclStmt;
 class Expr;
-class returnNode;
+class ReturnStmt;
 class TypeNode;
-class fnCallNode;
+class FnCallNode;
 class callArgList;
+class BinaryOp;
+class UnaryOp;
+class LeafNode;
 
 namespace funLang {
 
@@ -71,8 +74,17 @@ public:
   bool operator==(const TypeNode &other) {
 	if (type==other.type) {
 	  if (type==Basic::Data::Type::ident && other.type==Basic::Data::Type::ident) {
-		return identifier.getIdentifier()==other.identifier.getIdentifier();
+		return identifier.getIdentifier().str()==other.identifier.getIdentifier().str();
 	  }
+	}
+	return false;
+  }
+
+  bool operator!=(const TypeNode &rhs) {
+	if (type!=rhs.type) {
+	  return true;
+	} else if (type==Basic::Data::Type::ident && rhs.type==Basic::Data::Type::ident) {
+	  return identifier.getIdentifier().str()==rhs.identifier.getIdentifier();
 	}
 	return false;
   }
@@ -186,29 +198,37 @@ public:
   void accept(funLang::SemaAnalyzer &v) override {}
 };
 
-class CompoundStmt : public Node {
-private:
-  std::vector<std::unique_ptr<Stmt>> stmts;
-
-public:
-  explicit CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
-	  : stmts(std::move(simples)) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
-  std::vector<std::unique_ptr<Stmt>> &getStmts();
-};
-
 class Stmt : public Node {
 public:
   enum StmtKind {
 	SK_VARDECL,
 	SK_EXPR,
-	SK_RETURN
+	SK_RETURN,
+	SK_COMPOUND
   };
 
 private:
   StmtKind kind;
 public:
   explicit Stmt(StmtKind k) : kind(k) {}
+  StmtKind getKind() const {
+	return kind;
+  }
+};
+
+class CompoundStmt : public Stmt {
+private:
+  std::vector<std::unique_ptr<Stmt>> stmts;
+
+public:
+  explicit CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
+	  : stmts(std::move(simples)), Stmt(SK_COMPOUND) {}
+  void accept(funLang::SemaAnalyzer &sema) override {};
+  std::vector<std::unique_ptr<Stmt>> &getStmts();
+
+  static bool classof(const Stmt *S) {
+	return S->getKind()==SK_COMPOUND;
+  }
 };
 
 class VarDecl : public Decl {
@@ -252,32 +272,86 @@ public:
   std::shared_ptr<VarDecl> toDecl() { return std::make_shared<VarDecl>(*type, name, *expr); };
 };
 
-class returnNode : public Stmt {
+class ReturnStmt : public Stmt {
 private:
   std::unique_ptr<Expr> expr;
 
 public:
-  returnNode(std::unique_ptr<Expr> exprNode) : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
+  explicit ReturnStmt(std::unique_ptr<Expr> exprNode) : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
   void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class Expr : public Stmt {
 public:
-  enum ExprKind { EXPR_BINARY, EXPR_UNARY, EXPR_PRIMARY, EXPR_FNCALL };
+  enum ExprKind { EXPR_BINARY, EXPR_UNARY, EXPR_LEAF, EXPR_FNCALL };
 
 public:
   ExprKind kind;
 protected:
-  Basic::Data::Type resultingType;
+  std::pair<Basic::Data::Type, llvm::StringRef> resultingTypePair;
 
 public:
-  explicit Expr(ExprKind k) : kind(k), Stmt(SK_EXPR), resultingType(Basic::Data::Type::invalid) {};
+  explicit Expr(ExprKind k)
+	  : kind(k), Stmt(SK_EXPR),
+		resultingTypePair(std::pair<Basic::Data::Type, llvm::StringRef>(Basic::Data::invalid, llvm::StringRef())) {};
 
   void accept(funLang::SemaAnalyzer &v);
 
   void setType(Basic::Data::Type toSet);
 
-  Basic::Data::Type getResultingType();
+  virtual llvm::SMLoc getLoc() = 0;
+
+  ExprKind getExprKind() const {
+	return kind;
+  }
+  std::pair<Basic::Data::Type, llvm::StringRef> getResultingType();
+};
+
+class LeafNode : public Expr {
+protected:
+  Token &tok;
+
+public:
+  explicit LeafNode(Token &token) : tok(token), Expr(ExprKind::EXPR_LEAF) {}
+
+  llvm::StringRef getLexeme();
+  Basic::tok::Tag getTag();
+  llvm::SMLoc getLoc() override { return tok.getFromPtr(); }
+  void accept(funLang::SemaAnalyzer &v) override {}
+};
+
+class FnCallNode : public Expr {
+private:
+  Token &name;
+private:
+  std::unique_ptr<callArgList> args;
+
+public:
+  FnCallNode(Token &id, std::unique_ptr<callArgList> arguments)
+	  : name(id), args(std::move(arguments)), Expr(ExprKind::EXPR_FNCALL) {}
+  void accept(funLang::SemaAnalyzer &v) override {}
+
+  Token &getName() const { return name; }
+  const std::unique_ptr<callArgList> &getArgs() const { return args; }
+  llvm::SMLoc getLoc() override {
+	return name.getFromPtr();
+  }
+
+};
+
+class UnaryOp : public Expr {
+public:
+private:
+  Basic::Op::Unary op;
+  std::unique_ptr<Expr> input;
+
+public:
+  UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
+	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY) {}
+  void accept(funLang::SemaAnalyzer &v) override {}
+  llvm::SMLoc getLoc() override {
+	return input->getLoc();
+  }
 };
 
 class BinaryOp : public Expr {
@@ -293,50 +367,26 @@ public:
 	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
 		Expr(ExprKind::EXPR_BINARY) {}
   void accept(funLang::SemaAnalyzer &v) override {}
-};
 
-class UnaryOp : public Expr {
-public:
-private:
-  Basic::Op::Unary op;
-  std::unique_ptr<Expr> input;
-
-public:
-  UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
-	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
-};
-
-class leafNode : public Expr {
-protected:
-  Token &tok;
-
-public:
-  llvm::StringRef getLexeme();
-  Basic::tok::Tag getTag();
-
-  leafNode(Token &token) : tok(token), Expr(ExprKind::EXPR_PRIMARY) {}
-
-  void accept(funLang::SemaAnalyzer &v) override {}
-};
-
-class fnCallNode : public Expr {
-private:
-  Token &name;
-public:
-  Token &getName() const {
-	return name;
+  Expr &getLhs() {
+	return *lhs;
   }
-  const std::unique_ptr<callArgList> &getArgs() const {
-	return args;
-  }
-private:
-  std::unique_ptr<callArgList> args;
 
-public:
-  fnCallNode(Token &id, std::unique_ptr<callArgList> arguments)
-	  : name(id), args(std::move(arguments)), Expr(ExprKind::EXPR_FNCALL) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
+  Expr &getRhs() {
+	return *rhs;
+  }
+
+  llvm::SMLoc getLoc() override { // the 'location' of a binary op will be its left-most side
+	return lhs->getLoc();
+  }
+
+  llvm::SMRange getRange() {
+	return {lhs->getLoc(), rhs->getLoc()};
+  };
+
+  static bool classof(const Expr *expr) {
+	return expr->getExprKind()==ExprKind::EXPR_BINARY;
+  }
 };
 
 class callArgList : public Node {

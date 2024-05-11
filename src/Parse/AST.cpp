@@ -39,9 +39,9 @@ Token &VarDeclStmt::getTok() {
   return name;
 }
 
-llvm::StringRef leafNode::getLexeme() { return tok.getLexeme(); }
+llvm::StringRef LeafNode::getLexeme() { return tok.getLexeme(); }
 
-Basic::tok::Tag leafNode::getTag() {
+Basic::tok::Tag LeafNode::getTag() {
   return Basic::tok::exclaimequal;
 }
 
@@ -53,13 +53,13 @@ size_t PrototypeNode::getNumArgs() {
 }
 
 void Expr::accept(funLang::SemaAnalyzer &v) {
-  v.actOnExpr(*this);
+  ;
 }
 
 void Expr::setType(Basic::Data::Type toSet) {
 
 }
-Basic::Data::Type Expr::getResultingType() {
-  assert(resultingType!=Basic::Data::Type::invalid && "Type not evaluated for expr\n");
-  return resultingType;
+std::pair<Basic::Data::Type, llvm::StringRef> Expr::getResultingType() {
+  assert(resultingTypePair.first!=Basic::Data::Type::invalid && "Type not evaluated for expr\n");
+  return resultingTypePair;
 }
