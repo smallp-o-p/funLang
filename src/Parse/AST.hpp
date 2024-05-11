@@ -323,7 +323,6 @@ public:
 class FnCallNode : public Expr {
 private:
   Token &name;
-private:
   std::unique_ptr<callArgList> args;
 
 public:
@@ -352,6 +351,8 @@ public:
   llvm::SMLoc getLoc() override {
 	return input->getLoc();
   }
+  Basic::Op::Unary getOp() { return op; }
+
 };
 
 class BinaryOp : public Expr {

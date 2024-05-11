@@ -102,11 +102,13 @@ std::shared_ptr<FunctionNode> Parser::function() {
   if (!prototype) {
 	return nullptr;
   }
+  semantics->enterScope();
 
   std::unique_ptr<CompoundStmt> compound = compoundStmt();
   if (!compound) {
 	return nullptr;
   }
+  semantics->exitScope();
   return std::make_unique<FunctionNode>(std::move(prototype),
 										std::move(compound));
 }
@@ -184,12 +186,22 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
 	  advance();
 	  break;
 	}
-	std::unique_ptr<Stmt> s = simpleStmt();
+	std::unique_ptr<Stmt> s;
+	if (check(Basic::tok::Tag::l_brace)) {
+	  advance();
+	  semantics->enterScope();
+	  s = compoundStmt();
+	} else {
+	  s = simpleStmt();
+	}
 	if (!s) {
 	  if (!recoverFromError(currentNT::STMT)) {
 		return nullptr;
 	  }
 	} else {
+	  if (s->getKind()==Stmt::SK_COMPOUND) {
+		semantics->exitScope();
+	  }
 	  stmts.push_back(std::move(s));
 	}
   }
@@ -232,6 +244,7 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   }
   return stmt_inq;
 }
+
 std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   std::unique_ptr<TypeNode> type_node = type();
   if (!type_node) {
@@ -240,30 +253,33 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   if (!expect(Basic::tok::Tag::identifier)) {
 	return nullptr;
   }
-  Token &id = previous();
 
+  Token &id = previous();
   if (!expect(Basic::tok::Tag::equal)) {
 	return nullptr;
   }
   std::unique_ptr<Expr> expr_node = expr();
+
   if (!expr_node) {
 	return nullptr;
   }
-  return std::make_unique<VarDeclStmt>(std::move(type_node), id,
-									   std::move(expr_node));
+
+  auto decl = std::make_unique<VarDeclStmt>(std::move(type_node), id,
+											std::move(expr_node));
+  semantics->actOnVarDecl(*decl);
+
+  return decl;
 }
 
-std::unique_ptr<returnNode> Parser::returnStmt() {
-
+std::unique_ptr<ReturnStmt> Parser::returnStmt() {
   if (!expect(Basic::tok::Tag::kw_return)) {
 	return nullptr;
   }
   std::unique_ptr<Expr> expr_node = expr();
-
   if (!expr_node) {
 	return nullptr;
   }
-  return std::make_unique<returnNode>(std::move(expr_node));
+  return std::make_unique<ReturnStmt>(std::move(expr_node));
 }
 
 std::unique_ptr<Expr> Parser::expr() { return assign(); }
@@ -428,24 +444,27 @@ std::unique_ptr<Expr> Parser::primary() {
 	return expr_node;
   } else if (check(Basic::tok::identifier)) {
 	if (lookahead(2).getTag()==Basic::tok::Tag::l_paren) {
-	  std::unique_ptr<Expr> fncall_node = fnCall();
+	  std::unique_ptr<FnCallNode> fncall_node = fnCall();
 	  if (!fncall_node) {
 		return nullptr;
 	  }
+	  semantics->actOnFnCall(*fncall_node);
 	  return fncall_node;
 	} else { /* identifier only */
-	  std::unique_ptr<leafNode> leaf = std::make_unique<leafNode>(advance());
+	  Token &var_name = advance();
+	  semantics->actOnNameUsage(var_name);
+	  std::unique_ptr<LeafNode> leaf = std::make_unique<LeafNode>(var_name);
 	  return leaf;
 	}
   } else if (isOneOf({Basic::tok::floating_constant,
 					  Basic::tok::numeric_constant, Basic::tok::string_literal,
 					  Basic::tok::kw_true, Basic::tok::kw_false})) {
-	return std::make_unique<leafNode>(advance());
+	return std::make_unique<LeafNode>(advance());
   }
   return nullptr;
 }
 
-std::unique_ptr<Expr> Parser::fnCall() {
+std::unique_ptr<FnCallNode> Parser::fnCall() {
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
@@ -462,7 +481,7 @@ std::unique_ptr<Expr> Parser::fnCall() {
   if (!expect(Basic::tok::r_paren)) {
 	return nullptr;
   }
-  return std::make_unique<fnCallNode>(id, std::move(callargs_node));
+  return std::make_unique<FnCallNode>(id, std::move(callargs_node));
 }
 
 std::unique_ptr<callArgList> Parser::callArgs() {

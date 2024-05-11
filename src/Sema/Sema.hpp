@@ -18,11 +18,10 @@ public:
   explicit Scope(std::shared_ptr<Scope> parent)
 	  : parentScope(std::move(parent)), symTable(llvm::StringMap<std::shared_ptr<Decl>>()) {}
 
-  bool insert(std::shared_ptr<Decl> decl) {
+  bool insert(const std::shared_ptr<Decl> &decl) {
 	switch (decl->getKind()) {
 	case Decl::DK_VAR: {
 	  if (VarDecl *var = llvm::dyn_cast<VarDecl>(decl.get())) {
-
 		return symTable.insert(std::pair<llvm::StringRef, std::shared_ptr<Decl>>(var->getName().getIdentifier(),
 																				 decl)).second;
 	  }
@@ -59,6 +58,7 @@ class SemaAnalyzer {
 private:
   std::shared_ptr<Scope> currentScope;
   std::shared_ptr<DiagEngine> diags;
+  std::vector<FnCallNode *> non_resolved;
 public:
   explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
 	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)) {}
@@ -73,39 +73,88 @@ public:
 	currentScope = currentScope->getParent();
   }
 
-  bool actOnVarDeclStmt(VarDeclStmt &decl) {
+  void actOnVarDecl(VarDeclStmt &decl) {
 	if (!currentScope->insert(decl.toDecl())) {
 	  diags->emitDiagMsg(decl.getTok().getFromPtr(), diag::err_var_redefinition, decl.getName());
-	  return false;
 	}
-	if (decl.getExpr().getResultingType()!=decl.getDeclType()) {
-	  diags->emitDiagMsg(decl.getTok().getFromPtr(), diag::err_incompatible_type_var_decl, decl.getName());
+	if (decl.getExpr().getResultingType().first!=decl.getDeclType()) {
+	  diags->emitDiagMsg(decl.getTok().getFromPtr(),
+						 diag::err_incompatible_type_var_decl,
+						 decl.getName(),
+						 decl.getExpr().getResultingType().second);
 	}
-	return true;
   }
 
-  bool actOnFunctions(FunctionsNode &fncs) {
+  bool actOnCompilationUnit(FunctionsNode &fncs) {
 	std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &fns = fncs.getFnMap();
-	return std::all_of(fns.cbegin(),
-					   fns.cend(),
-					   [this](auto fn) { return currentScope->insert(std::move(fn.second)); });
+	bool errs = false;
+	for (FnCallNode *fn : non_resolved) {
+	  if (!currentScope->find(fn->getName().getIdentifier())) {
+		diags->emitDiagMsg(fn->getLoc(), diag::err_fn_not_found, fn->getName().getLexeme());
+		errs = true;
+	  }
+	}
+	return errs;
+  }
+
+  bool actOnNameUsage(Token &identifier) {
+	assert(identifier.getTag()==Basic::tok::Tag::identifier && "Trying to lookup a tag that isn't an identifier");
+	if (!lookup(identifier.getLexeme())) {
+	  diags->emitDiagMsg(identifier.getFromPtr(), diag::err_var_not_found, identifier.getLexeme());
+	  return false;
+	}
+	return true;
   }
 
   bool actOnFnDecl(FunctionNode &fn) {
 	return false;
   }
 
-  // type check an expr: check if all operands are the same type as the left most operand
-  bool actOnExpr(Expr &expr) {
-	return false;
+  bool actOnReturnStmt() {
+	return true;
   }
 
-  bool actOnFnCall(fnCallNode &fnCall) {
+  bool actOnUnaryOp(UnaryOp &unary) {
+	auto type_pair = unary.getResultingType();
+	switch (type_pair.first) {
+	case Basic::Data::i32:
+	case Basic::Data::i64:
+	case Basic::Data::f32:
+	case Basic::Data::f64: return true;
+	default:
+	  diags->emitDiagMsg(unary.getLoc(),
+						 diag::err_incompatible_binary_operands,
+						 Basic::Op::getUnaryOpSpelling(unary.getOp()), unary.getResultingType().second);
+	  return false;
+	}
+  }
+
+  bool actOnBinaryOp(BinaryOp &bin) {
+	if (bin.getLhs().getResultingType().first==Basic::Data::invalid
+		|| bin.getRhs().getResultingType().first==Basic::Data::invalid) {
+	  return true; // pretend there's no error
+	}
+	if (bin.getLhs().getResultingType().first==bin.getRhs().getResultingType().first) {
+	  bin.setType(bin.getLhs().getResultingType().first);
+	  return true;
+	} else {
+	  diags->emitDiagMsgRange(bin.getLhs().getLoc(),
+							  bin.getRhs().getLoc(),
+							  diag::err_incompatible_binary_operands,
+							  bin.getLhs().getResultingType().second,
+							  bin.getRhs().getResultingType().second);
+	  return false;
+	};
+  }
+
+  bool actOnFnCall(const FnCallNode &fnCall) {
 	bool failed = false;
 	Decl *fn;
 	if (!(fn = lookup(fnCall.getName().getIdentifier()))) {
+	  non_resolved.push_back(&fnCall);
 	  return false;
 	}
+
 	auto fn_casted = llvm::dyn_cast<FunctionNode>(fn);
 	if (fn_casted->getProto()->getNumArgs()!=fnCall.getArgs()->getSize()) {
 	  diags->emitDiagMsg(fnCall.getName().getFromPtr(),
@@ -113,10 +162,6 @@ public:
 						 fnCall.getName().getLexeme());
 	  failed = true;
 	}
-
-	for (std::unique_ptr<Expr> &arg : fnCall.getArgs()->getArgsVec()) {
-	}
-
 	return failed;
   }
 
@@ -124,7 +169,6 @@ public:
 	std::shared_ptr<Scope> s = currentScope;
 	while (s) {
 	  Decl *found = s->find(var).get();
-
 	  if (found) {
 		return found;
 	  } else {

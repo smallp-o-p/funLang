@@ -9,11 +9,13 @@
 #include <utility>
 
 enum currentNT { STMT, FUNCTION }; // what non-terminal we failed to parse
-
+using namespace funLang;
 class Parser {
 private:
   std::unique_ptr<Lexer> lexer;
   DiagEngine diags;
+  std::unique_ptr<SemaAnalyzer> semantics;
+
   bool error;
 
 public:
@@ -39,7 +41,7 @@ public:
   std::unique_ptr<CompoundStmt> compoundStmt();
   std::unique_ptr<Stmt> simpleStmt();
   std::unique_ptr<VarDeclStmt> declStmt();
-  std::unique_ptr<returnNode> returnStmt();
+  std::unique_ptr<ReturnStmt> returnStmt();
   std::unique_ptr<Expr> expr();
   std::unique_ptr<Expr> assign();
   std::unique_ptr<Expr> eqExpr();
@@ -48,7 +50,7 @@ public:
   std::unique_ptr<Expr> multdiv();
   std::unique_ptr<Expr> unary();
   std::unique_ptr<Expr> primary();
-  std::unique_ptr<Expr> fnCall();
+  std::unique_ptr<FnCallNode> fnCall();
   std::unique_ptr<callArgList> callArgs();
   bool recoverFromError(currentNT whereWeFailed);
 

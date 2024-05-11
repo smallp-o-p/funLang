@@ -51,6 +51,7 @@ const char *Op::getUnaryOpSpelling(Basic::Op::Unary unop) {
   default: break;
   }
 }
+
 const char *Data::getBasicTypeSpelling(Data::Type t) {
   assert(t > Type::ident);
   switch (t) {
