@@ -53,8 +53,7 @@ simpleStmt
     | return
     ;
 
-
-forStmt : FOR expr; expr; expr compoundStmt
+forStmt : FOR expr in expr, expr compoundStmt
 
 whileStmt : WHILE '(' expr ')' compoundStmt
 
@@ -63,7 +62,7 @@ loopStmt : LOOP compoundStmt
 matchStmt : MATCH '(' ID ')' '{' matchArm+ '}'
 
 matchArm
-    : (expr | 'default') '=>' (expr | compoundStmt);
+    : (expr | 'default') '=>' compoundStmt;
 
 declare
     : type ID '=' expr

@@ -50,6 +50,7 @@ const char *Op::getUnaryOpSpelling(Basic::Op::Unary unop) {
 	#include "OperationKinds.def"
   default: break;
   }
+  return nullptr;
 }
 
 const char *Data::getBasicTypeSpelling(Data::Type t) {

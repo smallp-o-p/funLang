@@ -5,41 +5,55 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/APFloat.h"
 
 class TypeProperties;
 class CompilationUnit;
 class FunctionsNode;
 class FunctionNode;
 class PrototypeNode;
-class ArgumentsNode;
-class ArgNode;
+class ArgsList;
+class ArgDecl;
 class CompoundStmt;
 class Stmt;
 class matchStmt;
+class matchArm;
 class forStmt;
 class whileStmt;
 class loopStmt;
 class Decl;
-class structDecl;
+class TypeDecl;
+class TypeUse;
 class VarDeclStmt;
 class Expr;
 class ReturnStmt;
 class TypeNode;
-class FnCallNode;
-class callArgList;
+class FunctionCall;
+class CallArgList;
 class BinaryOp;
 class UnaryOp;
-class LeafNode;
+class NameUsage;
+class FloatingLiteral;
+class Integer;
+class BooleanLiteral;
+class StringLiteral;
+class CharLiteral;
 
 namespace funLang {
 
 class SemaAnalyzer;
 
-};
+}
 
 class Node {
+protected:
+  llvm::SMLoc locationInSrc;
 public:
-  virtual ~Node() = default;
+  Node() : locationInSrc(llvm::SMLoc()) {}
+  explicit Node(llvm::SMLoc loc) : locationInSrc(loc) {}
+
+  llvm::SMLoc getLoc() { return locationInSrc; }
   virtual void accept(funLang::SemaAnalyzer &visitor) = 0;
 };
 
@@ -48,46 +62,15 @@ private:
   std::unique_ptr<FunctionsNode> funcs;
   std::unique_ptr<std::unordered_map<std::string, int>> globalSymbols;
 public:
-  std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &getFuncs();
-  auto &getGlobs();
   explicit CompilationUnit(std::unique_ptr<FunctionsNode> fncs)
 	  : funcs(std::move(fncs)), globalSymbols(nullptr) {};
   CompilationUnit(std::unique_ptr<FunctionsNode> fncs,
 				  std::unique_ptr<std::unordered_map<std::string, int>> globs)
 	  : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
 
+  std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &getFuncs();
+  auto &getGlobs();
   void accept(funLang::SemaAnalyzer &visitor) override {}
-};
-
-class TypeNode : public Node {
-private:
-  Basic::Data::Type type;
-  Token &identifier;
-
-public:
-  explicit TypeNode(Token &tok);
-  Basic::Data::Type getType() { return type; }
-  Token &getCustomTypeToken() { return identifier; }
-
-  void accept(funLang::SemaAnalyzer &v) override {}
-
-  bool operator==(const TypeNode &other) {
-	if (type==other.type) {
-	  if (type==Basic::Data::Type::ident && other.type==Basic::Data::Type::ident) {
-		return identifier.getIdentifier().str()==other.identifier.getIdentifier().str();
-	  }
-	}
-	return false;
-  }
-
-  bool operator!=(const TypeNode &rhs) {
-	if (type!=rhs.type) {
-	  return true;
-	} else if (type==Basic::Data::Type::ident && rhs.type==Basic::Data::Type::ident) {
-	  return identifier.getIdentifier().str()==rhs.identifier.getIdentifier();
-	}
-	return false;
-  }
 };
 
 class Decl : public Node {
@@ -95,106 +78,94 @@ public:
   enum DeclKind {
 	DK_FN,
 	DK_VAR,
-	DK_STRUCT
+	DK_TYPE,
+	DK_ARG,
   };
 private:
   DeclKind kind;
+  llvm::StringRef name;
 
 public:
-  explicit Decl(DeclKind kind) : kind(kind) {}
+  explicit Decl(DeclKind kind) : kind(kind), name(""), Node(llvm::SMLoc()) {}
+  Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc loc) : kind(kind), name(name), Node(loc) {}
+
   DeclKind getKind() const { return kind; }
+  llvm::StringRef getName() { return name; }
   void accept(funLang::SemaAnalyzer &v) override {};
+};
+
+class TypeDecl : public Decl {
+private:
+  std::unique_ptr<TypeProperties> properties;
+public:
+  TypeDecl(llvm::StringRef name, std::unique_ptr<TypeProperties> properties, llvm::SMLoc loc)
+	  : Decl(DK_TYPE, name, loc), properties(std::move(properties)) {}
+  TypeDecl() : Decl(DK_TYPE), properties(nullptr) {}
+  explicit TypeDecl(llvm::StringRef name, llvm::SMLoc loc) : Decl(DK_TYPE, name, loc), properties(nullptr) {}
+
+  static bool classof(const Decl *d) {
+	return d->getKind()==DK_TYPE;
+  }
+};
+
+class TypeUse : public Node {
+private:
+  TypeDecl *type;
+
+public:
+  explicit TypeUse(llvm::SMLoc loc) : type(nullptr) {}
+  TypeUse(TypeDecl *type, llvm::SMLoc loc) : type(type), Node(loc) {}
+
+  TypeDecl &getType() { return *type; }
+
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
 class FunctionsNode : public Node {
 private:
   std::unordered_map<std::string, std::shared_ptr<FunctionNode>> fnMap;
-
 public:
   explicit FunctionsNode(std::unordered_map<std::string, std::shared_ptr<FunctionNode>> fnMap)
 	  : fnMap(std::move(fnMap)) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
 
+  void accept(funLang::SemaAnalyzer &v) override {}
   std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &getFnMap();
-
-  static bool classof(const Decl &decl) {
-	return decl.getKind();
-  }
-};
-
-class PrototypeNode : public Node {
-private:
-  std::unique_ptr<TypeNode> type;
-  Token &name;
-  std::unique_ptr<ArgumentsNode> args;
-
-public:
-  PrototypeNode(std::unique_ptr<TypeNode> fnType, Token &name,
-				std::unique_ptr<ArgumentsNode> argsList)
-	  : type(std::move(fnType)), name(name), args(std::move(argsList)) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
-
-  const std::unique_ptr<TypeNode> &getTypeNode() const {
-	return type;
-  }
-  Token &getName() const {
-	return name;
-  }
-  const std::unique_ptr<ArgumentsNode> &getArgs() const {
-	return args;
-  }
-
-  size_t getNumArgs();
-
 };
 
 class FunctionNode : public Decl {
 private:
-  std::unique_ptr<PrototypeNode> proto;
+  std::unique_ptr<TypeUse> retType;
   std::unique_ptr<CompoundStmt> compound;
-
 public:
-  FunctionNode(std::unique_ptr<PrototypeNode> pro,
-			   std::unique_ptr<CompoundStmt> compoundStmt)
-	  : proto(std::move(pro)), compound(std::move(compoundStmt)), Decl(DK_FN) {};
+  FunctionNode(
+	  std::unique_ptr<TypeUse> retType,
+	  llvm::StringRef name,
+	  std::unique_ptr<CompoundStmt> compound,
+	  llvm::SMLoc loc) : retType(std::move(retType)), compound(std::move(compound)), Decl(DK_FN, name, loc) {}
+
   void accept(funLang::SemaAnalyzer &v) override {}
-  const std::unique_ptr<PrototypeNode> &getProto() const {
-	return proto;
-  }
-
-  Token &getName() {
-	return proto->getName();
-  }
-  const std::unique_ptr<CompoundStmt> &getCompound() const {
-	return compound;
-  }
-
-  static bool classof(const Decl *D) {
-	return D->getKind()==DK_FN;
-  }
+  CompoundStmt &getCompound() const { return *compound; }
+  static bool classof(const Decl *D) { return D->getKind()==DK_FN; }
 };
 
-class ArgumentsNode : public Node {
+class ArgsList : public Node {
 private:
-  std::vector<std::unique_ptr<ArgNode>> argList;
-
+  std::vector<std::unique_ptr<ArgDecl>> argList;
 public:
-  ArgumentsNode(std::vector<std::unique_ptr<ArgNode>> &args)
+  explicit ArgsList(std::vector<std::unique_ptr<ArgDecl>> &args)
 	  : argList(std::move(args)) {}
+
   void accept(funLang::SemaAnalyzer &v) override {}
-  const std::vector<std::unique_ptr<ArgNode>> &getArgList() {
-	return argList;
-  }
+  const std::vector<std::unique_ptr<ArgDecl>> &getArgList() { return argList; }
 };
 
-class ArgNode : public Node {
+class ArgDecl : public Decl {
 private:
-  std::unique_ptr<TypeNode> type;
-  Token &argName;
-
+  std::unique_ptr<TypeUse> type;
 public:
-  ArgNode(std::unique_ptr<TypeNode> type, Token &id)
-	  : type(std::move(type)), argName(id) {}
+  ArgDecl(std::unique_ptr<TypeUse> type, llvm::StringRef name, llvm::SMLoc loc)
+	  : type(std::move(type)), Decl(DK_ARG, name, loc) {}
+
   void accept(funLang::SemaAnalyzer &v) override {}
 };
 
@@ -204,159 +175,209 @@ public:
 	SK_VARDECL,
 	SK_EXPR,
 	SK_RETURN,
-	SK_COMPOUND
+	SK_COMPOUND,
+	SK_FOR,
+	SK_WHILE,
+	SK_LOOP,
+	SK_MATCH,
+	SK_MATCHARM
   };
-
 private:
   StmtKind kind;
 public:
   explicit Stmt(StmtKind k) : kind(k) {}
-  StmtKind getKind() const {
-	return kind;
-  }
+  Stmt(StmtKind k, llvm::SMLoc loc) : kind(k), Node(loc) {}
+
+  StmtKind getKind() const { return kind; }
 };
 
 class CompoundStmt : public Stmt {
 private:
   std::vector<std::unique_ptr<Stmt>> stmts;
-
 public:
   explicit CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
 	  : stmts(std::move(simples)), Stmt(SK_COMPOUND) {}
+
   void accept(funLang::SemaAnalyzer &sema) override {};
   std::vector<std::unique_ptr<Stmt>> &getStmts();
 
-  static bool classof(const Stmt *S) {
-	return S->getKind()==SK_COMPOUND;
-  }
+  static bool classof(const Stmt *S) { return S->getKind()==SK_COMPOUND; }
+};
+
+class forStmt : public Stmt {
+private:
+  std::unique_ptr<Expr> var;
+  std::unique_ptr<Expr> range;
+  std::unique_ptr<Expr> iterator;
+  std::unique_ptr<CompoundStmt> compound;
+public:
+  forStmt(
+	  std::unique_ptr<Expr> var,
+	  std::unique_ptr<Expr> range,
+	  std::unique_ptr<Expr> iter,
+	  std::unique_ptr<CompoundStmt> compound,
+	  llvm::SMLoc loc)
+	  : Stmt(SK_FOR, loc), var(std::move(var)), range(std::move(range)), iterator(std::move(iter)),
+		compound(std::move(compound)) {}
+};
+
+class whileStmt : public Stmt {
+private:
+  std::unique_ptr<Expr> condition;
+  std::unique_ptr<CompoundStmt> compound;
+public:
+  whileStmt(std::unique_ptr<Expr> condition, std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
+	  : compound(std::move(compound)), condition(std::move(condition)), Stmt(SK_WHILE, loc) {}
+};
+
+class loopStmt : public Stmt {
+private:
+  std::unique_ptr<CompoundStmt> compound;
+public:
+  loopStmt(std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
+	  : compound(std::move(compound)), Stmt(SK_LOOP, loc) {}
+};
+class matchArm : public Stmt {
+private:
+  std::unique_ptr<Expr> lhs;
+  std::unique_ptr<CompoundStmt> rhs;
+public:
+  matchArm(std::unique_ptr<Expr> lhs, std::unique_ptr<CompoundStmt> rhs, llvm::SMLoc begin)
+	  : lhs(std::move(lhs)), rhs(std::move(rhs)), Stmt(SK_MATCHARM, begin) {}
+};
+
+class matchStmt : public Stmt {
+private:
+  std::vector<std::unique_ptr<matchArm>> arms;
+public:
+  matchStmt(std::vector<std::unique_ptr<matchArm>> arms, llvm::SMLoc loc)
+	  : arms(std::move(arms)), Stmt(SK_MATCH, loc) {}
 };
 
 class VarDecl : public Decl {
-  TypeNode &type;
-  Token &name;
-  Expr &expr;
-
+private:
+  TypeUse &type;
+  Expr *expr;
 public :
-  VarDecl(TypeNode &t, Token &n, Expr &expr) : type(t), name(n), expr(expr), Decl(DK_VAR) {}
-  TypeNode &getType() const {
-	return type;
-  }
-  Token &getName() const {
-	return name;
-  }
-  Expr &getExpr() const {
-	return expr;
-  }
+  VarDecl(TypeUse &t, llvm::StringRef name, Expr *expr)
+	  : type(t), expr(expr), Decl(DK_VAR, name, llvm::SMLoc().getFromPointer(name.data())) {}
 
-  static bool classof(const Decl *D) {
-	return D->getKind()==DK_VAR;
-  }
+  TypeUse &getType() const { return type; }
+  Expr *getExpr() const { return expr; }
+  static bool classof(const Decl *D) { return D->getKind()==DK_VAR; }
 };
 
 class VarDeclStmt : public Stmt {
 private:
-  std::unique_ptr<TypeNode> type;
-  Token &name;
+  std::unique_ptr<TypeUse> type;
+  llvm::StringRef name;
   std::unique_ptr<Expr> expr;
-
 public:
-  VarDeclStmt(std::unique_ptr<TypeNode> t, Token &id,
-			  std::unique_ptr<Expr> expression)
-	  : type(std::move(t)), name(id), expr(std::move(expression)), Stmt(SK_VARDECL) {}
-  Basic::Data::Type getDeclType();
-  llvm::StringRef getName();
-  Token &getTok();
+  VarDeclStmt(std::unique_ptr<TypeUse> t, llvm::StringRef id, std::unique_ptr<Expr> expression, llvm::SMLoc loc)
+	  : type(std::move(t)), name(id), expr(std::move(expression)), Stmt(SK_VARDECL, loc) {}
+  VarDeclStmt(std::unique_ptr<TypeUse> t, llvm::StringRef id, llvm::SMLoc loc)
+	  : type(std::move(t)), name(id), Stmt(SK_VARDECL, loc) {}
+
+  llvm::StringRef getName() { return name; };
   Expr &getExpr();
-  void accept(funLang::SemaAnalyzer &v) override {
-  }
-  std::shared_ptr<VarDecl> toDecl() { return std::make_shared<VarDecl>(*type, name, *expr); };
+  VarDecl *toDecl() { return new VarDecl(*type, name, expr==nullptr ? nullptr : expr.get()); }
+  void accept(funLang::SemaAnalyzer &v) override {}
 };
 
-class ReturnStmt : public Stmt {
+class TypeProperties {
 private:
-  std::unique_ptr<Expr> expr;
-
+  std::vector<std::unique_ptr<VarDeclStmt>> decls;
 public:
-  explicit ReturnStmt(std::unique_ptr<Expr> exprNode) : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
+  explicit TypeProperties(std::vector<std::unique_ptr<VarDeclStmt>> decls)
+	  : decls(std::move(decls)) {}
 };
 
 class Expr : public Stmt {
 public:
-  enum ExprKind { EXPR_BINARY, EXPR_UNARY, EXPR_LEAF, EXPR_FNCALL };
-
-public:
+  enum ExprKind {
+	EXPR_BINARY,
+	EXPR_UNARY,
+	EXPR_LEAF,
+	EXPR_INT,
+	EXPR_FLOAT,
+	EXPR_BOOL,
+	EXPR_STRING,
+	EXPR_FNCALL
+  };
   ExprKind kind;
 protected:
-  std::pair<Basic::Data::Type, llvm::StringRef> resultingTypePair;
-
+  TypeDecl *resultType;
 public:
-  explicit Expr(ExprKind k)
-	  : kind(k), Stmt(SK_EXPR),
-		resultingTypePair(std::pair<Basic::Data::Type, llvm::StringRef>(Basic::Data::invalid, llvm::StringRef())) {};
+  explicit Expr(ExprKind k) : kind(k), Stmt(SK_EXPR) {};
+  Expr(ExprKind Kind, llvm::SMLoc Loc) : kind(Kind), Stmt(SK_EXPR, Loc) {};
 
   void accept(funLang::SemaAnalyzer &v);
-
-  void setType(Basic::Data::Type toSet);
-
-  virtual llvm::SMLoc getLoc() = 0;
-
-  ExprKind getExprKind() const {
-	return kind;
+  void setType(TypeDecl *toSet);
+  ExprKind getExprKind() const { return kind; }
+  static bool classof(StmtKind S) {
+	return S==SK_EXPR;
   }
-  std::pair<Basic::Data::Type, llvm::StringRef> getResultingType();
 };
 
-class LeafNode : public Expr {
+class NameUsage : public Expr {
 protected:
-  Token &tok;
-
+  llvm::StringRef name;
 public:
-  explicit LeafNode(Token &token) : tok(token), Expr(ExprKind::EXPR_LEAF) {}
+  explicit NameUsage(llvm::StringRef name)
+	  : name(name), Expr(ExprKind::EXPR_LEAF, llvm::SMLoc().getFromPointer(name.data())) {}
 
-  llvm::StringRef getLexeme();
-  Basic::tok::Tag getTag();
-  llvm::SMLoc getLoc() override { return tok.getFromPtr(); }
+  llvm::StringRef getLexeme() { return name; };
   void accept(funLang::SemaAnalyzer &v) override {}
 };
 
-class FnCallNode : public Expr {
+class IntegerLiteral : public Expr {
 private:
-  Token &name;
-  std::unique_ptr<callArgList> args;
+  llvm::APInt val;
+public:
+  explicit IntegerLiteral(llvm::APInt &value, llvm::SMLoc litLoc) : val(value), Expr(EXPR_INT, litLoc) {}
+};
+
+class FloatingLiteral : public Expr {
+private:
+  llvm::APFloat val;
+public:
+  explicit FloatingLiteral(llvm::APFloat &value, llvm::SMLoc litLoc) : val(value), Expr(EXPR_FLOAT) {}
+};
+
+class BooleanLiteral : public Expr {
+private:
+  bool val;
+public:
+  explicit BooleanLiteral(bool value, llvm::SMLoc loc) : Expr(EXPR_BOOL, loc), val(value) {}
+};
+
+class FunctionCall : public Expr {
+private:
+  llvm::StringRef name;
+  std::unique_ptr<CallArgList> args;
 
 public:
-  FnCallNode(Token &id, std::unique_ptr<callArgList> arguments)
-	  : name(id), args(std::move(arguments)), Expr(ExprKind::EXPR_FNCALL) {}
+  FunctionCall(llvm::StringRef name, std::unique_ptr<CallArgList> arguments, llvm::SMLoc loc)
+	  : name(name), args(std::move(arguments)),
+		Expr(ExprKind::EXPR_FNCALL, loc) {}
+
   void accept(funLang::SemaAnalyzer &v) override {}
-
-  Token &getName() const { return name; }
-  const std::unique_ptr<callArgList> &getArgs() const { return args; }
-  llvm::SMLoc getLoc() override {
-	return name.getFromPtr();
-  }
-
+  llvm::StringRef getName() const { return name; }
+  const std::unique_ptr<CallArgList> &getArgs() const { return args; }
 };
 
 class UnaryOp : public Expr {
-public:
 private:
   Basic::Op::Unary op;
   std::unique_ptr<Expr> input;
-
 public:
   UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
-	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY) {}
+	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY, inp->getLoc()) {}
   void accept(funLang::SemaAnalyzer &v) override {}
-  llvm::SMLoc getLoc() override {
-	return input->getLoc();
-  }
   Basic::Op::Unary getOp() { return op; }
-
 };
 
 class BinaryOp : public Expr {
-public:
 private:
   Basic::Op::Binary op;
   std::unique_ptr<Expr> lhs;
@@ -367,41 +388,36 @@ public:
 		   Basic::Op::Binary opcode)
 	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
 		Expr(ExprKind::EXPR_BINARY) {}
+
   void accept(funLang::SemaAnalyzer &v) override {}
-
-  Expr &getLhs() {
-	return *lhs;
-  }
-
-  Expr &getRhs() {
-	return *rhs;
-  }
-
-  llvm::SMLoc getLoc() override { // the 'location' of a binary op will be its left-most side
-	return lhs->getLoc();
-  }
-
-  llvm::SMRange getRange() {
-	return {lhs->getLoc(), rhs->getLoc()};
-  };
-
-  static bool classof(const Expr *expr) {
-	return expr->getExprKind()==ExprKind::EXPR_BINARY;
-  }
+  Expr &getLhs() { return *lhs; }
+  Expr &getRhs() { return *rhs; }
+  llvm::SMRange getRange() { return {lhs->getLoc(), rhs->getLoc()}; };
+  static bool classof(const Expr *expr) { return expr->getExprKind()==ExprKind::EXPR_BINARY; }
 };
 
-class callArgList : public Node {
+class CallArgList : public Node {
 private:
   std::vector<std::unique_ptr<Expr>> args;
-
 public:
-  explicit callArgList(std::vector<std::unique_ptr<Expr>> a) : args(std::move(a)) {}
-  size_t getSize() {
-	return args.size();
-  }
+  explicit CallArgList(std::vector<std::unique_ptr<Expr>> a) : args(std::move(a)) {}
 
-  std::vector<std::unique_ptr<Expr>> &getArgsVec() {
-	return args;
-  };
+  size_t getSize() { return args.size(); }
+  std::vector<std::unique_ptr<Expr>> &getArgsVec() { return args; };
   void accept(funLang::SemaAnalyzer &v) override {};
+};
+
+class ReturnStmt : public Stmt {
+private:
+  std::unique_ptr<Expr> expr;
+  FunctionNode &enclosedFn;
+public:
+  explicit ReturnStmt(std::unique_ptr<Expr> exprNode, FunctionNode &enclosedFn)
+	  : expr(std::move(exprNode)), enclosedFn(enclosedFn), Stmt(SK_RETURN) {}
+
+  void accept(funLang::SemaAnalyzer &v) override {}
+
+  static bool classof(StmtKind S) {
+	return S==SK_RETURN;
+  }
 };
