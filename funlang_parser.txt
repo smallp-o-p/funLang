@@ -29,11 +29,7 @@ functions
     : func+
     ; 
 
-func : proto compoundstmt;
-
-proto 
-    : type ID '(' args ')'
-    ; 
+func : type ID '(' args ')' compoundStmt;
 
 args 
     : (arg (',' arg)*)?
@@ -42,23 +38,40 @@ args
 arg : type ID
     ;
 
-compoundstmt 
-    : '{' (simplestmt ';')+ '}'
+compoundStmt
+    : '{' (simpleStmt ';')+ '}'
     ;
     
-simplestmt 
+simpleStmt
     : declare
     | expr
+    | ifStmt
+    | forStmt
+    | whileStmt
+    | loopStmt
+    | matchStmt
     | return
     ;
-    
+
+
+forStmt : FOR expr; expr; expr compoundStmt
+
+whileStmt : WHILE '(' expr ')' compoundStmt
+
+loopStmt : LOOP compoundStmt
+
+matchStmt : MATCH '(' ID ')' '{' matchArm+ '}'
+
+matchArm
+    : (expr | 'default') '=>' (expr | compoundStmt);
+
 declare
     : type ID '=' expr
     ;
     
 expr 
     : assign
-    ; 
+    ;
 
 return : 'return' expr ';'; 
 

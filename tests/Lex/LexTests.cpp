@@ -64,7 +64,8 @@ TEST(LexTests, LexKeywords) {
   std::vector<Basic::tok::Tag> expected = {
 	  tok::kw_void, tok::kw_bool, tok::kw_char, tok::kw_string,
 	  tok::kw_i32, tok::kw_i64, tok::kw_f32, tok::kw_f64,
-	  tok::kw_return, tok::kw_true, tok::kw_false};
+	  tok::kw_return, tok::kw_true, tok::kw_false, tok::kw_for,
+	  tok::kw_while, tok::kw_loop, tok::kw_struct, tok::kw_enum};
   for (auto expected_tok : expected) {
 	Token lexed_token = lexer->advance();
 	EXPECT_EQ(lexed_token.getTag(), expected_tok)
@@ -141,7 +142,7 @@ TEST(LexTests, WithErrs) {
 	  tok::err, tok::err, tok::err,
 	  tok::err, tok::err, tok::kw_void,
 	  tok::kw_bool, tok::kw_i32, tok::kw_i64,
-	  tok::err, tok::err, tok::err
+	  tok::err, tok::err, tok::err, tok::err
   };
 
   for (auto expected_tok : expected) {

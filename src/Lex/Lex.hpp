@@ -73,7 +73,7 @@ private:
   std::vector<Token> tokens;    // keep track of old tokens for error messages
   std::deque<Token> unconsumed; // unconsumed tokens that are stored if we looked ahead.
   Token lexString();
-  Token lexNum();
+  Token lexNum(bool negative = false);
   Token lexIdentifier();
   Token getNext();
   bool nextIs(char c);

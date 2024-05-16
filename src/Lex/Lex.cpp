@@ -18,6 +18,12 @@ Token Lexer::getNext() {
 	} else {
 	  return formToken(bufPtr + 1, Basic::tok::Tag::equal);
 	}
+  case '.':
+	if (nextIs('.')) {
+	  return formToken(bufPtr + 2, Basic::tok::Tag::dotdot);
+	} else {
+	  return formToken(bufPtr + 1, Basic::tok::Tag::dot);
+	}
   case ':':
 	if (nextIs(':')) {
 	  return formToken(bufPtr + 2, Basic::tok::Tag::coloncolon);
@@ -56,6 +62,8 @@ Token Lexer::getNext() {
 	  return formToken(bufPtr + 2, Basic::tok::Tag::minusequal);
 	} else if (nextIs('-')) {
 	  return formToken(bufPtr + 2, Basic::tok::Tag::minusminus);
+	} else if (isdigit(*(bufPtr + 1))) {
+	  return lexNum(true);
 	} else {
 	  return formToken(bufPtr + 1, Basic::tok::Tag::minus);
 	}
@@ -101,19 +109,19 @@ Token Lexer::lexString() {
   while (*end && *end++!='\"') {
   }
   if (!*end) {
-	std::cerr << "Unclosed string literal :(" << std::endl;
 	diagnostics.emitDiagMsg(getLocFrom(bufPtr), diag::err_unterminated_char_or_string);
 	return formErr();
   }
   return formToken(end, Basic::tok::string_literal);
 }
 
-Token Lexer::lexNum() {
-  auto end = bufPtr;
+Token Lexer::lexNum(bool negative) {
+  auto end = negative ? bufPtr + 1 : bufPtr; // handle negative case
   bool seenDot = false;
   while (*end && (isdigit(*end) || *end=='.')) {
 	if (seenDot && *end=='.') {
-	  break;
+	  diagnostics.emitDiagMsg(getLocFrom(end + 1), diag::err_unexpected_char, *end);
+	  return formErr();
 	}
 	if (*end=='.' && !seenDot) {
 	  seenDot = true;

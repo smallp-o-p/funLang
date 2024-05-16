@@ -22,4 +22,12 @@ return
 
       false 
 
+for
 
+while
+
+loop
+
+struct
+
+enum

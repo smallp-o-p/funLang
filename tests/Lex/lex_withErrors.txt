@@ -1,1 +1,1 @@
-@ @ @ @ @ void bool i32 i64 ~ ~ ~
+@ @ @ @ @ void bool i32 i64 ~ ~ ~ 12.1.2
