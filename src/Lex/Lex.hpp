@@ -25,7 +25,13 @@ private:
 public:
 
   Basic::tok::Tag getTag() const { return syntactic_category; }
-
+  bool isIdentifier() const { return syntactic_category==Basic::tok::Tag::identifier; }
+  bool isPunctuator() const {
+	return syntactic_category < Basic::tok::Tag::last_punc && syntactic_category > Basic::tok::Tag::last_tok;
+  }
+  bool isBaseType() const {
+	return syntactic_category < Basic::tok::Tag::kw_last_type && syntactic_category > Basic::tok::Tag::last_punc;
+  };
   llvm::StringRef getIdentifier() {
 	assert(syntactic_category==Basic::tok::identifier &&
 		"Cannot get identifier of non-identifier token.");
@@ -39,7 +45,7 @@ public:
 			  << std::endl;
   }
 
-  llvm::SMLoc getFromPtr() {
+  llvm::SMLoc getLoc() {
 	return llvm::SMLoc::getFromPointer(lexeme.data());
   }
 
