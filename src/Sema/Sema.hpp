@@ -10,42 +10,18 @@ class SemaAnalyzer;
 class Scope;
 
 class Scope {
-  llvm::StringMap<std::shared_ptr<Decl>> symTable;
+  llvm::StringMap<Decl *> symTable;
   std::shared_ptr<Scope> parentScope;
-
+  FunctionNode *currentFunction;
 public:
-  Scope() : parentScope(nullptr) {}
+  Scope() : parentScope(nullptr), symTable(llvm::StringMap<Decl *>()), currentFunction(nullptr) {}
   explicit Scope(std::shared_ptr<Scope> parent)
-	  : parentScope(std::move(parent)), symTable(llvm::StringMap<std::shared_ptr<Decl>>()) {}
-
-  bool insert(const std::shared_ptr<Decl> &decl) {
-	switch (decl->getKind()) {
-	case Decl::DK_VAR: {
-	  if (VarDecl *var = llvm::dyn_cast<VarDecl>(decl.get())) {
-		return symTable.insert(std::pair<llvm::StringRef, std::shared_ptr<Decl>>(var->getName().getIdentifier(),
-																				 decl)).second;
-	  }
-	  return false;
-	}
-	case Decl::DK_FN: {
-	  if (auto *fn = llvm::dyn_cast<FunctionNode>(decl.get())) {
-		return symTable.insert(std::pair<llvm::StringRef, std::shared_ptr<Decl>>(fn->getName().getLexeme(),
-																				 decl)).second;
-	  }
-	  return false;
-	}
-	case Decl::DK_STRUCT: {
-	  assert(true && "structs not implemented \n");
-	}
-	}
-	return false;
-  }
-
-  std::shared_ptr<Scope> &getParent() {
-	return parentScope;
-  }
-
-  std::shared_ptr<Decl> find(llvm::StringRef varName) {
+	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()), currentFunction(nullptr) {}
+  Scope(std::shared_ptr<Scope> parent, FunctionNode *enclosingFn)
+	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()), currentFunction(enclosingFn) {}
+  bool insert(Decl *decl) { return symTable.insert({decl->getName(), decl}).second; }
+  std::shared_ptr<Scope> &getParent() { return parentScope; }
+  Decl *find(llvm::StringRef varName) {
 	auto found = symTable.find(varName);
 	if (found==symTable.end()) {
 	  return nullptr;
@@ -58,117 +34,44 @@ class SemaAnalyzer {
 private:
   std::shared_ptr<Scope> currentScope;
   std::shared_ptr<DiagEngine> diags;
-  std::vector<FnCallNode *> non_resolved;
+  std::unique_ptr<TypeUse> currentFnRetType;
 public:
   explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
 	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)) {}
 
-  void enterScope() {
-	std::shared_ptr<Scope> innerScope = std::make_shared<Scope>(currentScope);
-	currentScope = innerScope;
+  void init() {
+	auto boolType = new TypeDecl("bool");
+	auto i32Type = new TypeDecl("i32");
+	auto i64Type = new TypeDecl("i64");
+	auto f32Type = new TypeDecl("f32");
+	auto f64Type = new TypeDecl("f64");
+	auto stringType = new TypeDecl("string");
+	auto voidType = new TypeDecl("void");
+
+	currentScope->insert(boolType);
+	currentScope->insert(i32Type);
+	currentScope->insert(i64Type);
+	currentScope->insert(f32Type);
+	currentScope->insert(f64Type);
+	currentScope->insert(stringType);
+	currentScope->insert(voidType);
   }
-
-  void exitScope() {
-	assert(currentScope->getParent() && "Attempted to exit global scope.\n");
-	currentScope = currentScope->getParent();
-  }
-
-  void actOnVarDecl(VarDeclStmt &decl) {
-	if (!currentScope->insert(decl.toDecl())) {
-	  diags->emitDiagMsg(decl.getTok().getFromPtr(), diag::err_var_redefinition, decl.getName());
-	}
-	if (decl.getExpr().getResultingType().first!=decl.getDeclType()) {
-	  diags->emitDiagMsg(decl.getTok().getFromPtr(),
-						 diag::err_incompatible_type_var_decl,
-						 decl.getName(),
-						 decl.getExpr().getResultingType().second);
-	}
-  }
-
-  bool actOnCompilationUnit(FunctionsNode &fncs) {
-	std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &fns = fncs.getFnMap();
-	bool errs = false;
-	for (FnCallNode *fn : non_resolved) {
-	  if (!currentScope->find(fn->getName().getIdentifier())) {
-		diags->emitDiagMsg(fn->getLoc(), diag::err_fn_not_found, fn->getName().getLexeme());
-		errs = true;
-	  }
-	}
-	return errs;
-  }
-
-  bool actOnNameUsage(Token &identifier) {
-	assert(identifier.getTag()==Basic::tok::Tag::identifier && "Trying to lookup a tag that isn't an identifier");
-	if (!lookup(identifier.getLexeme())) {
-	  diags->emitDiagMsg(identifier.getFromPtr(), diag::err_var_not_found, identifier.getLexeme());
-	  return false;
-	}
-	return true;
-  }
-
-  bool actOnFnDecl(FunctionNode &fn) {
-	return false;
-  }
-
-  bool actOnReturnStmt() {
-	return true;
-  }
-
-  bool actOnUnaryOp(UnaryOp &unary) {
-	auto type_pair = unary.getResultingType();
-	switch (type_pair.first) {
-	case Basic::Data::i32:
-	case Basic::Data::i64:
-	case Basic::Data::f32:
-	case Basic::Data::f64: return true;
-	default:
-	  diags->emitDiagMsg(unary.getLoc(),
-						 diag::err_incompatible_binary_operands,
-						 Basic::Op::getUnaryOpSpelling(unary.getOp()), unary.getResultingType().second);
-	  return false;
-	}
-  }
-
-  bool actOnBinaryOp(BinaryOp &bin) {
-	if (bin.getLhs().getResultingType().first==Basic::Data::invalid
-		|| bin.getRhs().getResultingType().first==Basic::Data::invalid) {
-	  return true; // pretend there's no error
-	}
-	if (bin.getLhs().getResultingType().first==bin.getRhs().getResultingType().first) {
-	  bin.setType(bin.getLhs().getResultingType().first);
-	  return true;
-	} else {
-	  diags->emitDiagMsgRange(bin.getLhs().getLoc(),
-							  bin.getRhs().getLoc(),
-							  diag::err_incompatible_binary_operands,
-							  bin.getLhs().getResultingType().second,
-							  bin.getRhs().getResultingType().second);
-	  return false;
-	};
-  }
-
-  bool actOnFnCall(const FnCallNode &fnCall) {
-	bool failed = false;
-	Decl *fn;
-	if (!(fn = lookup(fnCall.getName().getIdentifier()))) {
-	  non_resolved.push_back(&fnCall);
-	  return false;
-	}
-
-	auto fn_casted = llvm::dyn_cast<FunctionNode>(fn);
-	if (fn_casted->getProto()->getNumArgs()!=fnCall.getArgs()->getSize()) {
-	  diags->emitDiagMsg(fnCall.getName().getFromPtr(),
-						 diag::err_wrong_number_of_parameters,
-						 fnCall.getName().getLexeme());
-	  failed = true;
-	}
-	return failed;
-  }
-
+  void enterScope();
+  void enterFunction(std::unique_ptr<TypeUse> retType);;
+  std::unique_ptr<TypeUse> exitFunction();
+  void exitScope();
+  void actOnVarDeclStmt(VarDeclStmt &declStmt);
+  bool actOnNameUsage(Token &identifier);
+  bool actOnFnDecl(FunctionNode &fn);
+  bool actOnReturnStmt(Expr &retExpr);
+  bool actOnUnaryOp(UnaryOp &unary);
+  bool actOnBinaryOp(BinaryOp &bin);
+  bool actOnFnCall(FunctionCall &fnCall);
+  bool actOnTopLevelDecl(Decl &decl);
   Decl *lookup(llvm::StringRef var) {
 	std::shared_ptr<Scope> s = currentScope;
 	while (s) {
-	  Decl *found = s->find(var).get();
+	  Decl *found = s->find(var);
 	  if (found) {
 		return found;
 	  } else {

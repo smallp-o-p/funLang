@@ -10,9 +10,8 @@
 
 class TypeProperties;
 class CompilationUnit;
-class FunctionsNode;
+class TopLevelDecls;
 class FunctionNode;
-class PrototypeNode;
 class ArgsList;
 class ArgDecl;
 class CompoundStmt;
@@ -59,12 +58,12 @@ public:
 
 class CompilationUnit : public Node {
 private:
-  std::unique_ptr<FunctionsNode> funcs;
+  std::unique_ptr<TopLevelDecls> funcs;
   std::unique_ptr<std::unordered_map<std::string, int>> globalSymbols;
 public:
-  explicit CompilationUnit(std::unique_ptr<FunctionsNode> fncs)
+  explicit CompilationUnit(std::unique_ptr<TopLevelDecls> fncs)
 	  : funcs(std::move(fncs)), globalSymbols(nullptr) {};
-  CompilationUnit(std::unique_ptr<FunctionsNode> fncs,
+  CompilationUnit(std::unique_ptr<TopLevelDecls> fncs,
 				  std::unique_ptr<std::unordered_map<std::string, int>> globs)
 	  : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
 
@@ -86,7 +85,7 @@ private:
   llvm::StringRef name;
 
 public:
-  explicit Decl(DeclKind kind) : kind(kind), name(""), Node(llvm::SMLoc()) {}
+  explicit Decl(DeclKind kind, llvm::StringRef name) : kind(kind), name(name), Node(llvm::SMLoc()) {}
   Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc loc) : kind(kind), name(name), Node(loc) {}
 
   DeclKind getKind() const { return kind; }
@@ -100,8 +99,7 @@ private:
 public:
   TypeDecl(llvm::StringRef name, std::unique_ptr<TypeProperties> properties, llvm::SMLoc loc)
 	  : Decl(DK_TYPE, name, loc), properties(std::move(properties)) {}
-  TypeDecl() : Decl(DK_TYPE), properties(nullptr) {}
-  explicit TypeDecl(llvm::StringRef name, llvm::SMLoc loc) : Decl(DK_TYPE, name, loc), properties(nullptr) {}
+  explicit TypeDecl(llvm::StringRef name) : Decl(DK_TYPE, name), properties(nullptr) {}
 
   static bool classof(const Decl *d) {
 	return d->getKind()==DK_TYPE;
@@ -117,15 +115,14 @@ public:
   TypeUse(TypeDecl *type, llvm::SMLoc loc) : type(type), Node(loc) {}
 
   TypeDecl &getType() { return *type; }
-
   void accept(funLang::SemaAnalyzer &v) override {}
 };
 
-class FunctionsNode : public Node {
+class TopLevelDecls : public Node {
 private:
-  std::unordered_map<std::string, std::shared_ptr<FunctionNode>> fnMap;
+  std::unordered_map<std::string, std::unique_ptr<Decl>> fnMap;
 public:
-  explicit FunctionsNode(std::unordered_map<std::string, std::shared_ptr<FunctionNode>> fnMap)
+  explicit TopLevelDecls(std::unordered_map<std::string, std::unique_ptr<Decl>> fnMap)
 	  : fnMap(std::move(fnMap)) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
@@ -176,6 +173,7 @@ public:
 	SK_EXPR,
 	SK_RETURN,
 	SK_COMPOUND,
+	SK_IF,
 	SK_FOR,
 	SK_WHILE,
 	SK_LOOP,
@@ -202,6 +200,34 @@ public:
   std::vector<std::unique_ptr<Stmt>> &getStmts();
 
   static bool classof(const Stmt *S) { return S->getKind()==SK_COMPOUND; }
+};
+class elifStmt : public Stmt {
+private:
+  std::unique_ptr<Expr> cond;
+  std::unique_ptr<CompoundStmt> block;
+  std::unique_ptr<elifStmt> elif;
+public:
+  elifStmt(StmtKind K,
+		   llvm::SMLoc Loc,
+		   std::unique_ptr<Expr> cond,
+		   std::unique_ptr<CompoundStmt> block,
+		   std::unique_ptr<elifStmt> elif)
+	  : Stmt(K, Loc), cond(std::move(cond)), block(std::move(block)), elif(std::move(elif)) {}
+};
+
+class ifStmt : public Stmt {
+private:
+  std::unique_ptr<Expr> cond;
+  std::unique_ptr<CompoundStmt> block1;
+  std::unique_ptr<elifStmt> elif;
+  std::unique_ptr<CompoundStmt> block2;
+public:
+  ifStmt(std::unique_ptr<Expr> cond,
+		 std::unique_ptr<CompoundStmt> block1,
+		 std::unique_ptr<elifStmt> elif,
+		 std::unique_ptr<CompoundStmt> block2)
+	  : cond(std::move(cond)), block1(std::move(block1)), elif(std::move(elif)), block2(std::move(block2)),
+		Stmt(SK_IF) {}
 };
 
 class forStmt : public Stmt {
@@ -313,6 +339,7 @@ public:
 
   void accept(funLang::SemaAnalyzer &v);
   void setType(TypeDecl *toSet);
+  TypeDecl *getType() { return resultType; };
   ExprKind getExprKind() const { return kind; }
   static bool classof(StmtKind S) {
 	return S==SK_EXPR;
@@ -382,7 +409,6 @@ private:
   Basic::Op::Binary op;
   std::unique_ptr<Expr> lhs;
   std::unique_ptr<Expr> rhs;
-
 public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
 		   Basic::Op::Binary opcode)
@@ -392,6 +418,8 @@ public:
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr &getLhs() { return *lhs; }
   Expr &getRhs() { return *rhs; }
+  TypeDecl *getLHSType() { return lhs->getType(); }
+  TypeDecl *getRHSType() { return rhs->getType(); }
   llvm::SMRange getRange() { return {lhs->getLoc(), rhs->getLoc()}; };
   static bool classof(const Expr *expr) { return expr->getExprKind()==ExprKind::EXPR_BINARY; }
 };
@@ -410,10 +438,9 @@ public:
 class ReturnStmt : public Stmt {
 private:
   std::unique_ptr<Expr> expr;
-  FunctionNode &enclosedFn;
 public:
-  explicit ReturnStmt(std::unique_ptr<Expr> exprNode, FunctionNode &enclosedFn)
-	  : expr(std::move(exprNode)), enclosedFn(enclosedFn), Stmt(SK_RETURN) {}
+  explicit ReturnStmt(std::unique_ptr<Expr> exprNode)
+	  : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
 

@@ -6,7 +6,7 @@ std::unordered_map<std::string,
 				   std::shared_ptr<FunctionNode>> &CompilationUnit::getFuncs() { return funcs->getFnMap(); }
 auto &CompilationUnit::getGlobs() { return globalSymbols; }
 
-std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &FunctionsNode::getFnMap() {
+std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &TopLevelDecls::getFnMap() {
   return fnMap;
 }
 
