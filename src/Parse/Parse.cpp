@@ -69,11 +69,11 @@ std::unique_ptr<TypeUse> Parser::type() {
 					  type_name.getLexeme());
 	return nullptr;
   }
-
   Decl *foundType = semantics->lookup(type_name.getLexeme());
   if (!foundType) {
-	return std::make_unique<TypeUse>(type_name.getLoc()); // allow types to be used anywhere so long as they're declared
+	diags.emitDiagMsg(type_name.getLoc(), diag::err_var_not_found, type_name.getLexeme());
   }
+
   return std::make_unique<TypeUse>((TypeDecl *)foundType, type_name.getLoc());
 }
 
@@ -102,7 +102,7 @@ std::unique_ptr<TopLevelDecls> Parser::topLevels() {
 	if (!topLevel) {
 	  return nullptr;
 	}
-	if (semantics->actOnTopLevelDecl(*topLevel)) {
+	if (semantics->actOnTopLevelDecl(*topLevel)) { // check if top level name has been defined before
 	  topLevelList.insert(std::pair<llvm::StringRef, std::unique_ptr<Decl>>(topLevel->getName(), std::move(topLevel)));
 	}
 	if (check(Basic::tok::Tag::eof)) {
@@ -121,8 +121,11 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
   if (!expect(Basic::tok::l_brace)) {
 	return nullptr;
   }
-  std::unique_ptr<TypeProperties> members = typeProperties();
 
+  semantics->enterScope();
+
+  std::unique_ptr<TypeProperties> members = typeProperties();
+  semantics->exitScope();
   if (!members) {
 	return nullptr;
   }
@@ -131,7 +134,31 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
 }
 
 std::unique_ptr<TypeProperties> Parser::typeProperties() {
+  std::vector<std::unique_ptr<VarDeclStmt>> props;
+  while (true) {
+	if (check(Basic::tok::Tag::r_brace)) {
+	  break;
+	}
+	std::unique_ptr<VarDeclStmt> decl = declStmt();
+	if (!decl) {
+	  return nullptr;
+	}
+	if (!semantics->actOnStructVarDecl(*decl)) {
+	  return nullptr;
+	}
+	if (Decl *found = semantics->lookupOneScope(decl->getName())) {
+	  diags.emitDiagMsg(decl->getLoc(), diag::err_var_redefinition, decl->getName());
+	  diags.emitDiagMsg(found->getLoc(), diag::note_var_redefinition, found->getName());
+	} else {
+	  if (!expect(Basic::tok::semi)) {
+		reportExpect(Basic::tok::semi, previous());
+		return nullptr;
+	  }
+	  props.push_back(std::move(decl));
+	}
+  }
 
+  return std::make_unique<TypeProperties>(std::move(props));
 }
 
 std::unique_ptr<FunctionNode> Parser::function() {
@@ -289,8 +316,6 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   }
   auto decl = std::make_unique<VarDeclStmt>(std::move(type_node), id.getLexeme(),
 											std::move(expr_node), id.getLoc());
-  semantics->actOnVarDeclStmt(*decl);
-
   return decl;
 }
 
@@ -487,11 +512,20 @@ std::unique_ptr<Expr> Parser::primary() {
 	auto token = advance();
 	switch (token.getTag()) {
 	case Basic::tok::numeric_constant: {
+	  auto a = std::make_unique<IntegerLiteral>(llvm::APInt(64, token.getLexeme(), 10), token.getLoc());
+	  a->setType((TypeDecl *)(semantics)->lookup("i32"));
+	  return a;
 	}
 	case Basic::tok::string_literal:
-	case Basic::tok::floating_constant:
-	case Basic::tok::kw_true: return std::make_unique<BooleanLiteral>(true, token.getLoc());
-	case Basic::tok::kw_false: return std::make_unique<BooleanLiteral>(false, token.getLoc());
+	case Basic::tok::floating_constant: {
+
+	}
+	case Basic::tok::kw_true:
+	case Basic::tok::kw_false: {
+	  auto a = std::make_unique<BooleanLiteral>(token.getTag()==Basic::tok::kw_true, token.getLoc());
+	  a->setType((TypeDecl *)(semantics->lookup("bool")));
+	  return a;
+	}
 	default: return nullptr;
 	}
   }

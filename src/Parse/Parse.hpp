@@ -19,8 +19,8 @@ private:
   bool error;
 
 public:
-  Parser(std::unique_ptr<Lexer> lex, DiagEngine &diags)
-	  : lexer(std::move(lex)), error(false), diags(diags) {}
+  Parser(std::unique_ptr<Lexer> lex, DiagEngine &diags, std::unique_ptr<SemaAnalyzer> sema)
+	  : lexer(std::move(lex)), error(false), diags(diags), semantics(std::move(sema)) {}
   bool atEnd();
   bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect, bool peeking);
   Token peek();

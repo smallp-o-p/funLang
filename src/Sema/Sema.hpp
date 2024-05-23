@@ -35,27 +35,13 @@ private:
   std::shared_ptr<Scope> currentScope;
   std::shared_ptr<DiagEngine> diags;
   std::unique_ptr<TypeUse> currentFnRetType;
+  void init();
 public:
   explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
-	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)) {}
-
-  void init() {
-	auto boolType = new TypeDecl("bool");
-	auto i32Type = new TypeDecl("i32");
-	auto i64Type = new TypeDecl("i64");
-	auto f32Type = new TypeDecl("f32");
-	auto f64Type = new TypeDecl("f64");
-	auto stringType = new TypeDecl("string");
-	auto voidType = new TypeDecl("void");
-
-	currentScope->insert(boolType);
-	currentScope->insert(i32Type);
-	currentScope->insert(i64Type);
-	currentScope->insert(f32Type);
-	currentScope->insert(f64Type);
-	currentScope->insert(stringType);
-	currentScope->insert(voidType);
+	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)) {
+	init();
   }
+
   void enterScope();
   void enterFunction(std::unique_ptr<TypeUse> retType);;
   std::unique_ptr<TypeUse> exitFunction();
@@ -68,6 +54,7 @@ public:
   bool actOnBinaryOp(BinaryOp &bin);
   bool actOnFnCall(FunctionCall &fnCall);
   bool actOnTopLevelDecl(Decl &decl);
+  bool actOnStructVarDecl(VarDeclStmt &declStmt);
   Decl *lookup(llvm::StringRef var) {
 	std::shared_ptr<Scope> s = currentScope;
 	while (s) {
@@ -79,6 +66,10 @@ public:
 	  }
 	}
 	return nullptr;
+  }
+
+  Decl *lookupOneScope(llvm::StringRef varName) {
+	return currentScope->find(varName);
   }
 };
 }

@@ -53,7 +53,7 @@ public:
   explicit Node(llvm::SMLoc loc) : locationInSrc(loc) {}
 
   llvm::SMLoc getLoc() { return locationInSrc; }
-  virtual void accept(funLang::SemaAnalyzer &visitor) = 0;
+  virtual void accept(funLang::SemaAnalyzer &visitor) {};
 };
 
 class CompilationUnit : public Node {
@@ -66,8 +66,6 @@ public:
   CompilationUnit(std::unique_ptr<TopLevelDecls> fncs,
 				  std::unique_ptr<std::unordered_map<std::string, int>> globs)
 	  : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
-
-  std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &getFuncs();
   auto &getGlobs();
   void accept(funLang::SemaAnalyzer &visitor) override {}
 };
@@ -104,6 +102,10 @@ public:
   static bool classof(const Decl *d) {
 	return d->getKind()==DK_TYPE;
   }
+
+  bool eq(TypeDecl &other) {
+	return other.getName()==this->getName();
+  }
 };
 
 class TypeUse : public Node {
@@ -126,7 +128,7 @@ public:
 	  : fnMap(std::move(fnMap)) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
-  std::unordered_map<std::string, std::shared_ptr<FunctionNode>> &getFnMap();
+  std::unordered_map<std::string, std::unique_ptr<Decl>> &getTopLevelMap();
 };
 
 class FunctionNode : public Decl {
@@ -305,7 +307,8 @@ public:
 	  : type(std::move(t)), name(id), Stmt(SK_VARDECL, loc) {}
 
   llvm::StringRef getName() { return name; };
-  Expr &getExpr();
+  Expr *getExpr();
+  TypeUse &getTypeUse() { return *type; }
   VarDecl *toDecl() { return new VarDecl(*type, name, expr==nullptr ? nullptr : expr.get()); }
   void accept(funLang::SemaAnalyzer &v) override {}
 };
@@ -323,12 +326,12 @@ public:
   enum ExprKind {
 	EXPR_BINARY,
 	EXPR_UNARY,
+	EXPR_FNCALL,
 	EXPR_LEAF,
 	EXPR_INT,
 	EXPR_FLOAT,
 	EXPR_BOOL,
 	EXPR_STRING,
-	EXPR_FNCALL
   };
   ExprKind kind;
 protected:
@@ -361,14 +364,14 @@ class IntegerLiteral : public Expr {
 private:
   llvm::APInt val;
 public:
-  explicit IntegerLiteral(llvm::APInt &value, llvm::SMLoc litLoc) : val(value), Expr(EXPR_INT, litLoc) {}
+  explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc litLoc) : val(std::move(value)), Expr(EXPR_INT, litLoc) {}
 };
 
 class FloatingLiteral : public Expr {
 private:
   llvm::APFloat val;
 public:
-  explicit FloatingLiteral(llvm::APFloat &value, llvm::SMLoc litLoc) : val(value), Expr(EXPR_FLOAT) {}
+  explicit FloatingLiteral(llvm::APFloat value, llvm::SMLoc litLoc) : val(std::move(value)), Expr(EXPR_FLOAT) {}
 };
 
 class BooleanLiteral : public Expr {

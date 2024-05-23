@@ -1,10 +1,7 @@
 #include "Sema.hpp"
 
 bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &retExpr) {
-  if (!currentFnRetType) {
-	return true;
-  }
-  if (!retExpr.getType()) { // poison type
+  if (!currentFnRetType || !retExpr.getType()) { // poison
 	return true;
   }
   if (retExpr.getType()->getName()!=currentFnRetType->getType().getName()) {
@@ -14,7 +11,7 @@ bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &retExpr) {
 					   currentFnRetType->getType().getName());
 	return false;
   }
-  return false;
+  return true;
 }
 
 bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
@@ -77,4 +74,33 @@ bool funLang::SemaAnalyzer::actOnTopLevelDecl(Decl &decl) {
   }
   currentScope->insert(&decl);
   return true;
+}
+bool funLang::SemaAnalyzer::actOnStructVarDecl(VarDeclStmt &declStmt) {
+  if (Expr *expr = declStmt.getExpr()) {
+	if (expr->getExprKind() < Expr::EXPR_INT) {
+	  diags->emitDiagMsg(expr->getLoc(), diag::err_struct_var_initialization_err);
+	  return false;
+	} else if (!(expr->getType()->eq(declStmt.getTypeUse().getType()))) {
+	  return false;
+	}
+	return true;
+  }
+  return true;
+}
+void funLang::SemaAnalyzer::init() {
+  auto boolType = new TypeDecl("bool");
+  auto i32Type = new TypeDecl("i32");
+  auto i64Type = new TypeDecl("i64");
+  auto f32Type = new TypeDecl("f32");
+  auto f64Type = new TypeDecl("f64");
+  auto stringType = new TypeDecl("string");
+  auto voidType = new TypeDecl("void");
+
+  currentScope->insert(boolType);
+  currentScope->insert(i32Type);
+  currentScope->insert(i64Type);
+  currentScope->insert(f32Type);
+  currentScope->insert(f64Type);
+  currentScope->insert(stringType);
+  currentScope->insert(voidType);
 }
