@@ -182,8 +182,7 @@ std::unique_ptr<FunctionNode> Parser::function() {
   if (!expect(Basic::tok::Tag::r_paren)) {
 	return nullptr;
   }
-  semantics->enterFunction(std::move(type_node)); // borrow
-  semantics->enterScope();
+  semantics->enterFunction(std::move(type_node), *args); // borrow
   std::unique_ptr<CompoundStmt> compound = compoundStmt();
   if (!compound) {
 	return nullptr;
@@ -267,11 +266,21 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   case tok::Tag::kw_i64:
   case tok::Tag::kw_f32:
   case tok::Tag::kw_f64:
-  case tok::Tag::kw_string:stmt_inq = declStmt();
+  case tok::Tag::kw_string: {
+	stmt_inq = declStmt();
+	if (auto *vardecl = llvm::dyn_cast<VarDeclStmt>(stmt_inq.get())) {
+	  semantics->actOnVarDeclStmt(*vardecl);
+	} else { ;
+	}
 	break;
+  }
   case tok::Tag::identifier: {
-	if (check(tok::Tag::equal)) {
+	if (lookahead(2).is(Basic::tok::equal) || lookahead(2).is(Basic::tok::semi)) {
 	  stmt_inq = declStmt();
+	  if (auto *vardecl = llvm::dyn_cast<VarDeclStmt>(stmt_inq.get())) {
+		semantics->actOnVarDeclStmt(*vardecl);
+	  } else { ;
+	  }
 	} else {
 	  stmt_inq = expr();
 	}

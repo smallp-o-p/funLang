@@ -22,61 +22,48 @@ std::unique_ptr<Parser> makeParser(const std::string &filename) {
   return std::move(parser);
 }
 
-TEST(ParseTesting, ExpFunc) {
-  auto parser_ptr = makeParser("./FnsParseTest.txt");
-  EXPECT_NE(nullptr, parser_ptr);
+TEST(ParseTesting, fnTest1) {
+  auto parser_ptr = makeParser("./fnTest1.fun");
+  ASSERT_NE(nullptr, parser_ptr);
   auto func = parser_ptr->function();
   EXPECT_NE(nullptr, func);
 }
 
-TEST(ParseTesting, ExpStruct) {
+TEST(ParseTesting, structTest) {
   auto parser_ptr = makeParser("./structTest.fun");
-  EXPECT_NE(nullptr, parser_ptr);
+  ASSERT_NE(nullptr, parser_ptr);
   auto struct_decl = parser_ptr->typeDecl();
   EXPECT_NE(nullptr, struct_decl);
 }
 
-TEST(ParseTesting, FuncWStmts) {
-  auto parser_ptr = makeParser("./FnsParseTest2.txt");
-  EXPECT_NE(nullptr, parser_ptr);
+TEST(ParseTesting, fnTest2) {
+  auto parser_ptr = makeParser("./fnTest2.fun");
+  ASSERT_NE(nullptr, parser_ptr);
   auto func = parser_ptr->function();
   EXPECT_NE(nullptr, func);
 }
 
-TEST(ParseTesting, TwoFuncs) {
-  auto parser_ptr = makeParser("./FnsParseTest3.txt");
-  EXPECT_NE(nullptr, parser_ptr);
+TEST(ParseTesting, compilationUnit) {
+  auto parser_ptr = makeParser("./compilationUnit.fun");
+  ASSERT_NE(nullptr, parser_ptr);
   std::unique_ptr<CompilationUnit> program = parser_ptr->program();
   EXPECT_NE(nullptr, program);
-  if (!program) {
-	FAIL();
-  } else {
-  }
 }
 
-TEST(ParseTesting, ManyFunc) {
-  auto parser_ptr = makeParser("./FnsParseTest4.fun");
-  EXPECT_NE(nullptr, parser_ptr);
+TEST(ParseTesting, biggerCompilationUnit) {
+  auto parser_ptr = makeParser("./bigCompilationUnit.fun");
+  ASSERT_NE(nullptr, parser_ptr);
   std::unique_ptr<CompilationUnit> program = parser_ptr->program();
   EXPECT_NE(nullptr, program);
-  if (!program) {
-	FAIL();
-  } else {
-  }
 }
 
-TEST(ParseTesting, AssignExpr) {
-
-  auto parser_ptr = makeParser("./FnsParseTest5.fun");
-  EXPECT_NE(nullptr, parser_ptr);
+TEST(ParseTesting, assignExpr) {
+  auto parser_ptr = makeParser("./assignExpr.fun");
+  ASSERT_NE(nullptr, parser_ptr);
   std::unique_ptr<CompoundStmt> program = parser_ptr->compoundStmt();
-  EXPECT_NE(nullptr, program);
-  if (!program) {
-	FAIL();
-  } else {
-	auto &stmts = program->getStmts();
-	EXPECT_EQ(stmts.size(), 5);
-  }
+  ASSERT_NE(nullptr, program);
+  auto &stmts = program->getStmts();
+  EXPECT_EQ(stmts.size(), 5);
 }
 int main() {
   testing::InitGoogleTest();

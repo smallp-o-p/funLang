@@ -21,6 +21,7 @@ bool funLang::SemaAnalyzer::actOnBinaryOp(BinaryOp &bin) {
 }
 
 bool funLang::SemaAnalyzer::actOnFnCall(FunctionCall &fnCall) {
+  return true;
 }
 
 void funLang::SemaAnalyzer::actOnVarDeclStmt(VarDeclStmt &declStmt) {
@@ -53,13 +54,22 @@ bool funLang::SemaAnalyzer::actOnNameUsage(Token &identifier) {
 bool funLang::SemaAnalyzer::actOnFnDecl(FunctionNode &fn) {
   if (Decl *same = lookup(fn.getName())) {
 	diags->emitDiagMsg(fn.getLoc(), diag::err_var_redefinition);
-	diags->emitDiagMsg(same->getLoc(), diag::note_var_redefinition, same->getName());
+	diags->emitDiagMsg(same->getLoc(),
+					   diag::note_var_redefinition,
+					   same->getName());
 	return false;
   }
   return true;
 }
-void funLang::SemaAnalyzer::enterFunction(std::unique_ptr<TypeUse> retType) {
+
+/// Make return type available to parser and insert declared arguments into function scope.
+void funLang::SemaAnalyzer::enterFunction(std::unique_ptr<TypeUse> retType, ArgsList &args) {
   currentFnRetType = std::move(retType);
+  enterScope();
+
+  for (auto &arg : args.getArgList()) {
+	currentScope->insert(arg.get());
+  }
 }
 
 std::unique_ptr<TypeUse> funLang::SemaAnalyzer::exitFunction() {
@@ -103,4 +113,9 @@ void funLang::SemaAnalyzer::init() {
   currentScope->insert(f64Type);
   currentScope->insert(stringType);
   currentScope->insert(voidType);
+}
+void funLang::SemaAnalyzer::actOnFnArgsList(ArgsList &args) {
+  for (auto &arg : args.getArgList()) {
+	currentScope->insert(arg.get());
+  }
 }

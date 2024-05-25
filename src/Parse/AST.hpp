@@ -53,7 +53,7 @@ public:
   explicit Node(llvm::SMLoc loc) : locationInSrc(loc) {}
 
   llvm::SMLoc getLoc() { return locationInSrc; }
-  virtual void accept(funLang::SemaAnalyzer &visitor) {};
+  virtual void accept(funLang::SemaAnalyzer &visitor) {}
 };
 
 class CompilationUnit : public Node {
@@ -173,6 +173,14 @@ public:
   enum StmtKind {
 	SK_VARDECL,
 	SK_EXPR,
+	SK_EXPR_BINARY,
+	SK_EXPR_UNARY,
+	SK_EXPR_FNCALL,
+	SK_EXPR_LEAF,
+	SK_EXPR_INT,
+	SK_EXPR_FLOAT,
+	SK_EXPR_BOOL,
+	SK_EXPR_STRING,
 	SK_RETURN,
 	SK_COMPOUND,
 	SK_IF,
@@ -182,7 +190,7 @@ public:
 	SK_MATCH,
 	SK_MATCHARM
   };
-private:
+protected:
   StmtKind kind;
 public:
   explicit Stmt(StmtKind k) : kind(k) {}
@@ -311,6 +319,9 @@ public:
   TypeUse &getTypeUse() { return *type; }
   VarDecl *toDecl() { return new VarDecl(*type, name, expr==nullptr ? nullptr : expr.get()); }
   void accept(funLang::SemaAnalyzer &v) override {}
+  static bool classof(const Stmt *S) {
+	return S->getKind()==StmtKind::SK_VARDECL;
+  }
 };
 
 class TypeProperties {

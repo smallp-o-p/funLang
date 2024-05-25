@@ -43,7 +43,7 @@ public:
   }
 
   void enterScope();
-  void enterFunction(std::unique_ptr<TypeUse> retType);;
+  void enterFunction(std::unique_ptr<TypeUse> retType, ArgsList &args);
   std::unique_ptr<TypeUse> exitFunction();
   void exitScope();
   void actOnVarDeclStmt(VarDeclStmt &declStmt);
@@ -52,6 +52,7 @@ public:
   bool actOnReturnStmt(Expr &retExpr);
   bool actOnUnaryOp(UnaryOp &unary);
   bool actOnBinaryOp(BinaryOp &bin);
+  void actOnFnArgsList(ArgsList &args);
   bool actOnFnCall(FunctionCall &fnCall);
   bool actOnTopLevelDecl(Decl &decl);
   bool actOnStructVarDecl(VarDeclStmt &declStmt);
