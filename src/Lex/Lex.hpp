@@ -25,7 +25,7 @@ private:
 public:
 
   Basic::tok::Tag getTag() const { return syntactic_category; }
-  bool isIdentifier() const { return syntactic_category==Basic::tok::Tag::identifier; }
+  bool isIdentifier() const { return syntactic_category == Basic::tok::Tag::identifier; }
   bool isPunctuator() const {
 	return syntactic_category < Basic::tok::Tag::last_punc && syntactic_category > Basic::tok::Tag::last_tok;
   }
@@ -33,7 +33,7 @@ public:
 	return syntactic_category < Basic::tok::Tag::kw_last_type && syntactic_category > Basic::tok::Tag::last_punc;
   };
   llvm::StringRef getIdentifier() {
-	assert(syntactic_category==Basic::tok::identifier &&
+	assert(syntactic_category == Basic::tok::identifier &&
 		"Cannot get identifier of non-identifier token.");
 	return lexeme;
   }
@@ -56,7 +56,7 @@ public:
 			end};
   }
 
-  bool is(Basic::tok::Tag K) const { return K==syntactic_category; }
+  bool is(Basic::tok::Tag K) const { return K == syntactic_category; }
 };
 
 class Lexer {
@@ -109,7 +109,7 @@ public:
 
   Token &advance();
   Token &peek(); // equivalent to lookahead(1)
-  Token &previous() { return tokens.back(); };
-  Token &lookahead(uint32_t howMuch);
+  Token previous();;
+  Token lookahead(size_t HowMuch);
   bool atEnd();
 };

@@ -27,14 +27,13 @@ class TypeUse;
 class VarDeclStmt;
 class Expr;
 class ReturnStmt;
-class TypeNode;
 class FunctionCall;
 class CallArgList;
 class BinaryOp;
 class UnaryOp;
 class NameUsage;
 class FloatingLiteral;
-class Integer;
+class IntegerLiteral;
 class BooleanLiteral;
 class StringLiteral;
 class CharLiteral;
@@ -100,11 +99,11 @@ public:
   explicit TypeDecl(llvm::StringRef name) : Decl(DK_TYPE, name), properties(nullptr) {}
 
   static bool classof(const Decl *d) {
-	return d->getKind()==DK_TYPE;
+	return d->getKind() == DK_TYPE;
   }
 
   bool eq(TypeDecl &other) {
-	return other.getName()==this->getName();
+	return other.getName() == this->getName();
   }
 };
 
@@ -144,7 +143,7 @@ public:
 
   void accept(funLang::SemaAnalyzer &v) override {}
   CompoundStmt &getCompound() const { return *compound; }
-  static bool classof(const Decl *D) { return D->getKind()==DK_FN; }
+  static bool classof(const Decl *D) { return D->getKind() == DK_FN; }
 };
 
 class ArgsList : public Node {
@@ -181,6 +180,7 @@ public:
 	SK_EXPR_FLOAT,
 	SK_EXPR_BOOL,
 	SK_EXPR_STRING,
+	SK_EXPR_NAME,
 	SK_RETURN,
 	SK_COMPOUND,
 	SK_IF,
@@ -209,7 +209,7 @@ public:
   void accept(funLang::SemaAnalyzer &sema) override {};
   std::vector<std::unique_ptr<Stmt>> &getStmts();
 
-  static bool classof(const Stmt *S) { return S->getKind()==SK_COMPOUND; }
+  static bool classof(const Stmt *S) { return S->getKind() == SK_COMPOUND; }
 };
 class elifStmt : public Stmt {
 private:
@@ -300,7 +300,7 @@ public :
 
   TypeUse &getType() const { return type; }
   Expr *getExpr() const { return expr; }
-  static bool classof(const Decl *D) { return D->getKind()==DK_VAR; }
+  static bool classof(const Decl *D) { return D->getKind() == DK_VAR; }
 };
 
 class VarDeclStmt : public Stmt {
@@ -317,10 +317,10 @@ public:
   llvm::StringRef getName() { return name; };
   Expr *getExpr();
   TypeUse &getTypeUse() { return *type; }
-  VarDecl *toDecl() { return new VarDecl(*type, name, expr==nullptr ? nullptr : expr.get()); }
+  VarDecl *toDecl() { return new VarDecl(*type, name, expr == nullptr ? nullptr : expr.get()); }
   void accept(funLang::SemaAnalyzer &v) override {}
   static bool classof(const Stmt *S) {
-	return S->getKind()==StmtKind::SK_VARDECL;
+	return S->getKind() == StmtKind::SK_VARDECL;
   }
 };
 
@@ -347,16 +347,17 @@ public:
   ExprKind kind;
 protected:
   TypeDecl *resultType;
+  bool IsLiteral;
 public:
-  explicit Expr(ExprKind k) : kind(k), Stmt(SK_EXPR) {};
-  Expr(ExprKind Kind, llvm::SMLoc Loc) : kind(Kind), Stmt(SK_EXPR, Loc) {};
+  explicit Expr(ExprKind k, StmtKind K) : kind(k), Stmt(K) {};
+  Expr(ExprKind Kind, StmtKind StmtK, llvm::SMLoc Loc) : kind(Kind), Stmt(StmtK, Loc) {};
 
   void accept(funLang::SemaAnalyzer &v);
   void setType(TypeDecl *toSet);
   TypeDecl *getType() { return resultType; };
   ExprKind getExprKind() const { return kind; }
   static bool classof(StmtKind S) {
-	return S==SK_EXPR;
+	return S == SK_EXPR;
   }
 };
 
@@ -365,7 +366,7 @@ protected:
   llvm::StringRef name;
 public:
   explicit NameUsage(llvm::StringRef name)
-	  : name(name), Expr(ExprKind::EXPR_LEAF, llvm::SMLoc().getFromPointer(name.data())) {}
+	  : name(name), Expr(ExprKind::EXPR_LEAF, SK_EXPR_NAME, llvm::SMLoc().getFromPointer(name.data())) {}
 
   llvm::StringRef getLexeme() { return name; };
   void accept(funLang::SemaAnalyzer &v) override {}
@@ -375,21 +376,31 @@ class IntegerLiteral : public Expr {
 private:
   llvm::APInt val;
 public:
-  explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc litLoc) : val(std::move(value)), Expr(EXPR_INT, litLoc) {}
+  explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc litLoc)
+	  : val(std::move(value)), Expr(EXPR_INT, SK_EXPR_INT, litLoc) {}
 };
 
 class FloatingLiteral : public Expr {
 private:
   llvm::APFloat val;
 public:
-  explicit FloatingLiteral(llvm::APFloat value, llvm::SMLoc litLoc) : val(std::move(value)), Expr(EXPR_FLOAT) {}
+  explicit FloatingLiteral(llvm::APFloat value, llvm::SMLoc litLoc)
+	  : val(std::move(value)), Expr(EXPR_FLOAT, SK_EXPR_FLOAT) {}
 };
 
 class BooleanLiteral : public Expr {
 private:
   bool val;
 public:
-  explicit BooleanLiteral(bool value, llvm::SMLoc loc) : Expr(EXPR_BOOL, loc), val(value) {}
+  explicit BooleanLiteral(bool value, llvm::SMLoc loc) : Expr(EXPR_BOOL, SK_EXPR_BOOL, loc), val(value) {}
+};
+
+class StringLiteral : public Expr {
+private:
+  llvm::StringRef str;
+  uint32_t len;
+public:
+  explicit StringLiteral(uint32_t len, llvm::StringRef str, llvm::SMLoc loc) : Expr(EXPR_STRING, SK_EXPR_STRING, loc) {}
 };
 
 class FunctionCall : public Expr {
@@ -400,11 +411,15 @@ private:
 public:
   FunctionCall(llvm::StringRef name, std::unique_ptr<CallArgList> arguments, llvm::SMLoc loc)
 	  : name(name), args(std::move(arguments)),
-		Expr(ExprKind::EXPR_FNCALL, loc) {}
+		Expr(ExprKind::EXPR_FNCALL, SK_EXPR_FNCALL, loc) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
   llvm::StringRef getName() const { return name; }
   const std::unique_ptr<CallArgList> &getArgs() const { return args; }
+
+  static bool classof(StmtKind K) {
+	return K == SK_EXPR_FNCALL;
+  }
 };
 
 class UnaryOp : public Expr {
@@ -413,7 +428,7 @@ private:
   std::unique_ptr<Expr> input;
 public:
   UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
-	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY, inp->getLoc()) {}
+	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY, SK_EXPR_UNARY, inp->getLoc()) {}
   void accept(funLang::SemaAnalyzer &v) override {}
   Basic::Op::Unary getOp() { return op; }
 };
@@ -427,7 +442,7 @@ public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
 		   Basic::Op::Binary opcode)
 	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
-		Expr(ExprKind::EXPR_BINARY) {}
+		Expr(ExprKind::EXPR_BINARY, StmtKind::SK_EXPR_BINARY) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr &getLhs() { return *lhs; }
@@ -435,7 +450,7 @@ public:
   TypeDecl *getLHSType() { return lhs->getType(); }
   TypeDecl *getRHSType() { return rhs->getType(); }
   llvm::SMRange getRange() { return {lhs->getLoc(), rhs->getLoc()}; };
-  static bool classof(const Expr *expr) { return expr->getExprKind()==ExprKind::EXPR_BINARY; }
+  static bool classof(StmtKind K) { return K == StmtKind::SK_EXPR_BINARY; }
 };
 
 class CallArgList : public Node {
@@ -459,6 +474,6 @@ public:
   void accept(funLang::SemaAnalyzer &v) override {}
 
   static bool classof(StmtKind S) {
-	return S==SK_RETURN;
+	return S == SK_RETURN;
   }
 };

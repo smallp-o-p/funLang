@@ -12,7 +12,7 @@ i32 main(){
 
     bool fun = (100 == 101);
 
-    bool fun2 = (++100 == 1-2/3);
+    bool fun2 = (100 == 1-2/3);
 
     return 0;
 }

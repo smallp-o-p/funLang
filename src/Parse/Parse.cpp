@@ -4,42 +4,44 @@
 #include "Basic.hpp"
 #include <initializer_list>
 #include <memory>
+#include <llvm/ADT/APFloat.h>
+#include <llvm/Support/Error.h>
 
 Token Parser::peek() { return lexer->peek(); }
-bool Parser::check(Basic::tok::Tag tok) { return peek().getTag()==tok; }
+bool Parser::check(Basic::tok::Tag Tok) { return peek().getTag() == Tok; }
 Token &Parser::previous() { return lexer->previous(); }
 Token &Parser::advance() { return lexer->advance(); }
-bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> toExpect,
-					 bool peeking = true) {
-  Token consumed = peeking ? lexer->peek() : lexer->advance();
+bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> ToExpect,
+					 bool Peeking = true) {
+  Token Consumed = Peeking ? lexer->peek() : lexer->advance();
 
   return std::any_of(
-	  toExpect.begin(), toExpect.end(),
-	  [consumed](Basic::tok::Tag tok) { return tok==consumed.getTag(); });
+	  ToExpect.begin(), ToExpect.end(),
+	  [Consumed](Basic::tok::Tag Tok) { return Tok == Consumed.getTag(); });
 }
-bool Parser::expect(Basic::tok::Tag tok) {
-  if (lexer->advance().getTag()!=tok) {
-	reportExpect(tok, previous());
+bool Parser::expect(Basic::tok::Tag Tok) {
+  if (lexer->advance().getTag() != Tok) {
+	reportExpect(Tok, previous());
 	return false;
   }
   return true;
 }
 
-void Parser::reportExpect(Basic::tok::Tag expected, Token received) {
-  diags.emitDiagMsg(received.getLoc(), diag::err_expected,
-					Basic::tok::getTokenName(expected), received.getLexeme());
+void Parser::reportExpect(Basic::tok::Tag Expected, Token Received) {
+  diags.emitDiagMsg(Received.getLoc(), diag::err_expected,
+					Basic::tok::getTokenName(Expected), Received.getLexeme());
 }
 
-void Parser::emitWarning(unsigned int diagID, llvm::SMLoc loc,
-						 llvm::StringRef name) {
-  diags.emitDiagMsg(loc, diagID, name);
+void Parser::emitWarning(unsigned int DiagId, llvm::SMLoc Loc,
+						 llvm::StringRef Name) {
+  diags.emitDiagMsg(Loc, DiagId, Name);
 }
 
-Token Parser::lookahead(uint32_t howMuch) { return lexer->lookahead(howMuch); }
+Token Parser::lookahead(uint32_t HowMuch) { return lexer->lookahead(HowMuch); }
 
-bool Parser::recoverFromError(currentNT whereWeFailed) {
+bool Parser::recoverFromError(currentNT WhereWeFailed) {
   error = true;
-  switch (whereWeFailed) {
+  switch (WhereWeFailed) {
   case STMT: {
 	do {
 	  advance(); // discard symbols until we find a semicolon and eat the
@@ -54,62 +56,65 @@ bool Parser::recoverFromError(currentNT whereWeFailed) {
 	break;
   }
   }
-  if (peek().getTag()==Basic::tok::Tag::eof) {
+  if (peek().getTag() == Basic::tok::Tag::eof) {
 	return false;
   }
   return true;
 }
 
 std::unique_ptr<TypeUse> Parser::type() {
-  Token &type_name = advance();
-  if (!type_name.isBaseType() && type_name.isIdentifier()) {
-	diags.emitDiagMsg(type_name.getLoc(),
+  Token &TypeName = advance();
+  if (!TypeName.isBaseType() && TypeName.isIdentifier()) {
+	diags.emitDiagMsg(TypeName.getLoc(),
 					  diag::err_expected,
 					  llvm::StringRef("identifier or base type"),
-					  type_name.getLexeme());
+					  TypeName.getLexeme());
 	return nullptr;
+  } else if (TypeName.isBaseType()) {
+	Decl *BaseType = semantics->getBaseType(TypeName.getLexeme());
+	return std::make_unique<TypeUse>((TypeDecl *)BaseType, TypeName.getLoc());
+  } else {
+	Decl *FoundType = semantics->lookup(TypeName.getLexeme());
+	if (!FoundType) {
+	  diags.emitDiagMsg(TypeName.getLoc(), diag::err_var_not_found, TypeName.getLexeme());
+	}
+	return std::make_unique<TypeUse>((TypeDecl *)FoundType, TypeName.getLoc());
   }
-  Decl *foundType = semantics->lookup(type_name.getLexeme());
-  if (!foundType) {
-	diags.emitDiagMsg(type_name.getLoc(), diag::err_var_not_found, type_name.getLexeme());
-  }
-
-  return std::make_unique<TypeUse>((TypeDecl *)foundType, type_name.getLoc());
 }
 
 std::unique_ptr<CompilationUnit> Parser::program() {
   // TODO: globals
-  std::unique_ptr<TopLevelDecls> tops = topLevels();
+  std::unique_ptr<TopLevelDecls> Tops = topLevels();
   if (Parser::error) {
 	return nullptr;
   }
   if (!expect(Basic::tok::Tag::eof)) {
 	return nullptr;
   }
-  return std::make_unique<CompilationUnit>(std::move(tops));
+  return std::make_unique<CompilationUnit>(std::move(Tops));
 }
 
 std::unique_ptr<TopLevelDecls> Parser::topLevels() {
-  std::unordered_map<std::string, std::unique_ptr<Decl>> topLevelList;
+  std::unordered_map<std::string, std::unique_ptr<Decl>> TopLevelList;
   while (true) {
-	std::unique_ptr<Decl> topLevel;
+	std::unique_ptr<Decl> TopLevel;
 
 	if (check(Basic::tok::kw_struct)) {
-	  topLevel = typeDecl();
+	  TopLevel = typeDecl();
 	} else if (isOneOf({Basic::tok::Tag::identifier}) || peek().isBaseType()) {
-	  topLevel = function();
+	  TopLevel = function();
 	}
-	if (!topLevel) {
+	if (!TopLevel) {
 	  return nullptr;
 	}
-	if (semantics->actOnTopLevelDecl(*topLevel)) { // check if top level name has been defined before
-	  topLevelList.insert(std::pair<llvm::StringRef, std::unique_ptr<Decl>>(topLevel->getName(), std::move(topLevel)));
+	if (semantics->actOnTopLevelDecl(*TopLevel)) { // check if top level name has been defined before
+	  TopLevelList.insert(std::pair<llvm::StringRef, std::unique_ptr<Decl>>(TopLevel->getName(), std::move(TopLevel)));
 	}
 	if (check(Basic::tok::Tag::eof)) {
 	  break;
 	}
   }
-  return std::make_unique<TopLevelDecls>(std::move(topLevelList));
+  return std::make_unique<TopLevelDecls>(std::move(TopLevelList));
 }
 
 std::unique_ptr<TypeDecl> Parser::typeDecl() {
@@ -117,148 +122,148 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
-  Token &id = previous();
+  Token &Id = previous();
   if (!expect(Basic::tok::l_brace)) {
 	return nullptr;
   }
 
   semantics->enterScope();
 
-  std::unique_ptr<TypeProperties> members = typeProperties();
+  std::unique_ptr<TypeProperties> Members = typeProperties();
   semantics->exitScope();
-  if (!members) {
+  if (!Members) {
 	return nullptr;
   }
 
-  return std::make_unique<TypeDecl>(id.getLexeme(), std::move(members), id.getLoc());
+  return std::make_unique<TypeDecl>(Id.getLexeme(), std::move(Members), Id.getLoc());
 }
 
 std::unique_ptr<TypeProperties> Parser::typeProperties() {
-  std::vector<std::unique_ptr<VarDeclStmt>> props;
+  std::vector<std::unique_ptr<VarDeclStmt>> Properties;
   while (true) {
 	if (check(Basic::tok::Tag::r_brace)) {
 	  break;
 	}
-	std::unique_ptr<VarDeclStmt> decl = declStmt();
-	if (!decl) {
+	std::unique_ptr<VarDeclStmt> DeclStmt = declStmt();
+	if (!DeclStmt) {
 	  return nullptr;
 	}
-	if (!semantics->actOnStructVarDecl(*decl)) {
+	if (!semantics->actOnStructVarDecl(*DeclStmt)) {
 	  return nullptr;
 	}
-	if (Decl *found = semantics->lookupOneScope(decl->getName())) {
-	  diags.emitDiagMsg(decl->getLoc(), diag::err_var_redefinition, decl->getName());
-	  diags.emitDiagMsg(found->getLoc(), diag::note_var_redefinition, found->getName());
+	if (Decl *Found = semantics->lookupOneScope(DeclStmt->getName())) {
+	  diags.emitDiagMsg(DeclStmt->getLoc(), diag::err_var_redefinition, DeclStmt->getName());
+	  diags.emitDiagMsg(Found->getLoc(), diag::note_var_redefinition, Found->getName());
 	} else {
 	  if (!expect(Basic::tok::semi)) {
 		reportExpect(Basic::tok::semi, previous());
 		return nullptr;
 	  }
-	  props.push_back(std::move(decl));
+	  Properties.push_back(std::move(DeclStmt));
 	}
   }
 
-  return std::make_unique<TypeProperties>(std::move(props));
+  return std::make_unique<TypeProperties>(std::move(Properties));
 }
 
 std::unique_ptr<FunctionNode> Parser::function() {
-  std::unique_ptr<TypeUse> type_node = type();
-  if (!type_node) {
+  std::unique_ptr<TypeUse> TypeNode = type();
+  if (!TypeNode) {
 	return nullptr;
   }
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
-  Token &id = previous();
+  Token Id = previous();
 
   if (!expect(Basic::tok::Tag::l_paren)) {
 	return nullptr;
   }
-  std::unique_ptr<ArgsList> args = arguments();
+  std::unique_ptr<ArgsList> Args = arguments();
 
-  if (!args) {
+  if (!Args) {
 	return nullptr;
   }
   if (!expect(Basic::tok::Tag::r_paren)) {
 	return nullptr;
   }
-  semantics->enterFunction(std::move(type_node), *args); // borrow
-  std::unique_ptr<CompoundStmt> compound = compoundStmt();
-  if (!compound) {
+  semantics->enterFunction(std::move(TypeNode), *Args); // borrow
+  std::unique_ptr<CompoundStmt> Compound = compoundStmt();
+  if (!Compound) {
 	return nullptr;
   }
   semantics->exitScope();
-  type_node = semantics->exitFunction(); // give back
-  return std::make_unique<FunctionNode>(std::move(type_node), id.getLexeme(),
-										std::move(compound), id.getLoc());
+  TypeNode = semantics->exitFunction(); // give back
+  return std::make_unique<FunctionNode>(std::move(TypeNode), Id.getLexeme(),
+										std::move(Compound), Id.getLoc());
 }
 
 std::unique_ptr<ArgsList> Parser::arguments() {
-  std::vector<std::unique_ptr<ArgDecl>> argList;
+  std::vector<std::unique_ptr<ArgDecl>> ArgList;
   while (true) {
 	if (check(Basic::tok::Tag::r_paren)) {
 	  break;
 	}
-	if (!argList.empty() && !expect(Basic::tok::Tag::comma)) {
+	if (!ArgList.empty() && !expect(Basic::tok::Tag::comma)) {
 	  return nullptr;
 	}
-	std::unique_ptr<ArgDecl> argument = arg();
-	if (!argument) {
+	std::unique_ptr<ArgDecl> Argument = arg();
+	if (!Argument) {
 	  return nullptr;
 	}
-	argList.push_back(std::move(argument));
+	ArgList.push_back(std::move(Argument));
   }
-  return std::make_unique<ArgsList>(argList);
+  return std::make_unique<ArgsList>(ArgList);
 }
 
 std::unique_ptr<ArgDecl> Parser::arg() {
-  std::unique_ptr<TypeUse> t_node = type();
-  if (!t_node) {
+  std::unique_ptr<TypeUse> TNode = type();
+  if (!TNode) {
 	return nullptr;
   }
   if (!expect(Basic::tok::Tag::identifier)) {
 	return nullptr;
   }
-  Token &id = previous();
+  Token &Id = previous();
 
-  return std::make_unique<ArgDecl>(std::move(t_node), id.getLexeme(), id.getLoc());
+  return std::make_unique<ArgDecl>(std::move(TNode), Id.getLexeme(), Id.getLoc());
 }
 
 std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
   if (!expect(Basic::tok::Tag::l_brace)) {
 	return nullptr;
   }
-  std::vector<std::unique_ptr<Stmt>> stmts;
+  std::vector<std::unique_ptr<Stmt>> Stmts;
   while (true) {
 	if (check(Basic::tok::Tag::r_brace)) {
 	  advance();
 	  break;
 	}
-	std::unique_ptr<Stmt> s;
+	std::unique_ptr<Stmt> S;
 	if (check(Basic::tok::Tag::l_brace)) {
 	  advance();
 	  semantics->enterScope();
-	  s = compoundStmt();
+	  S = compoundStmt();
 	} else {
-	  s = simpleStmt();
+	  S = simpleStmt();
 	}
-	if (!s) {
+	if (!S) {
 	  if (!recoverFromError(currentNT::STMT)) {
 		return nullptr;
 	  }
 	} else {
-	  if (s->getKind()==Stmt::SK_COMPOUND) {
+	  if (S->getKind() == Stmt::SK_COMPOUND) {
 		semantics->exitScope();
 	  }
-	  stmts.push_back(std::move(s));
+	  Stmts.push_back(std::move(S));
 	}
   }
-  return std::make_unique<CompoundStmt>(std::move(stmts));
+  return std::make_unique<CompoundStmt>(std::move(Stmts));
 }
 
 std::unique_ptr<Stmt> Parser::simpleStmt() {
   using namespace Basic;
-  std::unique_ptr<Stmt> stmt_inq;
+  std::unique_ptr<Stmt> StmtInq;
   switch (peek().getTag()) {
   case Basic::tok::Tag::kw_void:
   case tok::Tag::kw_bool:
@@ -267,275 +272,284 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   case tok::Tag::kw_f32:
   case tok::Tag::kw_f64:
   case tok::Tag::kw_string: {
-	stmt_inq = declStmt();
-	if (auto *vardecl = llvm::dyn_cast<VarDeclStmt>(stmt_inq.get())) {
-	  semantics->actOnVarDeclStmt(*vardecl);
-	} else { ;
+	StmtInq = declStmt();
+	if (auto *Vardecl = llvm::dyn_cast<VarDeclStmt>(StmtInq.get())) {
+	  semantics->actOnVarDeclStmt(*Vardecl);
 	}
 	break;
   }
   case tok::Tag::identifier: {
 	if (lookahead(2).is(Basic::tok::equal) || lookahead(2).is(Basic::tok::semi)) {
-	  stmt_inq = declStmt();
-	  if (auto *vardecl = llvm::dyn_cast<VarDeclStmt>(stmt_inq.get())) {
-		semantics->actOnVarDeclStmt(*vardecl);
-	  } else { ;
+	  StmtInq = declStmt();
+	  if (auto *Vardecl = llvm::dyn_cast<VarDeclStmt>(StmtInq.get())) {
+		semantics->actOnVarDeclStmt(*Vardecl);
 	  }
 	} else {
-	  stmt_inq = expr();
+	  StmtInq = expr();
 	}
 	break;
   }
   case tok::Tag::kw_return: {
-	stmt_inq = returnStmt();
+	StmtInq = returnStmt();
 	break;
   }
   default:return nullptr;
   }
-  if (!stmt_inq) {
+  if (!StmtInq) {
 	return nullptr;
   }
   if (!expect(Basic::tok::Tag::semi)) {
 	return nullptr;
   }
-  return stmt_inq;
+  return StmtInq;
 }
 
 std::unique_ptr<VarDeclStmt> Parser::declStmt() {
-  std::unique_ptr<TypeUse> type_node = type();
-  if (!type_node) {
+  std::unique_ptr<TypeUse> TypeNode = type();
+  if (!TypeNode) {
 	return nullptr;
   }
   if (!expect(Basic::tok::Tag::identifier)) {
 	return nullptr;
   }
 
-  Token &id = previous();
+  Token &Id = previous();
 
   if (check(Basic::tok::Tag::semi)) {
-	return std::make_unique<VarDeclStmt>(std::move(type_node), id.getLexeme(), id.getLoc());
+	return std::make_unique<VarDeclStmt>(std::move(TypeNode), Id.getLexeme(), Id.getLoc());
   }
   if (!expect(Basic::tok::Tag::equal)) {
 	return nullptr;
   }
-  std::unique_ptr<Expr> expr_node = expr();
+  std::unique_ptr<Expr> ExprNode = expr();
 
-  if (!expr_node) {
+  if (!ExprNode) {
 	return nullptr;
   }
-  auto decl = std::make_unique<VarDeclStmt>(std::move(type_node), id.getLexeme(),
-											std::move(expr_node), id.getLoc());
-  return decl;
+  auto Decl = std::make_unique<VarDeclStmt>(std::move(TypeNode), Id.getLexeme(),
+											std::move(ExprNode), Id.getLoc());
+  return Decl;
 }
 
 std::unique_ptr<ReturnStmt> Parser::returnStmt() {
   if (!expect(Basic::tok::Tag::kw_return)) {
 	return nullptr;
   }
-  std::unique_ptr<Expr> expr_node = expr();
-  if (!expr_node) {
+  std::unique_ptr<Expr> ExprNode = expr();
+  if (!ExprNode) {
 	return nullptr;
   }
-  semantics->actOnReturnStmt(*expr_node);
+  semantics->actOnReturnStmt(*ExprNode);
 
-  return std::make_unique<ReturnStmt>(std::move(expr_node));
+  return std::make_unique<ReturnStmt>(std::move(ExprNode));
 }
 
 std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
-  std::unique_ptr<Expr> eq_node = eqExpr();
-  Basic::Op::Binary opc = Basic::Op::Binary::equals;
+  std::unique_ptr<Expr> EqNode = eqExpr();
+  Basic::Op::Binary Opc = Basic::Op::Binary::equals;
   if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
 			   Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
 			   Basic::tok::Tag::slashequal})) {
 	switch (advance().getTag()) {
-	case Basic::tok::Tag::equal:opc = Basic::Op::Binary::assign;
+	case Basic::tok::Tag::equal:Opc = Basic::Op::Binary::assign;
 	  break;
-	case Basic::tok::Tag::plusequal:opc = Basic::Op::Binary::plusassign;
+	case Basic::tok::Tag::plusequal:Opc = Basic::Op::Binary::plusassign;
 	  break;
-	case Basic::tok::Tag::minusequal:opc = Basic::Op::Binary::minusassign;
+	case Basic::tok::Tag::minusequal:Opc = Basic::Op::Binary::minusassign;
 	  break;
-	case Basic::tok::Tag::starequal:opc = Basic::Op::Binary::multassign;
+	case Basic::tok::Tag::starequal:Opc = Basic::Op::Binary::multassign;
 	  break;
-	case Basic::tok::Tag::slashequal:opc = Basic::Op::Binary::divassign;
+	case Basic::tok::Tag::slashequal:Opc = Basic::Op::Binary::divassign;
 	  break;
 	default:return nullptr;
 	}
-	std::unique_ptr<Expr> expr_node = eqExpr();
-	if (!expr_node) {
+	std::unique_ptr<Expr> ExprNode = eqExpr();
+	if (!ExprNode) {
 	  return nullptr;
 	}
-	return std::make_unique<BinaryOp>(std::move(eq_node), std::move(expr_node),
-									  opc);
+	return std::make_unique<BinaryOp>(std::move(EqNode), std::move(ExprNode),
+									  Opc);
   } else {
-	return eq_node;
+	return EqNode;
   }
 }
 
 std::unique_ptr<Expr> Parser::eqExpr() {
-  std::unique_ptr<Expr> cmp_node = cmpExpr();
-  if (!cmp_node) {
+  std::unique_ptr<Expr> CmpNode = cmpExpr();
+  if (!CmpNode) {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::equalequal, Basic::tok::Tag::exclaimequal})) {
-	Basic::Op::Binary opcode =
-		advance().getTag()==Basic::tok::Tag::equalequal
+	Basic::Op::Binary Opcode =
+		advance().getTag() == Basic::tok::Tag::equalequal
 		? Basic::Op::Binary::equals
 		: Basic::Op::Binary::notequals;
-	std::unique_ptr<Expr> cmp_node2 = cmpExpr();
+	std::unique_ptr<Expr> CmpNode2 = cmpExpr();
 
-	if (!cmp_node2) {
+	if (!CmpNode2) {
 	  return nullptr;
 	}
-	return std::make_unique<BinaryOp>(std::move(cmp_node), std::move(cmp_node2),
-									  opcode);
+	return std::make_unique<BinaryOp>(std::move(CmpNode), std::move(CmpNode2),
+									  Opcode);
   }
-  return cmp_node;
+  return CmpNode;
 }
 
 std::unique_ptr<Expr> Parser::cmpExpr() {
-  std::unique_ptr<Expr> add_node = addExpr();
-  if (!add_node) {
+  std::unique_ptr<Expr> AddNode = addExpr();
+  if (!AddNode) {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::less, Basic::tok::Tag::lessequal,
 			   Basic::tok::Tag::greater, Basic::tok::Tag::greaterequal})) {
-	Basic::Op::Binary opcode;
+	Basic::Op::Binary Opcode;
 	switch (advance().getTag()) {
-	case Basic::tok::Tag::less:opcode = Basic::Op::lt;
+	case Basic::tok::Tag::less:Opcode = Basic::Op::lt;
 	  break;
-	case Basic::tok::Tag::lessequal:opcode = Basic::Op::ltequals;
+	case Basic::tok::Tag::lessequal:Opcode = Basic::Op::ltequals;
 	  break;
-	case Basic::tok::Tag::greater:opcode = Basic::Op::gt;
+	case Basic::tok::Tag::greater:Opcode = Basic::Op::gt;
 	  break;
-	case Basic::tok::Tag::greaterequal:opcode = Basic::Op::gtequals;
+	case Basic::tok::Tag::greaterequal:Opcode = Basic::Op::gtequals;
 	  break;
 	default:return nullptr;
 	}
-	std::unique_ptr<Expr> add_node2 = addExpr();
-	if (!add_node2) {
+	std::unique_ptr<Expr> AddNode2 = addExpr();
+	if (!AddNode2) {
 	  return nullptr;
 	}
-	return std::make_unique<BinaryOp>(std::move(add_node), std::move(add_node2),
-									  opcode);
+	return std::make_unique<BinaryOp>(std::move(AddNode), std::move(AddNode2),
+									  Opcode);
   }
-  return add_node;
+  return AddNode;
 }
 
 std::unique_ptr<Expr> Parser::addExpr() {
-  std::unique_ptr<Expr> multdiv_node = multdiv();
-  if (!multdiv_node) {
+  std::unique_ptr<Expr> MultdivNode = multdiv();
+  if (!MultdivNode) {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::plus, Basic::tok::Tag::minus})) {
-	Basic::Op::Binary opcode = advance().getTag()==Basic::tok::Tag::plus
+	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::plus
 							   ? Basic::Op::plus
 							   : Basic::Op::minus;
-	std::unique_ptr<Expr> multdiv_node2 = multdiv();
-	if (!multdiv_node2) {
+	std::unique_ptr<Expr> MultdivNode2 = multdiv();
+	if (!MultdivNode2) {
 	  return nullptr;
 	}
-	return std::make_unique<BinaryOp>(std::move(multdiv_node),
-									  std::move(multdiv_node2), opcode);
+	return std::make_unique<BinaryOp>(std::move(MultdivNode),
+									  std::move(MultdivNode2), Opcode);
   }
-  return multdiv_node;
+  return MultdivNode;
 }
 
 std::unique_ptr<Expr> Parser::multdiv() {
-  std::unique_ptr<Expr> unary_node = unary();
+  std::unique_ptr<Expr> UnaryNode = unary();
 
-  if (!unary_node) {
+  if (!UnaryNode) {
 	return nullptr;
   }
   if (isOneOf({Basic::tok::Tag::star, Basic::tok::Tag::slash})) {
-	Basic::Op::Binary opcode = advance().getTag()==Basic::tok::Tag::star
+	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::star
 							   ? Basic::Op::multiply
 							   : Basic::Op::divide;
-	std::unique_ptr<Expr> unary_node2 = unary();
-	if (!unary_node2) {
+	std::unique_ptr<Expr> UnaryNode2 = unary();
+	if (!UnaryNode2) {
 	  return nullptr;
 	}
-	return std::make_unique<BinaryOp>(std::move(unary_node),
-									  std::move(unary_node2), opcode);
+	return std::make_unique<BinaryOp>(std::move(UnaryNode),
+									  std::move(UnaryNode2), Opcode);
   }
-  return unary_node;
+  return UnaryNode;
 }
 
 std::unique_ptr<Expr> Parser::unary() {
   using namespace Basic;
-  Op::Unary opcode = Basic::Op::Unary::NUM_UNARY;
+  Op::Unary Opcode = Basic::Op::Unary::NUM_UNARY;
   if (isOneOf(
 	  {tok::plusplus, tok::minusminus, tok::exclaim, tok::Tag::minus})) {
 	switch (advance().getTag()) {
-	case tok::plusplus:opcode = Basic::Op::Unary::preInc;
+	case tok::plusplus:Opcode = Basic::Op::Unary::preInc;
 	  break;
-	case tok::exclaim:opcode = Basic::Op::Unary::lNot;
+	case tok::exclaim:Opcode = Basic::Op::Unary::lNot;
 	  break;
-	case tok::minusminus:opcode = Basic::Op::Unary::preDec;
+	case tok::minusminus:Opcode = Basic::Op::Unary::preDec;
 	  break;
-	case tok::minus:opcode = Basic::Op::Unary::unaryMinus;
+	case tok::minus:Opcode = Basic::Op::Unary::unaryMinus;
 	  break;
 	default:;
 	}
   }
-  std::unique_ptr<Expr> primary_node = primary();
-  if (!primary_node) {
+  std::unique_ptr<Expr> PrimaryNode = primary();
+  if (!PrimaryNode) {
 	return nullptr;
   }
-  if (opcode!=Basic::Op::Unary::NUM_UNARY) {
-	return std::make_unique<UnaryOp>(std::move(primary_node), opcode);
+  if (Opcode != Basic::Op::Unary::NUM_UNARY) {
+	return std::make_unique<UnaryOp>(std::move(PrimaryNode), Opcode);
   } else {
-	return primary_node;
+	return PrimaryNode;
   }
 }
 
 std::unique_ptr<Expr> Parser::primary() {
   if (check(Basic::tok::l_paren)) {
 	advance();
-	std::unique_ptr<Expr> expr_node = expr();
-	if (!expr_node) {
+	std::unique_ptr<Expr> ExprNode = expr();
+	if (!ExprNode) {
 	  return nullptr;
 	}
 	if (!expect(Basic::tok::r_paren)) {
 	  return nullptr;
 	}
-	return expr_node;
+	return ExprNode;
   } else if (check(Basic::tok::identifier)) {
-	if (lookahead(2).getTag()==Basic::tok::Tag::l_paren) {
-	  std::unique_ptr<FunctionCall> fncall_node = fnCall();
-	  if (!fncall_node) {
+	if (lookahead(2).getTag() == Basic::tok::Tag::l_paren) {
+	  std::unique_ptr<FunctionCall> FncallNode = fnCall();
+	  if (!FncallNode) {
 		return nullptr;
 	  }
-	  semantics->actOnFnCall(*fncall_node);
-	  return fncall_node;
+	  semantics->actOnFnCall(*FncallNode);
+	  return FncallNode;
 	} else { /* identifier only */
-	  Token &var_name = advance();
-	  semantics->actOnNameUsage(var_name);
-	  std::unique_ptr<NameUsage> leaf = std::make_unique<NameUsage>(var_name.getLexeme());
-	  return leaf;
+	  Token &VarName = advance();
+	  semantics->actOnNameUsage(VarName);
+	  std::unique_ptr<NameUsage> Leaf = std::make_unique<NameUsage>(VarName.getLexeme());
+	  return Leaf;
 	}
   } else if (isOneOf({Basic::tok::floating_constant,
 					  Basic::tok::numeric_constant, Basic::tok::string_literal,
 					  Basic::tok::kw_true, Basic::tok::kw_false})) {
-	auto token = advance();
-	switch (token.getTag()) {
+	auto Token = advance();
+	switch (Token.getTag()) {
+	default: return nullptr;
 	case Basic::tok::numeric_constant: {
-	  auto a = std::make_unique<IntegerLiteral>(llvm::APInt(64, token.getLexeme(), 10), token.getLoc());
-	  a->setType((TypeDecl *)(semantics)->lookup("i32"));
-	  return a;
+	  uint32_t NumBits = llvm::APInt::getSufficientBitsNeeded(Token.getLexeme(), 10);
+	  llvm::APInt ApInt = llvm::APInt(NumBits < 32 ? 32 : 64, Token.getLexeme(), 10);
+	  auto Literal = std::make_unique<IntegerLiteral>(ApInt, Token.getLoc());
+	  if (NumBits > 32) {
+		Literal->setType(semantics->getBaseType("i64"));
+	  } else {
+		Literal->setType(semantics->getBaseType("i32"));
+	  }
+	  return Literal;
 	}
-	case Basic::tok::string_literal:
 	case Basic::tok::floating_constant: {
-
+	  llvm::APFloat ApFloatSingle =
+		  llvm::APFloat(llvm::APFloat::IEEEdouble(), Token.getLexeme()); //TODO: find out how to use APFloat
+	  return std::make_unique<FloatingLiteral>(ApFloatSingle, Token.getLoc());
+	}
+	case Basic::tok::string_literal: {
+	  auto StrLit = std::make_unique<StringLiteral>(Token.getLexeme().size(), Token.getLexeme(), Token.getLoc());
+	  return StrLit;
 	}
 	case Basic::tok::kw_true:
 	case Basic::tok::kw_false: {
-	  auto a = std::make_unique<BooleanLiteral>(token.getTag()==Basic::tok::kw_true, token.getLoc());
-	  a->setType((TypeDecl *)(semantics->lookup("bool")));
-	  return a;
+	  auto BoolLit = std::make_unique<BooleanLiteral>(Token.getTag() == Basic::tok::kw_true, Token.getLoc());
+	  BoolLit->setType((semantics->getBaseType("bool")));
+	  return BoolLit;
 	}
-	default: return nullptr;
 	}
   }
   return nullptr;
@@ -545,35 +559,35 @@ std::unique_ptr<FunctionCall> Parser::fnCall() {
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
-  Token &id = previous();
+  Token &Id = previous();
   if (!expect(Basic::tok::l_paren)) {
 	return nullptr;
   }
-  std::unique_ptr<CallArgList> callargs_node = callArgs();
-  if (!callargs_node) {
+  std::unique_ptr<CallArgList> CallargsNode = callArgs();
+  if (!CallargsNode) {
 	return nullptr;
   }
   if (!expect(Basic::tok::r_paren)) {
 	return nullptr;
   }
 
-  return std::make_unique<FunctionCall>(id.getLexeme(), std::move(callargs_node), id.getLoc());
+  return std::make_unique<FunctionCall>(Id.getLexeme(), std::move(CallargsNode), Id.getLoc());
 }
 
 std::unique_ptr<CallArgList> Parser::callArgs() {
-  std::vector<std::unique_ptr<Expr>> args;
+  std::vector<std::unique_ptr<Expr>> Args;
   while (true) {
 	if (check(Basic::tok::r_paren)) {
 	  break;
 	}
-	if (!args.empty() && !expect(Basic::tok::Tag::comma)) {
+	if (!Args.empty() && !expect(Basic::tok::Tag::comma)) {
 	  return nullptr;
 	}
-	std::unique_ptr<Expr> expr_ptr = expr();
-	if (!expr_ptr) {
+	std::unique_ptr<Expr> ExprPtr = expr();
+	if (!ExprPtr) {
 	  return nullptr;
 	}
-	args.push_back(std::move(expr_ptr));
+	Args.push_back(std::move(ExprPtr));
   }
-  return std::make_unique<CallArgList>(std::move(args));
+  return std::make_unique<CallArgList>(std::move(Args));
 }

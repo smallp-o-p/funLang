@@ -22,15 +22,15 @@ public:
   Parser(std::unique_ptr<Lexer> lex, DiagEngine &diags, std::unique_ptr<SemaAnalyzer> sema)
 	  : lexer(std::move(lex)), error(false), diags(diags), semantics(std::move(sema)) {}
   bool atEnd();
-  bool isOneOf(std::initializer_list<Basic::tok::Tag> toExpect, bool peeking);
+  bool isOneOf(std::initializer_list<Basic::tok::Tag> Tok, bool Peeking);
   Token peek();
   Token &previous();
   Token &advance();
-  bool expect(Basic::tok::Tag tok);
-  bool check(Basic::tok::Tag tok);
-  Token lookahead(uint32_t howMuch);
-  void reportExpect(Basic::tok::Tag expected, Token received);
-  void emitWarning(unsigned int diagID, llvm::SMLoc loc, llvm::StringRef name);
+  bool expect(Basic::tok::Tag Tok);
+  bool check(Basic::tok::Tag Tok);
+  Token lookahead(uint32_t HowMuch);
+  void reportExpect(Basic::tok::Tag Expected, Token Received);
+  void emitWarning(unsigned int DiagId, llvm::SMLoc Loc, llvm::StringRef Name);
 public:
   std::unique_ptr<CompilationUnit> functions();
   std::unique_ptr<TopLevelDecls> topLevels();
@@ -57,7 +57,7 @@ public:
   std::unique_ptr<Expr> primary();
   std::unique_ptr<FunctionCall> fnCall();
   std::unique_ptr<CallArgList> callArgs();
-  bool recoverFromError(currentNT whereWeFailed);
+  bool recoverFromError(currentNT WhereWeFailed);
 
 public:
   std::unique_ptr<CompilationUnit> program();

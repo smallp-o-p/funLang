@@ -50,13 +50,6 @@ TEST(ParseTesting, compilationUnit) {
   EXPECT_NE(nullptr, program);
 }
 
-TEST(ParseTesting, biggerCompilationUnit) {
-  auto parser_ptr = makeParser("./bigCompilationUnit.fun");
-  ASSERT_NE(nullptr, parser_ptr);
-  std::unique_ptr<CompilationUnit> program = parser_ptr->program();
-  EXPECT_NE(nullptr, program);
-}
-
 TEST(ParseTesting, assignExpr) {
   auto parser_ptr = makeParser("./assignExpr.fun");
   ASSERT_NE(nullptr, parser_ptr);
@@ -65,6 +58,14 @@ TEST(ParseTesting, assignExpr) {
   auto &stmts = program->getStmts();
   EXPECT_EQ(stmts.size(), 5);
 }
+
+TEST(ParseTesting, bigCompilationUnit) {
+  auto parser_ptr = makeParser("./bigCompilationUnit.fun");
+  ASSERT_NE(nullptr, parser_ptr);
+  std::unique_ptr<CompilationUnit> program = parser_ptr->program();
+  EXPECT_NE(nullptr, program);
+}
+
 int main() {
   testing::InitGoogleTest();
   return RUN_ALL_TESTS();

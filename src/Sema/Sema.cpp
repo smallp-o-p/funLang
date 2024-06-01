@@ -97,6 +97,7 @@ bool funLang::SemaAnalyzer::actOnStructVarDecl(VarDeclStmt &declStmt) {
   }
   return true;
 }
+
 void funLang::SemaAnalyzer::init() {
   auto boolType = new TypeDecl("bool");
   auto i32Type = new TypeDecl("i32");
@@ -106,13 +107,13 @@ void funLang::SemaAnalyzer::init() {
   auto stringType = new TypeDecl("string");
   auto voidType = new TypeDecl("void");
 
-  currentScope->insert(boolType);
-  currentScope->insert(i32Type);
-  currentScope->insert(i64Type);
-  currentScope->insert(f32Type);
-  currentScope->insert(f64Type);
-  currentScope->insert(stringType);
-  currentScope->insert(voidType);
+  baseTypeTable->insert(boolType);
+  baseTypeTable->insert(i32Type);
+  baseTypeTable->insert(i64Type);
+  baseTypeTable->insert(f32Type);
+  baseTypeTable->insert(f64Type);
+  baseTypeTable->insert(stringType);
+  baseTypeTable->insert(voidType);
 }
 void funLang::SemaAnalyzer::actOnFnArgsList(ArgsList &args) {
   for (auto &arg : args.getArgList()) {

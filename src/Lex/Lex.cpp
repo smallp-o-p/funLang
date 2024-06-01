@@ -98,7 +98,7 @@ Token Lexer::getNext() {
 }
 
 bool Lexer::nextIs(char c) {
-  if (*(bufPtr + 1)==c) {
+  if (*(bufPtr + 1) == c) {
 	return true;
   }
   return false;
@@ -106,7 +106,7 @@ bool Lexer::nextIs(char c) {
 
 Token Lexer::lexString() {
   auto end = bufPtr + 1;
-  while (*end && *end++!='\"') {
+  while (*end && *end++ != '\"') {
   }
   if (!*end) {
 	diagnostics.emitDiagMsg(getLocFrom(bufPtr), diag::err_unterminated_char_or_string);
@@ -118,12 +118,12 @@ Token Lexer::lexString() {
 Token Lexer::lexNum(bool negative) {
   auto end = negative ? bufPtr + 1 : bufPtr; // handle negative case
   bool seenDot = false;
-  while (*end && (isdigit(*end) || *end=='.')) {
-	if (seenDot && *end=='.') {
+  while (*end && (isdigit(*end) || *end == '.')) {
+	if (seenDot && *end == '.') {
 	  diagnostics.emitDiagMsg(getLocFrom(end + 1), diag::err_unexpected_char, *end);
 	  return formErr();
 	}
-	if (*end=='.' && !seenDot) {
+	if (*end == '.' && !seenDot) {
 	  seenDot = true;
 	}
 	end++;
@@ -142,7 +142,7 @@ Token Lexer::lexNum(bool negative) {
 Token Lexer::lexIdentifier() {
   auto end = bufPtr;
 
-  while (isalnum(*end) || *end=='_') {
+  while (isalnum(*end) || *end == '_') {
 	end++;
   }
   std::string temp = std::string(bufPtr, end);
@@ -177,16 +177,16 @@ Token &Lexer::peek() {
 /**
 Lookahead of n tokens.
 */
-Token &Lexer::lookahead(uint32_t howMuch) {
-  while (howMuch > unconsumed.size()) {
+Token Lexer::lookahead(size_t HowMuch) {
+  while (HowMuch > unconsumed.size()) {
 	unconsumed.push_back(getNext());
   }
-  return unconsumed.at(howMuch - 1);
+  return unconsumed.at(HowMuch - 1);
 }
 
 Basic::tok::Tag Lexer::findKeyword(std::string_view name) {
   auto result = keywordMap.find(name);
-  if (result!=keywordMap.end()) {
+  if (result != keywordMap.end()) {
 	return result->second;
   }
   return Basic::tok::Tag::identifier;
@@ -206,6 +206,7 @@ Token Lexer::formErr() {
   bufPtr++;
   return {llvm::StringRef(""), Basic::tok::Tag::err};
 }
+Token Lexer::previous() { return tokens.back(); }
 
 Token::Token(llvm::StringRef lexeme, Basic::tok::Tag syntactic_category)
 	: lexeme(lexeme), syntactic_category(syntactic_category) {}

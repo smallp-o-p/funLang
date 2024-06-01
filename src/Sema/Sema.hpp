@@ -12,18 +12,19 @@ class Scope;
 class Scope {
   llvm::StringMap<Decl *> symTable;
   std::shared_ptr<Scope> parentScope;
-  FunctionNode *currentFunction;
 public:
-  Scope() : parentScope(nullptr), symTable(llvm::StringMap<Decl *>()), currentFunction(nullptr) {}
+  Scope() : parentScope(nullptr) {
+	symTable = llvm::StringMap<Decl *>();
+  }
   explicit Scope(std::shared_ptr<Scope> parent)
-	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()), currentFunction(nullptr) {}
+	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()) {}
   Scope(std::shared_ptr<Scope> parent, FunctionNode *enclosingFn)
-	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()), currentFunction(enclosingFn) {}
+	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()) {}
   bool insert(Decl *decl) { return symTable.insert({decl->getName(), decl}).second; }
   std::shared_ptr<Scope> &getParent() { return parentScope; }
   Decl *find(llvm::StringRef varName) {
 	auto found = symTable.find(varName);
-	if (found==symTable.end()) {
+	if (found == symTable.end()) {
 	  return nullptr;
 	}
 	return found->second;
@@ -35,10 +36,11 @@ private:
   std::shared_ptr<Scope> currentScope;
   std::shared_ptr<DiagEngine> diags;
   std::unique_ptr<TypeUse> currentFnRetType;
+  std::unique_ptr<Scope> baseTypeTable;
   void init();
 public:
   explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
-	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)) {
+	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)), baseTypeTable(std::make_unique<Scope>()) {
 	init();
   }
 
@@ -56,6 +58,13 @@ public:
   bool actOnFnCall(FunctionCall &fnCall);
   bool actOnTopLevelDecl(Decl &decl);
   bool actOnStructVarDecl(VarDeclStmt &declStmt);
+
+  TypeDecl *getBaseType(llvm::StringRef type) {
+	Decl *found = baseTypeTable->find(type);
+	assert(found && "Tried to lookup base type that does not exist");
+	return llvm::dyn_cast<TypeDecl>(found);
+  }
+
   Decl *lookup(llvm::StringRef var) {
 	std::shared_ptr<Scope> s = currentScope;
 	while (s) {
