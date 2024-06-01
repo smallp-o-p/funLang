@@ -21,7 +21,7 @@ private:
 
   llvm::StringRef lexeme; // string ref because we need the pointer to the location in the memory buffer
   Basic::tok::Tag syntactic_category;
-  Token(llvm::StringRef lexeme, Basic::tok::Tag syntactic_category);
+  Token(llvm::StringRef Lexeme, Basic::tok::Tag SyntacticCategory);
 public:
 
   Basic::tok::Tag getTag() const { return syntactic_category; }
@@ -50,10 +50,10 @@ public:
   }
 
   llvm::SMRange getLocRange() {
-	llvm::SMLoc end = llvm::SMLoc::getFromPointer(lexeme.data() + lexeme.size());
-	assert(end.isValid());
+	llvm::SMLoc End = llvm::SMLoc::getFromPointer(lexeme.data() + lexeme.size());
+	assert(End.isValid());
 	return {llvm::SMLoc::getFromPointer(lexeme.data()),
-			end};
+			End};
   }
 
   bool is(Basic::tok::Tag K) const { return K == syntactic_category; }
@@ -67,22 +67,22 @@ private:
 	#include "defs/TokenTags.def"
   }
 
-  Token formToken(const char *tokEnd, Basic::tok::Tag kind);
+  Token formToken(const char *TokEnd, Basic::tok::Tag Kind);
 
   Token formErr();
 
-  void addKeyword(const std::string &kw, Basic::tok::Tag tag) {
-	keywordMap.insert(std::make_pair(kw, tag));
+  void addKeyword(const std::string &Kw, Basic::tok::Tag Tag) {
+	keywordMap.insert(std::make_pair(Kw, Tag));
   }
 
-  Basic::tok::Tag findKeyword(std::string_view name);
+  Basic::tok::Tag findKeyword(std::string_view Name);
   std::vector<Token> tokens;    // keep track of old tokens for error messages
   std::deque<Token> unconsumed; // unconsumed tokens that are stored if we looked ahead.
   Token lexString();
-  Token lexNum(bool negative = false);
+  Token lexNum();
   Token lexIdentifier();
   Token getNext();
-  bool nextIs(char c);
+  bool nextIs(char C);
 
 private:
   std::shared_ptr<llvm::SourceMgr> srcManager;
@@ -91,10 +91,10 @@ private:
   llvm::StringRef::iterator bufPtr;
   uint32_t currentBuffer = 0;
 public:
-  Lexer(const std::shared_ptr<llvm::SourceMgr> &srcMgr, DiagEngine &diags)
-	  : srcManager(srcMgr), diagnostics(diags) {
-	currentBuffer = srcMgr->getMainFileID();
-	curBuf = srcMgr->getMemoryBuffer(currentBuffer)->getBuffer();
+  Lexer(const std::shared_ptr<llvm::SourceMgr> &SrcMgr, DiagEngine &Diags)
+	  : srcManager(SrcMgr), diagnostics(Diags) {
+	currentBuffer = SrcMgr->getMainFileID();
+	curBuf = SrcMgr->getMemoryBuffer(currentBuffer)->getBuffer();
 	bufPtr = curBuf.begin();
 	addKeywords();
   }
@@ -103,8 +103,8 @@ public:
 	return llvm::SMLoc::getFromPointer(bufPtr);
   }
 
-  llvm::SMLoc getLocFrom(const char *ptr) {
-	return llvm::SMLoc::getFromPointer(ptr - 1);
+  static llvm::SMLoc getLocFrom(const char *Ptr) {
+	return llvm::SMLoc::getFromPointer(Ptr - 1);
   }
 
   Token &advance();

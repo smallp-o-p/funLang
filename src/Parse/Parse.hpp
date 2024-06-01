@@ -8,7 +8,7 @@
 #include <memory>
 #include <utility>
 
-enum currentNT { STMT, FUNCTION }; // what non-terminal we failed to parse
+enum CurrentNonTerminal { STMT, FUNCTION }; // what non-terminal we failed to parse
 using namespace funLang;
 class Parser {
 private:
@@ -19,12 +19,12 @@ private:
   bool error;
 
 public:
-  Parser(std::unique_ptr<Lexer> lex, DiagEngine &diags, std::unique_ptr<SemaAnalyzer> sema)
-	  : lexer(std::move(lex)), error(false), diags(diags), semantics(std::move(sema)) {}
+  Parser(std::unique_ptr<Lexer> Lex, DiagEngine &Diags, std::unique_ptr<SemaAnalyzer> Sema)
+	  : lexer(std::move(Lex)), error(false), diags(Diags), semantics(std::move(Sema)) {}
   bool atEnd();
   bool isOneOf(std::initializer_list<Basic::tok::Tag> Tok, bool Peeking);
   Token peek();
-  Token &previous();
+  Token previous();
   Token &advance();
   bool expect(Basic::tok::Tag Tok);
   bool check(Basic::tok::Tag Tok);
@@ -32,7 +32,7 @@ public:
   void reportExpect(Basic::tok::Tag Expected, Token Received);
   void emitWarning(unsigned int DiagId, llvm::SMLoc Loc, llvm::StringRef Name);
 public:
-  std::unique_ptr<CompilationUnit> functions();
+  std::unique_ptr<CompilationUnit> program();
   std::unique_ptr<TopLevelDecls> topLevels();
   std::unique_ptr<FunctionNode> function();
   std::unique_ptr<TypeDecl> typeDecl();
@@ -57,8 +57,5 @@ public:
   std::unique_ptr<Expr> primary();
   std::unique_ptr<FunctionCall> fnCall();
   std::unique_ptr<CallArgList> callArgs();
-  bool recoverFromError(currentNT WhereWeFailed);
-
-public:
-  std::unique_ptr<CompilationUnit> program();
+  bool recoverFromError(CurrentNonTerminal WhereWeFailed);
 };

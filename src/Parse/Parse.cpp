@@ -9,7 +9,7 @@
 
 Token Parser::peek() { return lexer->peek(); }
 bool Parser::check(Basic::tok::Tag Tok) { return peek().getTag() == Tok; }
-Token &Parser::previous() { return lexer->previous(); }
+Token Parser::previous() { return lexer->previous(); }
 Token &Parser::advance() { return lexer->advance(); }
 bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> ToExpect,
 					 bool Peeking = true) {
@@ -39,7 +39,7 @@ void Parser::emitWarning(unsigned int DiagId, llvm::SMLoc Loc,
 
 Token Parser::lookahead(uint32_t HowMuch) { return lexer->lookahead(HowMuch); }
 
-bool Parser::recoverFromError(currentNT WhereWeFailed) {
+bool Parser::recoverFromError(CurrentNt WhereWeFailed) {
   error = true;
   switch (WhereWeFailed) {
   case STMT: {
@@ -122,7 +122,7 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
-  Token &Id = previous();
+  Token Id = previous();
   if (!expect(Basic::tok::l_brace)) {
 	return nullptr;
   }
@@ -224,7 +224,7 @@ std::unique_ptr<ArgDecl> Parser::arg() {
   if (!expect(Basic::tok::Tag::identifier)) {
 	return nullptr;
   }
-  Token &Id = previous();
+  Token Id = previous();
 
   return std::make_unique<ArgDecl>(std::move(TNode), Id.getLexeme(), Id.getLoc());
 }
@@ -248,7 +248,7 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
 	  S = simpleStmt();
 	}
 	if (!S) {
-	  if (!recoverFromError(currentNT::STMT)) {
+	  if (!recoverFromError(CurrentNt::STMT)) {
 		return nullptr;
 	  }
 	} else {
@@ -313,7 +313,7 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
 	return nullptr;
   }
 
-  Token &Id = previous();
+  Token Id = previous();
 
   if (check(Basic::tok::Tag::semi)) {
 	return std::make_unique<VarDeclStmt>(std::move(TypeNode), Id.getLexeme(), Id.getLoc());
@@ -559,7 +559,7 @@ std::unique_ptr<FunctionCall> Parser::fnCall() {
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
-  Token &Id = previous();
+  Token Id = previous();
   if (!expect(Basic::tok::l_paren)) {
 	return nullptr;
   }

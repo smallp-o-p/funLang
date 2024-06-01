@@ -1,6 +1,5 @@
 #include "Lex.hpp"
 #include "Basic.hpp"
-#include <cstdint>
 
 Token Lexer::getNext() {
   while (*bufPtr && iswspace(*bufPtr)) {
@@ -62,8 +61,6 @@ Token Lexer::getNext() {
 	  return formToken(bufPtr + 2, Basic::tok::Tag::minusequal);
 	} else if (nextIs('-')) {
 	  return formToken(bufPtr + 2, Basic::tok::Tag::minusminus);
-	} else if (isdigit(*(bufPtr + 1))) {
-	  return lexNum(true);
 	} else {
 	  return formToken(bufPtr + 1, Basic::tok::Tag::minus);
 	}
@@ -97,56 +94,55 @@ Token Lexer::getNext() {
   }
 }
 
-bool Lexer::nextIs(char c) {
-  if (*(bufPtr + 1) == c) {
+bool Lexer::nextIs(char C) {
+  if (*(bufPtr + 1) == C) {
 	return true;
   }
   return false;
 }
 
 Token Lexer::lexString() {
-  auto end = bufPtr + 1;
-  while (*end && *end++ != '\"') {
+  auto End = bufPtr + 1;
+  while (*End && *End++ != '\"') {
   }
-  if (!*end) {
+  if (!*End) {
 	diagnostics.emitDiagMsg(getLocFrom(bufPtr), diag::err_unterminated_char_or_string);
 	return formErr();
   }
-  return formToken(end, Basic::tok::string_literal);
+  return formToken(End, Basic::tok::string_literal);
 }
 
-Token Lexer::lexNum(bool negative) {
-  auto end = negative ? bufPtr + 1 : bufPtr; // handle negative case
-  bool seenDot = false;
-  while (*end && (isdigit(*end) || *end == '.')) {
-	if (seenDot && *end == '.') {
-	  diagnostics.emitDiagMsg(getLocFrom(end + 1), diag::err_unexpected_char, *end);
+Token Lexer::lexNum() {
+  auto End = bufPtr; // handle negative case
+  bool SeenDot = false;
+  while (*End && (isdigit(*End) || *End == '.')) {
+	if (SeenDot && *End == '.') {
+	  diagnostics.emitDiagMsg(getLocFrom(End + 1), diag::err_unexpected_char, *End);
 	  return formErr();
 	}
-	if (*end == '.' && !seenDot) {
-	  seenDot = true;
+	if (*End == '.' && !SeenDot) {
+	  SeenDot = true;
 	}
-	end++;
+	End++;
   }
-  if (!*end) {
+  if (!*End) {
 	return formErr();
   }
-  if (seenDot) {
-	return formToken(end,
+  if (SeenDot) {
+	return formToken(End,
 					 Basic::tok::Tag::floating_constant);
   }
-  return formToken(end,
+  return formToken(End,
 				   Basic::tok::Tag::numeric_constant);
 }
 
 Token Lexer::lexIdentifier() {
-  auto end = bufPtr;
+  auto End = bufPtr;
 
-  while (isalnum(*end) || *end == '_') {
-	end++;
+  while (isalnum(*End) || *End == '_') {
+	End++;
   }
-  std::string temp = std::string(bufPtr, end);
-  return formToken(end, findKeyword(temp));
+  return formToken(End, findKeyword(std::string(bufPtr, End)));
 }
 
 /**
@@ -154,11 +150,11 @@ Token Lexer::lexIdentifier() {
   tokens.
 */
 Token &Lexer::advance() {
-  Token tok = unconsumed.empty() ? getNext() : unconsumed.front();
+  Token Tok = unconsumed.empty() ? getNext() : unconsumed.front();
   if (!unconsumed.empty()) {
 	unconsumed.pop_front();
   }
-  tokens.push_back(tok);
+  tokens.push_back(Tok);
   return tokens.back();
 }
 
@@ -184,10 +180,10 @@ Token Lexer::lookahead(size_t HowMuch) {
   return unconsumed.at(HowMuch - 1);
 }
 
-Basic::tok::Tag Lexer::findKeyword(std::string_view name) {
-  auto result = keywordMap.find(name);
-  if (result != keywordMap.end()) {
-	return result->second;
+Basic::tok::Tag Lexer::findKeyword(std::string_view Name) {
+  auto Result = keywordMap.find(Name);
+  if (Result != keywordMap.end()) {
+	return Result->second;
   }
   return Basic::tok::Tag::identifier;
 }
@@ -196,10 +192,10 @@ bool Lexer::atEnd() {
   return !*bufPtr;
 }
 
-Token Lexer::formToken(const char *tokEnd, Basic::tok::Tag kind) {
-  Token tok = Token{llvm::StringRef(bufPtr, static_cast<size_t>(tokEnd - bufPtr)), kind};
-  bufPtr = tokEnd;
-  return tok;
+Token Lexer::formToken(const char *TokEnd, Basic::tok::Tag Kind) {
+  Token Tok = Token{llvm::StringRef(bufPtr, static_cast<size_t>(TokEnd - bufPtr)), Kind};
+  bufPtr = TokEnd;
+  return Tok;
 }
 
 Token Lexer::formErr() {
@@ -208,5 +204,5 @@ Token Lexer::formErr() {
 }
 Token Lexer::previous() { return tokens.back(); }
 
-Token::Token(llvm::StringRef lexeme, Basic::tok::Tag syntactic_category)
-	: lexeme(lexeme), syntactic_category(syntactic_category) {}
+Token::Token(llvm::StringRef Lexeme, Basic::tok::Tag SyntacticCategory)
+	: lexeme(Lexeme), syntactic_category(SyntacticCategory) {}
