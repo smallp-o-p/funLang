@@ -39,7 +39,7 @@ void Parser::emitWarning(unsigned int DiagId, llvm::SMLoc Loc,
 
 Token Parser::lookahead(uint32_t HowMuch) { return lexer->lookahead(HowMuch); }
 
-bool Parser::recoverFromError(CurrentNt WhereWeFailed) {
+bool Parser::recoverFromError(CurrentNonTerminal WhereWeFailed) {
   error = true;
   switch (WhereWeFailed) {
   case STMT: {
@@ -101,6 +101,7 @@ std::unique_ptr<TopLevelDecls> Parser::topLevels() {
 
 	if (check(Basic::tok::kw_struct)) {
 	  TopLevel = typeDecl();
+	  semantics->actOnStructDecl(*llvm::dyn_cast<TypeDecl>(TopLevel.get()));
 	} else if (isOneOf({Basic::tok::Tag::identifier}) || peek().isBaseType()) {
 	  TopLevel = function();
 	}
@@ -144,22 +145,16 @@ std::unique_ptr<TypeProperties> Parser::typeProperties() {
 	if (check(Basic::tok::Tag::r_brace)) {
 	  break;
 	}
-	std::unique_ptr<VarDeclStmt> DeclStmt = declStmt();
-	if (!DeclStmt) {
+	std::unique_ptr<VarDeclStmt> VarDecl = declStmt();
+	if (!VarDecl) {
 	  return nullptr;
 	}
-	if (!semantics->actOnStructVarDecl(*DeclStmt)) {
-	  return nullptr;
-	}
-	if (Decl *Found = semantics->lookupOneScope(DeclStmt->getName())) {
-	  diags.emitDiagMsg(DeclStmt->getLoc(), diag::err_var_redefinition, DeclStmt->getName());
-	  diags.emitDiagMsg(Found->getLoc(), diag::note_var_redefinition, Found->getName());
-	} else {
+	if (semantics->actOnStructVarDecl(*VarDecl)) {
 	  if (!expect(Basic::tok::semi)) {
 		reportExpect(Basic::tok::semi, previous());
 		return nullptr;
 	  }
-	  Properties.push_back(std::move(DeclStmt));
+	  Properties.push_back(std::move(VarDecl));
 	}
   }
 
@@ -194,7 +189,7 @@ std::unique_ptr<FunctionNode> Parser::function() {
   }
   semantics->exitScope();
   TypeNode = semantics->exitFunction(); // give back
-  return std::make_unique<FunctionNode>(std::move(TypeNode), Id.getLexeme(),
+  return std::make_unique<FunctionNode>(std::move(TypeNode), Id.getLexeme(), std::move(Args),
 										std::move(Compound), Id.getLoc());
 }
 
@@ -248,7 +243,7 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
 	  S = simpleStmt();
 	}
 	if (!S) {
-	  if (!recoverFromError(CurrentNt::STMT)) {
+	  if (!recoverFromError(CurrentNonTerminal::STMT)) {
 		return nullptr;
 	  }
 	} else {

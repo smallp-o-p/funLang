@@ -4,7 +4,7 @@ bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &retExpr) {
   if (!currentFnRetType || !retExpr.getType()) { // poison
 	return true;
   }
-  if (retExpr.getType()->getName()!=currentFnRetType->getType().getName()) {
+  if (retExpr.getType()->getName() != currentFnRetType->getType().getName()) {
 	diags->emitDiagMsg(retExpr.getLoc(),
 					   diag::err_incompatible_ret,
 					   retExpr.getType()->getName(),
@@ -21,6 +21,21 @@ bool funLang::SemaAnalyzer::actOnBinaryOp(BinaryOp &bin) {
 }
 
 bool funLang::SemaAnalyzer::actOnFnCall(FunctionCall &fnCall) {
+  Decl *FunctionLookup = lookup(fnCall.getName());
+  if (!FunctionLookup) {
+	diags->emitDiagMsg(fnCall.getLoc(), diag::err_fn_not_found, fnCall.getName());
+	return false;
+  }
+  auto *FunctionCasted = llvm::dyn_cast<FunctionNode>(FunctionLookup);
+  assert(FunctionCasted && "Function cast from Decl lookup did not work");
+  if (FunctionCasted->getArgDecls().size() != fnCall.getArgs()->getSize()) {
+	diags->emitDiagMsgRange(fnCall.getLoc(), fnCall.getArgs()->getArgsVec().back()->getLoc(),
+							diag::err_wrong_number_of_parameters,
+							FunctionCasted->getName(),
+							std::to_string(FunctionCasted->getArgDecls().size()),
+							std::to_string(fnCall.getArgs()->getSize()));
+	return false;
+  }
   return true;
 }
 
@@ -43,7 +58,7 @@ void funLang::SemaAnalyzer::enterScope() {
 }
 
 bool funLang::SemaAnalyzer::actOnNameUsage(Token &identifier) {
-  assert(identifier.getTag()==Basic::tok::Tag::identifier && "Trying to lookup a tag that isn't an identifier");
+  assert(identifier.getTag() == Basic::tok::Tag::identifier && "Trying to lookup a tag that isn't an identifier");
   if (!lookup(identifier.getLexeme())) {
 	diags->emitDiagMsg(identifier.getLoc(), diag::err_var_not_found, identifier.getLexeme());
 	return false;
@@ -76,24 +91,22 @@ std::unique_ptr<TypeUse> funLang::SemaAnalyzer::exitFunction() {
   return std::move(currentFnRetType);
 }
 
-bool funLang::SemaAnalyzer::actOnTopLevelDecl(Decl &decl) {
-  if (Decl *search = lookup(decl.getName())) {
-	diags->emitDiagMsg(decl.getLoc(), diag::err_toplevel_redefinition, search->getName());
+bool funLang::SemaAnalyzer::actOnTopLevelDecl(Decl &TopLDecl) {
+  if (Decl *search = lookup(TopLDecl.getName())) {
+	diags->emitDiagMsg(TopLDecl.getLoc(), diag::err_toplevel_redefinition, search->getName());
 	diags->emitDiagMsg(search->getLoc(), diag::note_var_redefinition, search->getName());
 	return false;
   }
-  currentScope->insert(&decl);
+  currentScope->insert(&TopLDecl);
   return true;
 }
-bool funLang::SemaAnalyzer::actOnStructVarDecl(VarDeclStmt &declStmt) {
-  if (Expr *expr = declStmt.getExpr()) {
-	if (expr->getExprKind() < Expr::EXPR_INT) {
-	  diags->emitDiagMsg(expr->getLoc(), diag::err_struct_var_initialization_err);
-	  return false;
-	} else if (!(expr->getType()->eq(declStmt.getTypeUse().getType()))) {
-	  return false;
-	}
-	return true;
+
+// check for the expr is done in actOnStructDecl
+bool funLang::SemaAnalyzer::actOnStructVarDecl(VarDeclStmt &DeclStmt) {
+  if (Decl *Found = lookupOneScope(DeclStmt.getName())) {
+	diags->emitDiagMsg(DeclStmt.getLoc(), diag::err_struct_var_redefinition, DeclStmt.getName());
+	diags->emitDiagMsg(Found->getLoc(), diag::note_var_redefinition, Found->getName());
+	return false;
   }
   return true;
 }
@@ -119,4 +132,32 @@ void funLang::SemaAnalyzer::actOnFnArgsList(ArgsList &args) {
   for (auto &arg : args.getArgList()) {
 	currentScope->insert(arg.get());
   }
+}
+
+Decl *funLang::SemaAnalyzer::lookup(llvm::StringRef var) {
+  std::shared_ptr<Scope> s = currentScope;
+  while (s) {
+	Decl *found = s->find(var);
+	if (found) {
+	  return found;
+	} else {
+	  s = s->getParent();
+	}
+  }
+  return nullptr;
+}
+
+bool funLang::SemaAnalyzer::actOnStructDecl(TypeDecl &StructDecl) {
+  auto &Properties = StructDecl.getProperties();
+  bool Success = true;
+  for (auto &StructMember : Properties.getDecls()) {
+	if (StructMember->getExpr()) {
+	  diags->emitDiagMsg(StructMember->getLoc(),
+						 diag::err_struct_var_initialization,
+						 StructMember->getName(),
+						 StructDecl.getName());
+	  Success = false;
+	}
+  }
+  return Success;
 }

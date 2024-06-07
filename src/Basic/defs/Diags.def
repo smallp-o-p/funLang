@@ -19,9 +19,10 @@ DIAG(err_unary, Error, "Unary operation {0} does not correspond with unary opera
 DIAG(err_incompatible_ret,
 	 Error,
 	 "Type of return expression {0} is not compatible with function type declaration of {1}.")
-DIAG(err_struct_var_initialization_err,
+DIAG(err_struct_var_initialization,
 	 Error,
-	 "Cannot initialize default struct declaration with value that is not a literal.")
+	 "Member initialization is disallowed for '{0}' in struct '{1}'.")
+DIAG(err_struct_var_redefinition, Error, "Redefinition of member '{0}' in struct '{1}'")
 DIAG(last_err, Error, "last err")
 DIAG(last_warn, Warning, "last warn")
 

@@ -98,12 +98,20 @@ public:
 	  : Decl(DK_TYPE, name, loc), properties(std::move(properties)) {}
   explicit TypeDecl(llvm::StringRef name) : Decl(DK_TYPE, name), properties(nullptr) {}
 
+  TypeProperties &getProperties() {
+	return *properties;
+  }
+
   static bool classof(const Decl *d) {
 	return d->getKind() == DK_TYPE;
   }
 
   bool eq(TypeDecl &other) {
 	return other.getName() == this->getName();
+  }
+
+  static bool areTypesEqual(TypeDecl &Lhs, TypeDecl &Rhs) {
+	return Lhs.getName() == Rhs.getName();
   }
 };
 
@@ -130,22 +138,6 @@ public:
   std::unordered_map<std::string, std::unique_ptr<Decl>> &getTopLevelMap();
 };
 
-class FunctionNode : public Decl {
-private:
-  std::unique_ptr<TypeUse> retType;
-  std::unique_ptr<CompoundStmt> compound;
-public:
-  FunctionNode(
-	  std::unique_ptr<TypeUse> retType,
-	  llvm::StringRef name,
-	  std::unique_ptr<CompoundStmt> compound,
-	  llvm::SMLoc loc) : retType(std::move(retType)), compound(std::move(compound)), Decl(DK_FN, name, loc) {}
-
-  void accept(funLang::SemaAnalyzer &v) override {}
-  CompoundStmt &getCompound() const { return *compound; }
-  static bool classof(const Decl *D) { return D->getKind() == DK_FN; }
-};
-
 class ArgsList : public Node {
 private:
   std::vector<std::unique_ptr<ArgDecl>> argList;
@@ -165,6 +157,27 @@ public:
 	  : type(std::move(type)), Decl(DK_ARG, name, loc) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
+};
+
+class FunctionNode : public Decl {
+private:
+  std::unique_ptr<TypeUse> retType;
+  std::unique_ptr<ArgsList> argDecls;
+  std::unique_ptr<CompoundStmt> compound;
+public:
+  FunctionNode(
+	  std::unique_ptr<TypeUse> retType,
+	  llvm::StringRef name,
+	  std::unique_ptr<ArgsList> argDecls,
+	  std::unique_ptr<CompoundStmt> compound,
+	  llvm::SMLoc loc)
+	  : retType(std::move(retType)), argDecls(std::move(argDecls)), compound(std::move(compound)),
+		Decl(DK_FN, name, loc) {}
+
+  void accept(funLang::SemaAnalyzer &v) override {}
+  const std::vector<std::unique_ptr<ArgDecl>> &getArgDecls() { return argDecls->getArgList(); };
+  CompoundStmt &getCompound() const { return *compound; }
+  static bool classof(const Decl *D) { return D->getKind() == DK_FN; }
 };
 
 class Stmt : public Node {
@@ -330,6 +343,9 @@ private:
 public:
   explicit TypeProperties(std::vector<std::unique_ptr<VarDeclStmt>> decls)
 	  : decls(std::move(decls)) {}
+  std::vector<std::unique_ptr<VarDeclStmt>> &getDecls() {
+	return decls;
+  }
 };
 
 class Expr : public Stmt {

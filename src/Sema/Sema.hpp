@@ -56,8 +56,9 @@ public:
   bool actOnBinaryOp(BinaryOp &bin);
   void actOnFnArgsList(ArgsList &args);
   bool actOnFnCall(FunctionCall &fnCall);
-  bool actOnTopLevelDecl(Decl &decl);
-  bool actOnStructVarDecl(VarDeclStmt &declStmt);
+  bool actOnTopLevelDecl(Decl &TopLDecl);
+  bool actOnStructVarDecl(VarDeclStmt &DeclStmt);
+  bool actOnStructDecl(TypeDecl &StructDecl);
 
   TypeDecl *getBaseType(llvm::StringRef type) {
 	Decl *found = baseTypeTable->find(type);
@@ -65,18 +66,7 @@ public:
 	return llvm::dyn_cast<TypeDecl>(found);
   }
 
-  Decl *lookup(llvm::StringRef var) {
-	std::shared_ptr<Scope> s = currentScope;
-	while (s) {
-	  Decl *found = s->find(var);
-	  if (found) {
-		return found;
-	  } else {
-		s = s->getParent();
-	  }
-	}
-	return nullptr;
-  }
+  Decl *lookup(llvm::StringRef var);
 
   Decl *lookupOneScope(llvm::StringRef varName) {
 	return currentScope->find(varName);
