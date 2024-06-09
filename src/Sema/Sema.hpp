@@ -66,6 +66,16 @@ public:
 	return llvm::dyn_cast<TypeDecl>(found);
   }
 
+  std::vector<TypeDecl *> getManyTypes(std::initializer_list<llvm::StringRef> TypesToGet) {
+	std::vector<TypeDecl *> List;
+	for (llvm::StringRef TypeName : TypesToGet) {
+	  auto *Found = llvm::dyn_cast<TypeDecl>(baseTypeTable->find(TypeName));
+	  assert(Found && "Did not find a base type in getManyTypes()");
+	  List.push_back(Found);
+	}
+	return List;
+  }
+
   Decl *lookup(llvm::StringRef var);
 
   Decl *lookupOneScope(llvm::StringRef varName) {

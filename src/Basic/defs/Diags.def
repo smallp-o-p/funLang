@@ -15,13 +15,15 @@ DIAG(err_incompatible_type_var_decl,
 	 Error,
 	 "Type of declared variable {0} is {1}, however expression results in a type of {2}")
 DIAG(err_incompatible_binary_operands, Error, "Type of LHS {0} is incompatible with type of RHS {1}")
-DIAG(err_unary, Error, "Unary operation {0} does not correspond with unary operand type {1}")
+DIAG(err_unary_op_incompatible, Error, "Operation '{0}' is incompatible with operand of type '{1}'")
 DIAG(err_incompatible_ret,
 	 Error,
 	 "Type of return expression {0} is not compatible with function type declaration of {1}.")
 DIAG(err_struct_var_initialization,
 	 Error,
 	 "Member initialization is disallowed for '{0}' in struct '{1}'.")
+DIAG(err_access_member_of_type_without_members, Error, "Type '{0}' has no members.")
+DIAG(err_member_does_not_exist, Error, "Type '{0}' has no member named '{1}'")
 DIAG(err_struct_var_redefinition, Error, "Redefinition of member '{0}' in struct '{1}'")
 DIAG(last_err, Error, "last err")
 DIAG(last_warn, Warning, "last warn")

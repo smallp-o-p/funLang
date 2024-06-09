@@ -140,7 +140,7 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
 }
 
 std::unique_ptr<TypeProperties> Parser::typeProperties() {
-  std::vector<std::unique_ptr<VarDeclStmt>> Properties;
+  llvm::StringMap<std::unique_ptr<VarDeclStmt>> Properties;
   while (true) {
 	if (check(Basic::tok::Tag::r_brace)) {
 	  break;
@@ -154,7 +154,8 @@ std::unique_ptr<TypeProperties> Parser::typeProperties() {
 		reportExpect(Basic::tok::semi, previous());
 		return nullptr;
 	  }
-	  Properties.push_back(std::move(VarDecl));
+	  Properties.insert(std::pair<llvm::StringRef, std::unique_ptr<VarDeclStmt>>(VarDecl->getName(),
+																				 std::move(VarDecl)));
 	}
   }
 
@@ -482,7 +483,9 @@ std::unique_ptr<Expr> Parser::unary() {
 	return nullptr;
   }
   if (Opcode != Basic::Op::Unary::NUM_UNARY) {
-	return std::make_unique<UnaryOp>(std::move(PrimaryNode), Opcode);
+	std::unique_ptr<UnaryOp> Unary = std::make_unique<UnaryOp>(std::move(PrimaryNode), Opcode);
+	semantics->actOnUnaryOp(*Unary);
+	return Unary;
   } else {
 	return PrimaryNode;
   }
@@ -522,18 +525,16 @@ std::unique_ptr<Expr> Parser::primary() {
 	case Basic::tok::numeric_constant: {
 	  uint32_t NumBits = llvm::APInt::getSufficientBitsNeeded(Token.getLexeme(), 10);
 	  llvm::APInt ApInt = llvm::APInt(NumBits < 32 ? 32 : 64, Token.getLexeme(), 10);
-	  auto Literal = std::make_unique<IntegerLiteral>(ApInt, Token.getLoc());
-	  if (NumBits > 32) {
-		Literal->setType(semantics->getBaseType("i64"));
-	  } else {
-		Literal->setType(semantics->getBaseType("i32"));
-	  }
-	  return Literal;
+	  auto IntLiteral = std::make_unique<IntegerLiteral>(ApInt, Token.getLoc());
+	  IntLiteral->setType(semantics->getBaseType("floating literal"));
+	  return IntLiteral;
 	}
 	case Basic::tok::floating_constant: {
 	  llvm::APFloat ApFloatSingle =
 		  llvm::APFloat(llvm::APFloat::IEEEdouble(), Token.getLexeme()); //TODO: find out how to use APFloat
-	  return std::make_unique<FloatingLiteral>(ApFloatSingle, Token.getLoc());
+	  std::unique_ptr<FloatingLiteral> FloatLit = std::make_unique<FloatingLiteral>(ApFloatSingle, Token.getLoc());
+	  FloatLit->setType(semantics->getBaseType("floating literal"));
+	  return FloatLit;
 	}
 	case Basic::tok::string_literal: {
 	  auto StrLit = std::make_unique<StringLiteral>(Token.getLexeme().size(), Token.getLexeme(), Token.getLoc());

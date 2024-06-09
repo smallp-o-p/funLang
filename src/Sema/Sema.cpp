@@ -15,6 +15,55 @@ bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &retExpr) {
 }
 
 bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
+  switch (unary.getOp()) {
+//  case Basic::Op::access: {
+//	if (!unary.getExprInput().getType()) {
+//	  return false;
+//	}
+//	if (!unary.getExprInput().getType()->getProperties()) {
+//	  diags->emitDiagMsg(unary.getLoc(), diag::err_access_member_of_type_without_members, unary.getType()->getName());
+//	  return false;
+//	}
+//	NameUsage *Name = llvm::dyn_cast<NameUsage>(&unary.getExprInput());
+//	assert(Name && "Null pointer in Name in actOnUnaryOp");
+//	if (auto *StructMember = unary.getType()->getMember(Name->getLexeme())) {
+//	  unary.setType(&StructMember->getTypeUse().getType());
+//	  return true;
+//	} else {
+//
+//	  diags->emitDiagMsg(unary.getExprInput().getLoc(),
+//						 diag::err_member_does_not_exist,
+//						 unary.getType()->getName(),
+//						 Name->getLexeme());
+//	  return false;
+//	}
+//  }
+  case Basic::Op::unaryMinus:
+  case Basic::Op::preInc:;
+  case Basic::Op::preDec: {
+	if (!unary.getExprInput().getType()->isTypeOfMany({"i32", "i64", "f32", "f64"})) {
+	  diags->emitDiagMsg(unary.getLoc(),
+						 diag::err_unary_op_incompatible,
+						 Basic::Op::getUnaryOpSpelling(unary.getOp()),
+						 unary.getExprInput().getType()->getName());
+
+	  return false;
+	}
+	unary.setType(unary.getExprInput().getType());
+	return true;
+  }
+  case Basic::Op::lNot: {
+	if (!unary.getType()->eq(*getBaseType("bool"))) {
+	  diags->emitDiagMsg(unary.getLoc(),
+						 diag::err_unary_op_incompatible,
+						 Basic::Op::getUnaryOpSpelling(unary.getOp()),
+						 unary.getType()->getName());
+	  return false;
+	}
+	return true;
+  };
+  default: return true; // don't report error
+  }
 }
 
 bool funLang::SemaAnalyzer::actOnBinaryOp(BinaryOp &bin) {
@@ -120,6 +169,9 @@ void funLang::SemaAnalyzer::init() {
   auto stringType = new TypeDecl("string");
   auto voidType = new TypeDecl("void");
 
+  auto IntLiteral = new TypeDecl("integer literal");
+  auto FloatLiteral = new TypeDecl("floating literal");
+
   baseTypeTable->insert(boolType);
   baseTypeTable->insert(i32Type);
   baseTypeTable->insert(i64Type);
@@ -127,7 +179,10 @@ void funLang::SemaAnalyzer::init() {
   baseTypeTable->insert(f64Type);
   baseTypeTable->insert(stringType);
   baseTypeTable->insert(voidType);
+  baseTypeTable->insert(IntLiteral);
+  baseTypeTable->insert(FloatLiteral);
 }
+
 void funLang::SemaAnalyzer::actOnFnArgsList(ArgsList &args) {
   for (auto &arg : args.getArgList()) {
 	currentScope->insert(arg.get());
@@ -148,13 +203,14 @@ Decl *funLang::SemaAnalyzer::lookup(llvm::StringRef var) {
 }
 
 bool funLang::SemaAnalyzer::actOnStructDecl(TypeDecl &StructDecl) {
-  auto &Properties = StructDecl.getProperties();
+  auto *Properties = StructDecl.getProperties();
   bool Success = true;
-  for (auto &StructMember : Properties.getDecls()) {
-	if (StructMember->getExpr()) {
-	  diags->emitDiagMsg(StructMember->getLoc(),
+  for (auto &StructMember : Properties->getDecls()) {
+	auto &Val = StructMember.getValue();
+	if (Val->getExpr()) {
+	  diags->emitDiagMsg(Val->getLoc(),
 						 diag::err_struct_var_initialization,
-						 StructMember->getName(),
+						 Val->getName(),
 						 StructDecl.getName());
 	  Success = false;
 	}

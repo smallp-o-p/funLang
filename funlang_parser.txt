@@ -7,7 +7,6 @@ program
 topLevelDecls
     : functions
     | structs
-    | impls
     ;
 
 structs
@@ -19,11 +18,19 @@ impls
     ;
 
 struct
-    : 'struct' ID '{' args '}'
+    : 'struct' ID '{' structMembers '}'
+    ;
+
+structMembers
+    : structMember*
+    ;
+structMember
+    : type ID ';'
+    : impl
     ;
 
 impl
-    : 'impl '{' functions '}'
+    : 'impl' '{' functions '}'
 
 functions
     : func+

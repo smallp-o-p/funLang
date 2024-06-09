@@ -4,6 +4,9 @@
 #ifndef UNARY_OPERATION
 #define UNARY_OPERATION(ID, SP)
 #endif
+#ifndef POSTFIX_OPERATION
+#define POSTFIX_OPERATION(ID, SP)
+#endif
 
 BINARY_OPERATION(plus, "+")
 BINARY_OPERATION(minus, "-")
@@ -22,13 +25,12 @@ BINARY_OPERATION(ltequals, "<=")
 BINARY_OPERATION(gtequals, ">=")
 BINARY_OPERATION(range, "..")
 
-UNARY_OPERATION(access, ".")
 UNARY_OPERATION(unaryMinus, "-")
 UNARY_OPERATION(preInc, "++")
-UNARY_OPERATION(postInc, "++")
 UNARY_OPERATION(preDec, "--")
-UNARY_OPERATION(postDec, "--")
 UNARY_OPERATION(lNot, "!")
+
+POSTFIX_OPERATION(access, '.')
 
 #undef BINARY_OPERATION
 #undef UNARY_OPERATION

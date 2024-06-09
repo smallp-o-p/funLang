@@ -31,6 +31,7 @@ class FunctionCall;
 class CallArgList;
 class BinaryOp;
 class UnaryOp;
+class PostFix;
 class NameUsage;
 class FloatingLiteral;
 class IntegerLiteral;
@@ -90,6 +91,23 @@ public:
   void accept(funLang::SemaAnalyzer &v) override {};
 };
 
+class TypeProperties {
+private:
+  llvm::StringMap<std::unique_ptr<VarDeclStmt>> decls;
+public:
+  explicit TypeProperties(llvm::StringMap<std::unique_ptr<VarDeclStmt>> Decls)
+	  : decls(std::move(Decls)) {}
+  llvm::StringMap<std::unique_ptr<VarDeclStmt>> &getDecls() {
+	return decls;
+  }
+  VarDeclStmt *lookupMember(llvm::StringRef MemberName) {
+	auto Found = decls.find(MemberName);
+	if (Found != decls.end()) {
+	  return Found->getValue().get();
+	}
+	return nullptr;
+  }
+};
 class TypeDecl : public Decl {
 private:
   std::unique_ptr<TypeProperties> properties;
@@ -98,8 +116,24 @@ public:
 	  : Decl(DK_TYPE, name, loc), properties(std::move(properties)) {}
   explicit TypeDecl(llvm::StringRef name) : Decl(DK_TYPE, name), properties(nullptr) {}
 
-  TypeProperties &getProperties() {
-	return *properties;
+  TypeProperties *getProperties() {
+	return properties.get();
+  }
+
+  VarDeclStmt *getMember(llvm::StringRef MemberName) {
+	assert(properties && "Attempted to access member of nullptr properties");
+	return properties->lookupMember(MemberName);
+  }
+
+  bool memberExists(llvm::StringRef MemberName) {
+	return properties->lookupMember(MemberName);
+  }
+  // TODO: i do not like how this is done, come back and figure out a non string-based way to do this
+  bool isTypeOfMany(std::initializer_list<llvm::StringRef> TypeNames) {
+	return std::any_of(TypeNames.begin(), TypeNames.end(),
+					   [this](llvm::StringRef Name) {
+						 return getName() == Name;
+					   });
   }
 
   static bool classof(const Decl *d) {
@@ -337,17 +371,6 @@ public:
   }
 };
 
-class TypeProperties {
-private:
-  std::vector<std::unique_ptr<VarDeclStmt>> decls;
-public:
-  explicit TypeProperties(std::vector<std::unique_ptr<VarDeclStmt>> decls)
-	  : decls(std::move(decls)) {}
-  std::vector<std::unique_ptr<VarDeclStmt>> &getDecls() {
-	return decls;
-  }
-};
-
 class Expr : public Stmt {
 public:
   enum ExprKind {
@@ -447,6 +470,9 @@ public:
 	  : input(std::move(inp)), op(opc), Expr(ExprKind::EXPR_UNARY, SK_EXPR_UNARY, inp->getLoc()) {}
   void accept(funLang::SemaAnalyzer &v) override {}
   Basic::Op::Unary getOp() { return op; }
+  Expr &getExprInput() {
+	return *input;
+  }
 };
 
 class BinaryOp : public Expr {
