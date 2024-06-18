@@ -1,5 +1,5 @@
-#include "Lex.hpp"
-#include "Basic.hpp"
+#include "Lex/Lex.hpp"
+#include "../../include/Basic/Basic.hpp"
 #include "gtest/gtest.h"
 #include <llvm/Support/InitLLVM.h>
 #include <llvm/Support/SMLoc.h>
@@ -78,7 +78,7 @@ TEST(LexTests, IntNumLiterals) {
   using namespace Basic;
   auto lexer = makeLexer("./lex_IntNumLits.txt");
   Token tok = lexer->advance();
-  while (tok.getTag()!=tok::eof) {
+  while (tok.getTag() != tok::eof) {
 	EXPECT_EQ(tok.getTag(), tok::numeric_constant)
 			<< "\nExpected: " << tok::getTokenName(tok::numeric_constant)
 			<< " Received: " << tok::getTokenName(tok.getTag());
@@ -91,7 +91,7 @@ TEST(LexTests, RealNumLiterals) {
   using namespace Basic;
   auto lexer = makeLexer("./lex_RealNumLits.txt");
   Token tok = lexer->advance();
-  while (tok.getTag()!=tok::eof) {
+  while (tok.getTag() != tok::eof) {
 	EXPECT_EQ(tok.getTag(), tok::floating_constant)
 			<< "\nExpected: " << tok::getTokenName(tok::floating_constant)
 			<< " Received: " << tok::getTokenName(tok.getTag());
@@ -106,7 +106,7 @@ TEST(LexTests, StringLits) {
   EXPECT_NE(nullptr, lex);
 
   Token tok = lex->advance();
-  while (tok.getTag()!=tok::eof) {
+  while (tok.getTag() != tok::eof) {
 	EXPECT_EQ(tok::string_literal, tok.getTag())
 			<< "\nExpected: " << tok::getTokenName(tok::string_literal)
 			<< " Received: " << tok::getTokenName(tok.getTag());

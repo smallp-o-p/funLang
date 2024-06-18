@@ -1,7 +1,5 @@
-#include "AST.hpp"
-#include "Lex.hpp"
-#include "Basic.hpp"
-#include "Sema.hpp"
+#include "AST/AST.hpp"
+#include "Sema/Sema.hpp"
 auto &CompilationUnit::getGlobs() { return globalSymbols; }
 
 std::unordered_map<std::string, std::unique_ptr<Decl>> &TopLevelDecls::getTopLevelMap() {

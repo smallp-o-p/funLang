@@ -1,4 +1,4 @@
-#include "Sema.hpp"
+#include "Sema/Sema.hpp"
 
 bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &retExpr) {
   if (!currentFnRetType || !retExpr.getType()) { // poison
@@ -38,36 +38,37 @@ bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
 //	  return false;
 //	}
 //  }
-  case Basic::Op::unaryMinus:
-  case Basic::Op::preInc:;
-  case Basic::Op::preDec: {
+  case Basic::Op::UO_unaryMinus:
+  case Basic::Op::UO_preInc:;
+  case Basic::Op::UO_preDec: {
 	if (!unary.getExprInput().getType()->isTypeOfMany({"i32", "i64", "f32", "f64"})) {
 	  diags->emitDiagMsg(unary.getLoc(),
 						 diag::err_unary_op_incompatible,
 						 Basic::Op::getUnaryOpSpelling(unary.getOp()),
 						 unary.getExprInput().getType()->getName());
-
+	  unary.setType(nullptr);
 	  return false;
 	}
 	unary.setType(unary.getExprInput().getType());
 	return true;
   }
-  case Basic::Op::lNot: {
+  case Basic::Op::UO_lNot: {
 	if (!unary.getType()->eq(*getBaseType("bool"))) {
 	  diags->emitDiagMsg(unary.getLoc(),
 						 diag::err_unary_op_incompatible,
 						 Basic::Op::getUnaryOpSpelling(unary.getOp()),
 						 unary.getType()->getName());
+	  unary.setType(nullptr);
 	  return false;
 	}
+	unary.setType(getBaseType("bool"));
 	return true;
   };
   default: return true; // don't report error
   }
 }
 
-bool funLang::SemaAnalyzer::actOnBinaryOp(BinaryOp &bin) {
-}
+bool funLang::SemaAnalyzer::actOnBinaryOp(BinaryOp &bin) {}
 
 bool funLang::SemaAnalyzer::actOnFnCall(FunctionCall &fnCall) {
   Decl *FunctionLookup = lookup(fnCall.getName());
@@ -216,4 +217,27 @@ bool funLang::SemaAnalyzer::actOnStructDecl(TypeDecl &StructDecl) {
 	}
   }
   return Success;
+}
+bool funLang::SemaAnalyzer::actOnMultDivOp(BinaryOp &MultiplyOrDivide) {
+  if (MultiplyOrDivide.getLhs().getType()->isTypeOfMany({"i32", "i64"})) {
+
+  }
+}
+bool funLang::SemaAnalyzer::actOnAddSubOp(BinaryOp &AddOrSubtract) {
+  return false;
+}
+bool funLang::SemaAnalyzer::actOnComparisonOp(BinaryOp &CmpOp) {
+  if (!CmpOp.getLhs().getType()->eq(*CmpOp.getRhs().getType())) {
+	diags->emitDiagMsgRange(
+		CmpOp.getLhs().getLoc(),
+		CmpOp.getRhs().getLoc(),
+		diag::err_incompatible_binary_operands,
+		CmpOp.getLhs().getType()->getName(),
+		CmpOp.getRhs().getType()->getName(),
+		Basic::Op::getBinaryOpSpelling(CmpOp.getOp()));
+	CmpOp.setType(nullptr);
+	return false;
+  }
+  CmpOp.setType(getBaseType("bool"));
+  return true;
 }

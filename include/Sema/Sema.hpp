@@ -1,5 +1,5 @@
 #pragma once
-#include "AST.hpp"
+#include "AST/AST.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -54,6 +54,9 @@ public:
   bool actOnReturnStmt(Expr &retExpr);
   bool actOnUnaryOp(UnaryOp &unary);
   bool actOnBinaryOp(BinaryOp &bin);
+  bool actOnAddSubOp(BinaryOp &AddOrSubtract);
+  bool actOnMultDivOp(BinaryOp &MultiplyOrDivide);
+  bool actOnComparisonOp(BinaryOp &CmpOp);
   void actOnFnArgsList(ArgsList &args);
   bool actOnFnCall(FunctionCall &fnCall);
   bool actOnTopLevelDecl(Decl &TopLDecl);

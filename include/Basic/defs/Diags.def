@@ -14,7 +14,9 @@ DIAG(err_incompatible_type_passed, Error, "Formal argument {0} is of type {1}, b
 DIAG(err_incompatible_type_var_decl,
 	 Error,
 	 "Type of declared variable {0} is {1}, however expression results in a type of {2}")
-DIAG(err_incompatible_binary_operands, Error, "Type of LHS {0} is incompatible with type of RHS {1}")
+DIAG(err_incompatible_binary_operands,
+	 Error,
+	 "Type of LHS '{0}' is incompatible with type of RHS '{1}' for operation '{2}'")
 DIAG(err_unary_op_incompatible, Error, "Operation '{0}' is incompatible with operand of type '{1}'")
 DIAG(err_incompatible_ret,
 	 Error,

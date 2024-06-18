@@ -1,7 +1,4 @@
 include_directories(${LLVM_INCLUDE_DIRS})
-include_directories(
-    "${CMAKE_CURRENT_LIST_DIR}/Lex" 
-    "${CMAKE_CURRENT_LIST_DIR}/Parse")
 add_definitions(${LLVM_DEFINITIONS})
 llvm_map_components_to_libnames(llvm_libs support core irreader)
 message(STATUS "LLVM linked!")
@@ -10,3 +7,4 @@ add_subdirectory(Lex)
 add_subdirectory(Parse)
 add_subdirectory(Sema)
 add_subdirectory(Basic)
+add_subdirectory(AST)

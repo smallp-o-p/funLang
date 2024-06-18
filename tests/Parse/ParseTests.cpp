@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
-#include "Parse.hpp"
-#include "Sema.hpp"
+#include "Parse/Parse.hpp"
+#include "Sema/Sema.hpp"
 
 std::unique_ptr<Parser> makeParser(const std::string &Filename) {
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> FileOrErr =

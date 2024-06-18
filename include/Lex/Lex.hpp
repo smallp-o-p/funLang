@@ -1,6 +1,6 @@
 #pragma once
-#include "Diag.hpp"
-#include "Basic.hpp"
+#include "Basic/Diag.hpp"
+#include "Basic/Basic.hpp"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormatVariadicDetails.h"
@@ -64,7 +64,7 @@ private:
   llvm::StringMap<Basic::tok::Tag> keywordMap;
   void addKeywords() {
 	#define KEYWORD(NAME, FLAGS) addKeyword(#NAME, Basic::tok::kw_##NAME);
-	#include "defs/TokenTags.def"
+	#include "Basic/defs/TokenTags.def"
   }
 
   Token formToken(const char *TokEnd, Basic::tok::Tag Kind);

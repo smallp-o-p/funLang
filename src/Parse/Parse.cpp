@@ -1,7 +1,4 @@
-#include "Parse.hpp"
-#include "AST.hpp"
-#include "Lex.hpp"
-#include "Basic.hpp"
+#include "Parse/Parse.hpp"
 #include <initializer_list>
 #include <memory>
 #include <llvm/ADT/APFloat.h>
@@ -344,20 +341,20 @@ std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
   std::unique_ptr<Expr> EqNode = eqExpr();
-  Basic::Op::Binary Opc = Basic::Op::Binary::equals;
+  Basic::Op::Binary Opc = Basic::Op::Binary::BO_equals;
   if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
 			   Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
 			   Basic::tok::Tag::slashequal})) {
 	switch (advance().getTag()) {
-	case Basic::tok::Tag::equal:Opc = Basic::Op::Binary::assign;
+	case Basic::tok::Tag::equal:Opc = Basic::Op::Binary::BO_assign;
 	  break;
-	case Basic::tok::Tag::plusequal:Opc = Basic::Op::Binary::plusassign;
+	case Basic::tok::Tag::plusequal:Opc = Basic::Op::Binary::BO_plusassign;
 	  break;
-	case Basic::tok::Tag::minusequal:Opc = Basic::Op::Binary::minusassign;
+	case Basic::tok::Tag::minusequal:Opc = Basic::Op::Binary::BO_minusassign;
 	  break;
-	case Basic::tok::Tag::starequal:Opc = Basic::Op::Binary::multassign;
+	case Basic::tok::Tag::starequal:Opc = Basic::Op::Binary::BO_multassign;
 	  break;
-	case Basic::tok::Tag::slashequal:Opc = Basic::Op::Binary::divassign;
+	case Basic::tok::Tag::slashequal:Opc = Basic::Op::Binary::BO_divassign;
 	  break;
 	default:return nullptr;
 	}
@@ -380,8 +377,8 @@ std::unique_ptr<Expr> Parser::eqExpr() {
   if (isOneOf({Basic::tok::Tag::equalequal, Basic::tok::Tag::exclaimequal})) {
 	Basic::Op::Binary Opcode =
 		advance().getTag() == Basic::tok::Tag::equalequal
-		? Basic::Op::Binary::equals
-		: Basic::Op::Binary::notequals;
+		? Basic::Op::Binary::BO_equals
+		: Basic::Op::Binary::BO_notequals;
 	std::unique_ptr<Expr> CmpNode2 = cmpExpr();
 
 	if (!CmpNode2) {
@@ -402,13 +399,13 @@ std::unique_ptr<Expr> Parser::cmpExpr() {
 			   Basic::tok::Tag::greater, Basic::tok::Tag::greaterequal})) {
 	Basic::Op::Binary Opcode;
 	switch (advance().getTag()) {
-	case Basic::tok::Tag::less:Opcode = Basic::Op::lt;
+	case Basic::tok::Tag::less:Opcode = Basic::Op::BO_lt;
 	  break;
-	case Basic::tok::Tag::lessequal:Opcode = Basic::Op::ltequals;
+	case Basic::tok::Tag::lessequal:Opcode = Basic::Op::BO_ltequals;
 	  break;
-	case Basic::tok::Tag::greater:Opcode = Basic::Op::gt;
+	case Basic::tok::Tag::greater:Opcode = Basic::Op::BO_gt;
 	  break;
-	case Basic::tok::Tag::greaterequal:Opcode = Basic::Op::gtequals;
+	case Basic::tok::Tag::greaterequal:Opcode = Basic::Op::BO_gtequals;
 	  break;
 	default:return nullptr;
 	}
@@ -429,8 +426,8 @@ std::unique_ptr<Expr> Parser::addExpr() {
   }
   if (isOneOf({Basic::tok::Tag::plus, Basic::tok::Tag::minus})) {
 	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::plus
-							   ? Basic::Op::plus
-							   : Basic::Op::minus;
+							   ? Basic::Op::BO_plus
+							   : Basic::Op::BO_minus;
 	std::unique_ptr<Expr> MultdivNode2 = multdiv();
 	if (!MultdivNode2) {
 	  return nullptr;
@@ -449,8 +446,8 @@ std::unique_ptr<Expr> Parser::multdiv() {
   }
   if (isOneOf({Basic::tok::Tag::star, Basic::tok::Tag::slash})) {
 	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::star
-							   ? Basic::Op::multiply
-							   : Basic::Op::divide;
+							   ? Basic::Op::BO_multiply
+							   : Basic::Op::BO_divide;
 	std::unique_ptr<Expr> UnaryNode2 = unary();
 	if (!UnaryNode2) {
 	  return nullptr;
@@ -467,13 +464,13 @@ std::unique_ptr<Expr> Parser::unary() {
   if (isOneOf(
 	  {tok::plusplus, tok::minusminus, tok::exclaim, tok::Tag::minus})) {
 	switch (advance().getTag()) {
-	case tok::plusplus:Opcode = Basic::Op::Unary::preInc;
+	case tok::plusplus:Opcode = Basic::Op::Unary::UO_preInc;
 	  break;
-	case tok::exclaim:Opcode = Basic::Op::Unary::lNot;
+	case tok::exclaim:Opcode = Basic::Op::Unary::UO_lNot;
 	  break;
-	case tok::minusminus:Opcode = Basic::Op::Unary::preDec;
+	case tok::minusminus:Opcode = Basic::Op::Unary::UO_preDec;
 	  break;
-	case tok::minus:Opcode = Basic::Op::Unary::unaryMinus;
+	case tok::minus:Opcode = Basic::Op::Unary::UO_unaryMinus;
 	  break;
 	default:;
 	}
@@ -511,9 +508,9 @@ std::unique_ptr<Expr> Parser::primary() {
 	  semantics->actOnFnCall(*FncallNode);
 	  return FncallNode;
 	} else { /* identifier only */
-	  Token &VarName = advance();
+	  Token VarName = advance();
 	  semantics->actOnNameUsage(VarName);
-	  std::unique_ptr<NameUsage> Leaf = std::make_unique<NameUsage>(VarName.getLexeme());
+	  std::unique_ptr<NameUsage> Leaf = std::make_unique<NameUsage>(VarName.getLexeme(), VarName.getLoc());
 	  return Leaf;
 	}
   } else if (isOneOf({Basic::tok::floating_constant,

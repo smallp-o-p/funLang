@@ -1,6 +1,6 @@
 #pragma once
-#include "Lex.hpp"
-#include "Basic.hpp"
+#include "Lex/Lex.hpp"
+#include "Basic/Basic.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -126,6 +126,9 @@ public:
   }
 
   bool memberExists(llvm::StringRef MemberName) {
+	if (!properties) {
+	  return false;
+	}
 	return properties->lookupMember(MemberName);
   }
   // TODO: i do not like how this is done, come back and figure out a non string-based way to do this
@@ -385,11 +388,11 @@ public:
   };
   ExprKind kind;
 protected:
-  TypeDecl *resultType;
+  TypeDecl *resultType; // nullptr as a poison value to indicate a bad type to suppress error messages
   bool IsLiteral;
 public:
-  explicit Expr(ExprKind k, StmtKind K) : kind(k), Stmt(K) {};
-  Expr(ExprKind Kind, StmtKind StmtK, llvm::SMLoc Loc) : kind(Kind), Stmt(StmtK, Loc) {};
+  explicit Expr(ExprKind k, StmtKind K) : kind(k), Stmt(K), resultType(nullptr) {};
+  Expr(ExprKind Kind, StmtKind StmtK, llvm::SMLoc Loc) : kind(Kind), Stmt(StmtK, Loc), resultType(nullptr) {};
 
   void accept(funLang::SemaAnalyzer &v);
   void setType(TypeDecl *toSet);
@@ -404,8 +407,8 @@ class NameUsage : public Expr {
 protected:
   llvm::StringRef name;
 public:
-  explicit NameUsage(llvm::StringRef name)
-	  : name(name), Expr(ExprKind::EXPR_LEAF, SK_EXPR_NAME, llvm::SMLoc().getFromPointer(name.data())) {}
+  explicit NameUsage(llvm::StringRef name, llvm::SMLoc Loc)
+	  : name(name), Expr(ExprKind::EXPR_LEAF, SK_EXPR_NAME, Loc) {}
 
   llvm::StringRef getLexeme() { return name; };
   void accept(funLang::SemaAnalyzer &v) override {}
@@ -489,6 +492,7 @@ public:
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr &getLhs() { return *lhs; }
   Expr &getRhs() { return *rhs; }
+  Basic::Op::Binary getOp() { return op; }
   TypeDecl *getLHSType() { return lhs->getType(); }
   TypeDecl *getRHSType() { return rhs->getType(); }
   llvm::SMRange getRange() { return {lhs->getLoc(), rhs->getLoc()}; };

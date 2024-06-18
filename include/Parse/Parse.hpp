@@ -1,9 +1,9 @@
 #pragma once
-#include "AST.hpp"
-#include "Lex.hpp"
-#include "Basic.hpp"
-#include "Diag.hpp"
-#include "Sema.hpp"
+#include "AST/AST.hpp"
+#include "Lex/Lex.hpp"
+#include "Basic/Basic.hpp"
+#include "Basic/Diag.hpp"
+#include "Sema/Sema.hpp"
 #include <initializer_list>
 #include <memory>
 #include <utility>

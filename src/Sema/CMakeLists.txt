@@ -1,18 +1,13 @@
+set(SEMA_HEADER_LIST "${funLang_SOURCE_DIR}/include/Sema/Sema.hpp")
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
-add_library(Sema "")
-target_sources(
-        Sema
-        PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/Sema.cpp
-        PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}/Sema.hpp
-)
+add_library(Sema "" Sema.cpp ${SEMA_HEADER_LIST})
 
 target_include_directories(Sema
         PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${LLVM_INCLUDE_DIRS}
+        ../../include
 )
 target_link_libraries(Sema PUBLIC AST)
 message("Sema current directory is: ${CMAKE_CURRENT_LIST_DIR}")

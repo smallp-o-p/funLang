@@ -1,0 +1,36 @@
+#ifndef BINARY_OPERATION
+#define BINARY_OPERATION(ID, SP)
+#endif
+#ifndef UNARY_OPERATION
+#define UNARY_OPERATION(ID, SP)
+#endif
+#ifndef POSTFIX_OPERATION
+#define POSTFIX_OPERATION(ID, SP)
+#endif
+
+BINARY_OPERATION(BO_plus, "+")
+BINARY_OPERATION(BO_minus, "-")
+BINARY_OPERATION(BO_multiply, "*")
+BINARY_OPERATION(BO_divide, "/")
+BINARY_OPERATION(BO_assign, "=")
+BINARY_OPERATION(BO_plusassign, "+=")
+BINARY_OPERATION(BO_minusassign, "-=")
+BINARY_OPERATION(BO_multassign, "*=")
+BINARY_OPERATION(BO_divassign, "/=")
+BINARY_OPERATION(BO_equals, "==")
+BINARY_OPERATION(BO_notequals, "!=")
+BINARY_OPERATION(BO_lt, "<")
+BINARY_OPERATION(BO_gt, ">")
+BINARY_OPERATION(BO_ltequals, "<=")
+BINARY_OPERATION(BO_gtequals, ">=")
+BINARY_OPERATION(BO_range, "..")
+
+UNARY_OPERATION(UO_unaryMinus, "-")
+UNARY_OPERATION(UO_preInc, "++")
+UNARY_OPERATION(UO_preDec, "--")
+UNARY_OPERATION(UO_lNot, "!")
+
+POSTFIX_OPERATION(access, '.')
+
+#undef BINARY_OPERATION
+#undef UNARY_OPERATION

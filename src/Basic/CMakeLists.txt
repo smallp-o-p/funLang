@@ -1,20 +1,21 @@
+set(BASIC_HEADER_LIST "${funLang_SOURCE_DIR}/include/Basic/Basic.hpp" "${funLang_SOURCE_DIR}/include/Basic/BuiltInTypes.h")
+set(DIAG_HEADER_LIST "${funLang_SOURCE_DIR}/include/Basic/Diag.hpp")
 add_library(Basic ""
         Basic.cpp
-        Basic.hpp)
+        BuiltInTypes.cpp
+        ${BASIC_HEADER_LIST})
 
-target_sources(Basic
-        PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/Diag.cpp
-        ${CMAKE_CURRENT_LIST_DIR}/Basic.cpp
-        PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}/Diag.hpp
-        ${CMAKE_CURRENT_LIST_DIR}/Basic.hpp
-)
+add_library(Diag ""
+        Diag.cpp
+        ${DIAG_HEADER_LIST})
 
 target_include_directories(Basic
         PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}
-        ${CMAKE_CURRENT_LIST_DIR}/defs
+        ../../include
+        ../../include/Basic/defs
 )
-
+target_include_directories(Diag
+        PUBLIC
+        ../../include
+)
 message("Basic current directory is: ${CMAKE_CURRENT_LIST_DIR}")

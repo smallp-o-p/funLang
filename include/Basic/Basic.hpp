@@ -9,7 +9,7 @@
 namespace Basic::tok {
 enum Tag : unsigned short {
 #define TOK(ID) ID,
-#include "TokenTags.def"
+#include "Basic/defs/TokenTags.def"
   NUM_TOKENS
 };
 
@@ -22,7 +22,7 @@ const char *getKwPunctuatorSpelling(Tag tag);
 namespace Basic::Data {
 enum Type : unsigned short {
   #define DATA(ID, SP) ID,
-  #include "BasicDataTypes.def"
+  #include "Basic/defs/BuiltInTypes.def"
   NUM_DATA_TYPES
 };
 const char *getBasicTypeSpelling(Type t);
@@ -33,14 +33,14 @@ namespace Basic::Op {
 
 enum Binary : unsigned short {
 #define BINARY_OPERATION(ID, SP) ID,
-#include "OperationKinds.def"
+#include "Basic/defs/OperationKinds.def"
   NUM_BINARY
 };
 const char *getBinaryOpSpelling(Binary binop);
 
 enum Unary : unsigned short {
 #define UNARY_OPERATION(ID, SP) ID,
-#include "OperationKinds.def"
+#include "Basic/defs/OperationKinds.def"
   NUM_UNARY
 };
 const char *getUnaryOpSpelling(Unary unop);

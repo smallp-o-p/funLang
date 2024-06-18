@@ -1,27 +1,10 @@
-add_library(AST "")
-target_sources(
-        AST
-        PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/AST.cpp
-        PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}/AST.hpp
-)
-
-target_link_libraries(AST PUBLIC Lex Basic Sema)
-
-add_library(Parse "")
-target_sources(
-        Parse
-        PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}/Parse.cpp
-        PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}/Parse.hpp
-)
+set(PARSE_HEADER_INCLUDES "${funLang_SOURCE_DIR}/include/Parse/Parse.hpp")
+add_library(Parse "" Parse.cpp ${PARSE_HEADER_INCLUDES})
 
 target_include_directories(Parse
         PUBLIC
-        ${CMAKE_CURRENT_LIST_DIR}
-)
+        ${LLVM_INCLUDE_DIRS}
+        ../../include)
 target_link_libraries(Parse PUBLIC Lex Basic AST Sema)
 
 message("Parser current directory is: ${CMAKE_CURRENT_LIST_DIR}")

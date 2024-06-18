@@ -1,5 +1,4 @@
-#include "Lex.hpp"
-#include "Basic.hpp"
+#include "Lex/Lex.hpp"
 
 Token Lexer::getNext() {
   while (*bufPtr && iswspace(*bufPtr)) {

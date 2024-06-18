@@ -1,10 +1,18 @@
 cmake_minimum_required(VERSION 3.14)
 project(funLang
         VERSION 0.0.1
-        DESCRIPTION "A beginner's programming language"
+        DESCRIPTION "A somewhat complicated to make programming language"
+        LANGUAGES CXX
 )
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(CMAKE_CXX_EXTENSIONS OFF)
+    set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+endif ()
+
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     message("Using Clang")
     add_compile_options(-fstandalone-debug)
@@ -24,11 +32,9 @@ message(STATUS "LLVM tools: ${LLVM_TOOLS_BINARY_DIR}")
 
 set(NO_RTTI "-fno-rtti")
 add_definitions(${NO_RTTI})
-
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip

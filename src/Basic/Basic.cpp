@@ -2,7 +2,7 @@
 // Created by will on 5/6/24.
 //
 
-#include "Basic.hpp"
+#include "Basic/Basic.hpp"
 #include <cassert>
 
 using namespace Basic;
@@ -58,7 +58,7 @@ const char *Data::getBasicTypeSpelling(Data::Type t) {
   switch (t) {
 	#define DATA(ID, SP) \
     case ##ID: return #SP;
-	#include "BasicDataTypes.def"
+	#include "BuiltInTypes.def"
   default:break;
   }
   return nullptr;

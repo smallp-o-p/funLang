@@ -1,12 +1,13 @@
-#include "Diag.hpp"
+#include "Basic/Diag.hpp"
+
 static const char *diagFmts[] = {
 	#define DIAG(ID, Level, Msg) Msg,
-	#include "Diags.def"
+	#include "Basic/defs/Diags.def"
 };
 
 llvm::SourceMgr::DiagKind diagKind[] = {
 	#define DIAG(ID, Level, Msg) llvm::SourceMgr::DK_##Level,
-	#include "Diags.def"
+	#include "Basic/defs/Diags.def"
 };
 const char *DiagEngine::getDiagText(unsigned int diagID) {
   return diagFmts[diagID];

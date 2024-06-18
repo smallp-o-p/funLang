@@ -9,7 +9,7 @@ namespace diag {
 using namespace llvm;
 enum {
   #define DIAG(ID, Level, Msg) ID,
-  #include "Diags.def"
+  #include "Basic/defs/Diags.def"
 };
 
 }
@@ -36,7 +36,7 @@ public:
 	llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
 	srcMgr->PrintMessage(loc, kind, msg);
 
-	numErrors += (kind==llvm::SourceMgr::DK_Error);
+	numErrors += (kind == llvm::SourceMgr::DK_Error);
   }
 
   template<typename... args>
@@ -47,6 +47,6 @@ public:
 	llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
 	srcMgr->PrintMessage(left, kind, msg, {llvm::SMRange(left, right)});
 
-	numErrors += (kind==llvm::SourceMgr::DK_Error);
+	numErrors += (kind == llvm::SourceMgr::DK_Error);
   }
 };
