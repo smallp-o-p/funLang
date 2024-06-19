@@ -53,9 +53,9 @@ const char *Op::getUnaryOpSpelling(Basic::Op::Unary unop) {
   return nullptr;
 }
 
-const char *Data::getBasicTypeSpelling(Data::Type t) {
-  assert(t > Type::ident);
-  switch (t) {
+const char *Data::getBasicTypeSpelling(Data::Type T) {
+  assert(T < Type::ident);
+  switch (T) {
 	#define DATA(ID, SP) \
     case ##ID: return #SP;
 	#include "BuiltInTypes.def"

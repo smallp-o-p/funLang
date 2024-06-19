@@ -1,8 +1,7 @@
-set(BASIC_HEADER_LIST "${funLang_SOURCE_DIR}/include/Basic/Basic.hpp" "${funLang_SOURCE_DIR}/include/Basic/BuiltInTypes.h")
+set(BASIC_HEADER_LIST "${funLang_SOURCE_DIR}/include/Basic/Basic.hpp")
 set(DIAG_HEADER_LIST "${funLang_SOURCE_DIR}/include/Basic/Diag.hpp")
 add_library(Basic ""
         Basic.cpp
-        BuiltInTypes.cpp
         ${BASIC_HEADER_LIST})
 
 add_library(Diag ""
