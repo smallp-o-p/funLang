@@ -12,6 +12,12 @@ static const char *const tokNames[] = {
 #include "TokenTags.def"
 	nullptr};
 
+static const char *const BuiltInTypes[]{
+#define DATA(ID, SP) SP,
+#include "Basic/defs/BuiltInTypes.def"
+	nullptr
+};
+
 const char *tok::getTokenName(Tag tag) { return tokNames[tag]; }
 const char *tok::getPunctuatorSpelling(Tag tag) {
   switch (tag) {
@@ -19,15 +25,6 @@ const char *tok::getPunctuatorSpelling(Tag tag) {
   case ID:                                                                     \
     return SP;
 #include "TokenTags.def"
-  default:break;
-  }
-  return nullptr;
-}
-const char *tok::getKeywordSpelling(Tag tag) {
-  switch (tag) {
-#define KEYWORD(ID, FLAG)                                                      \
-  case ##ID:  return #ID;
-	#include "TokenTags.def"
   default:break;
   }
   return nullptr;
@@ -54,12 +51,5 @@ const char *Op::getUnaryOpSpelling(Basic::Op::Unary unop) {
 }
 
 const char *Data::getBasicTypeSpelling(Data::Type T) {
-  assert(T < Type::ident);
-  switch (T) {
-	#define DATA(ID, SP) \
-    case ##ID: return #SP;
-	#include "BuiltInTypes.def"
-  default:break;
-  }
-  return nullptr;
+  return BuiltInTypes[T];
 }
