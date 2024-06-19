@@ -1,4 +1,4 @@
-bool returnTrue(){
+bool returnTrue(f32 a){
     return true;
 }
 
