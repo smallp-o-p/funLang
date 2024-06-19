@@ -50,8 +50,8 @@ public:
   void exitScope();
   void actOnVarDeclStmt(VarDeclStmt &declStmt);
   bool actOnNameUsage(Token &identifier);
-  bool actOnFnDecl(FunctionNode &fn);
-  bool actOnReturnStmt(Expr &retExpr);
+  bool actOnFnDecl(FunctionNode &Fn);
+  bool actOnReturnStmt(Expr &RetExpr);
   bool actOnUnaryOp(UnaryOp &unary);
   bool actOnBinaryOp(BinaryOp &bin);
   bool actOnAddSubOp(BinaryOp &AddOrSubtract);
@@ -63,26 +63,11 @@ public:
   bool actOnStructVarDecl(VarDeclStmt &DeclStmt);
   bool actOnStructDecl(TypeDecl &StructDecl);
 
-  TypeDecl *getBaseType(llvm::StringRef type) {
-	Decl *found = baseTypeTable->find(type);
-	assert(found && "Tried to lookup base type that does not exist");
-	return llvm::dyn_cast<TypeDecl>(found);
-  }
-
-  std::vector<TypeDecl *> getManyTypes(std::initializer_list<llvm::StringRef> TypesToGet) {
-	std::vector<TypeDecl *> List;
-	for (llvm::StringRef TypeName : TypesToGet) {
-	  auto *Found = llvm::dyn_cast<TypeDecl>(baseTypeTable->find(TypeName));
-	  assert(Found && "Did not find a base type in getManyTypes()");
-	  List.push_back(Found);
-	}
-	return List;
-  }
-
   Decl *lookup(llvm::StringRef var);
+  Decl *lookupOneScope(llvm::StringRef varName);
+  TypeDecl *lookupType(llvm::StringRef Type);
+  TypeDecl *lookupBaseType(Basic::Data::Type Type);
+  TypeDecl *isEqualToBaseType(std::initializer_list<Basic::Data::Type> Types, TypeDecl *Type);
 
-  Decl *lookupOneScope(llvm::StringRef varName) {
-	return currentScope->find(varName);
-  }
 };
 }

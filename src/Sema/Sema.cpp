@@ -1,39 +1,57 @@
 #include "Sema/Sema.hpp"
+#include <ranges>
 
-bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &retExpr) {
-  if (!currentFnRetType || !retExpr.getType()) { // poison
+bool funLang::SemaAnalyzer::actOnReturnStmt(Expr &RetExpr) {
+  if (!currentFnRetType || !RetExpr.getType()) { // poison
 	return true;
   }
-  if (retExpr.getType()->getName() != currentFnRetType->getType().getName()) {
-	diags->emitDiagMsg(retExpr.getLoc(),
-					   diag::err_incompatible_ret,
-					   retExpr.getType()->getName(),
-					   currentFnRetType->getType().getName());
-	return false;
+  auto *RetExprType = RetExpr.getType();
+  auto *FnRetTypeDecl = currentFnRetType->getTypeDecl();
+  bool Mismatch = false;
+  if (isEqualToBaseType({Basic::Data::i32, Basic::Data::i64}, FnRetTypeDecl)) {
+	if (!RetExprType->eq(lookupBaseType(Basic::Data::int_literal))
+		&& !RetExprType->eq(FnRetTypeDecl)) {
+	  Mismatch = true;
+	}
+  } else if (isEqualToBaseType({Basic::Data::f32, Basic::Data::f64}, FnRetTypeDecl)) {
+	if (!RetExprType->eq(lookupBaseType(Basic::Data::floating_literal)) // arg decl is f32 or f64, but passed arg is not an int literal and not equal to arg decl
+		&& !RetExprType->eq(FnRetTypeDecl)) {
+	  Mismatch = true;
+	}
+  } else {
+	if (!RetExprType->eq(FnRetTypeDecl)) {
+	  Mismatch = true;
+	}
   }
-  return true;
+  if (Mismatch) {
+	diags->emitDiagMsg(RetExpr.getLoc(),
+					   diag::err_incompatible_ret,
+					   FnRetTypeDecl->getName(),
+					   RetExprType->getName());
+  }
+  return !Mismatch;
 }
 
 bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
   switch (unary.getOp()) {
 //  case Basic::Op::access: {
-//	if (!unary.getExprInput().getType()) {
+//	if (!unary.getExprInput().getUnderlyingTypeDecl()) {
 //	  return false;
 //	}
-//	if (!unary.getExprInput().getType()->getProperties()) {
-//	  diags->emitDiagMsg(unary.getLoc(), diag::err_access_member_of_type_without_members, unary.getType()->getName());
+//	if (!unary.getExprInput().getUnderlyingTypeDecl()->getProperties()) {
+//	  diags->emitDiagMsg(unary.getLoc(), diag::err_access_member_of_type_without_members, unary.getUnderlyingTypeDecl()->getName());
 //	  return false;
 //	}
 //	NameUsage *Name = llvm::dyn_cast<NameUsage>(&unary.getExprInput());
 //	assert(Name && "Null pointer in Name in actOnUnaryOp");
-//	if (auto *StructMember = unary.getType()->getMember(Name->getLexeme())) {
-//	  unary.setType(&StructMember->getTypeUse().getType());
+//	if (auto *StructMember = unary.getUnderlyingTypeDecl()->getMember(Name->getLexeme())) {
+//	  unary.setType(&StructMember->getTypeUse().getUnderlyingTypeDecl());
 //	  return true;
 //	} else {
 //
 //	  diags->emitDiagMsg(unary.getExprInput().getLoc(),
 //						 diag::err_member_does_not_exist,
-//						 unary.getType()->getName(),
+//						 unary.getUnderlyingTypeDecl()->getName(),
 //						 Name->getLexeme());
 //	  return false;
 //	}
@@ -41,7 +59,8 @@ bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
   case Basic::Op::UO_unaryMinus:
   case Basic::Op::UO_preInc:;
   case Basic::Op::UO_preDec: {
-	if (!unary.getExprInput().getType()->isTypeOfMany({"i32", "i64", "f32", "f64"})) {
+	TypeDecl *IsEq = isEqualToBaseType({Basic::Data::i32, Basic::Data::i64}, unary.getExprInput().getType());
+	if (!IsEq) {
 	  diags->emitDiagMsg(unary.getLoc(),
 						 diag::err_unary_op_incompatible,
 						 Basic::Op::getUnaryOpSpelling(unary.getOp()),
@@ -53,7 +72,7 @@ bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
 	return true;
   }
   case Basic::Op::UO_lNot: {
-	if (!unary.getType()->eq(*getBaseType("bool"))) {
+	if (!unary.getType()->eq(lookupBaseType(Basic::Data::Type::bool_))) {
 	  diags->emitDiagMsg(unary.getLoc(),
 						 diag::err_unary_op_incompatible,
 						 Basic::Op::getUnaryOpSpelling(unary.getOp()),
@@ -61,7 +80,7 @@ bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
 	  unary.setType(nullptr);
 	  return false;
 	}
-	unary.setType(getBaseType("bool"));
+	unary.setType(llvm::dyn_cast<TypeDecl>(lookupBaseType(Basic::Data::Type::bool_)));
 	return true;
   };
   default: return true; // don't report error
@@ -79,14 +98,44 @@ bool funLang::SemaAnalyzer::actOnFnCall(FunctionCall &fnCall) {
   auto *FunctionCasted = llvm::dyn_cast<FunctionNode>(FunctionLookup);
   assert(FunctionCasted && "Function cast from Decl lookup did not work");
   if (FunctionCasted->getArgDecls().size() != fnCall.getArgs()->getSize()) {
-	diags->emitDiagMsgRange(fnCall.getLoc(), fnCall.getArgs()->getArgsVec().back()->getLoc(),
-							diag::err_wrong_number_of_parameters,
-							FunctionCasted->getName(),
-							std::to_string(FunctionCasted->getArgDecls().size()),
-							std::to_string(fnCall.getArgs()->getSize()));
+	diags->emitDiagMsg(fnCall.getLoc(),
+					   diag::err_wrong_number_of_parameters,
+					   FunctionCasted->getName(),
+					   std::to_string(FunctionCasted->getArgDecls().size()),
+					   std::to_string(fnCall.getArgs()->getSize()));
 	return false;
   }
-  return true;
+  bool Success = false;
+  for (size_t i = 0; i < FunctionCasted->getArgDecls().size(); i++) {
+	bool Mismatch = false;
+	auto *FnCallArgType = fnCall.getArgs()->getArgsVec()[i]->getType();
+	auto *FunctionArgDeclType = FunctionCasted->getArgDecls()[i]->getUnderlyingTypeDecl();
+
+	if (isEqualToBaseType({Basic::Data::i32, Basic::Data::i64}, FunctionArgDeclType)) {
+	  if (!FnCallArgType->eq(lookupBaseType(Basic::Data::int_literal)) // arg decl is i32 or i64, but passed arg is not an int literal and not equal to arg decl
+		  && !FnCallArgType->eq(FunctionArgDeclType)) {
+		Mismatch = true;
+		Success = false;
+	  }
+	} else if (isEqualToBaseType({Basic::Data::f32, Basic::Data::f64}, FunctionArgDeclType)) {
+	  if (!FnCallArgType->eq(lookupBaseType(Basic::Data::floating_literal)) // arg decl is f32 or f64, but passed arg is not an int literal and not equal to arg decl
+		  && !FnCallArgType->eq(FunctionArgDeclType)) {
+		Mismatch = true;
+		Success = false;
+	  }
+	} else {
+	  if (!FnCallArgType->eq(FunctionArgDeclType)) {
+		Mismatch = true;
+	  }
+	}
+	if (Mismatch) {
+	  diags->emitDiagMsg(FnCallArgType->getLoc(),
+						 diag::err_incompatible_type_passed,
+						 FunctionArgDeclType->getName(),
+						 FnCallArgType->getName());
+	}
+  }
+  return Success;
 }
 
 void funLang::SemaAnalyzer::actOnVarDeclStmt(VarDeclStmt &declStmt) {
@@ -116,14 +165,15 @@ bool funLang::SemaAnalyzer::actOnNameUsage(Token &identifier) {
   return true;
 }
 
-bool funLang::SemaAnalyzer::actOnFnDecl(FunctionNode &fn) {
-  if (Decl *same = lookup(fn.getName())) {
-	diags->emitDiagMsg(fn.getLoc(), diag::err_var_redefinition);
-	diags->emitDiagMsg(same->getLoc(),
+bool funLang::SemaAnalyzer::actOnFnDecl(FunctionNode &Fn) {
+  if (Decl *Same = lookup(Fn.getName())) {
+	diags->emitDiagMsg(Fn.getLoc(), diag::err_var_redefinition);
+	diags->emitDiagMsg(Same->getLoc(),
 					   diag::note_var_redefinition,
-					   same->getName());
+					   Same->getName());
 	return false;
   }
+
   return true;
 }
 
@@ -173,21 +223,15 @@ void funLang::SemaAnalyzer::init() {
   auto IntLiteral = new TypeDecl("integer literal");
   auto FloatLiteral = new TypeDecl("floating literal");
 
-  baseTypeTable->insert(boolType);
-  baseTypeTable->insert(i32Type);
-  baseTypeTable->insert(i64Type);
-  baseTypeTable->insert(f32Type);
-  baseTypeTable->insert(f64Type);
-  baseTypeTable->insert(stringType);
-  baseTypeTable->insert(voidType);
-  baseTypeTable->insert(IntLiteral);
-  baseTypeTable->insert(FloatLiteral);
-}
-
-void funLang::SemaAnalyzer::actOnFnArgsList(ArgsList &args) {
-  for (auto &arg : args.getArgList()) {
-	currentScope->insert(arg.get());
-  }
+  currentScope->insert(boolType);
+  currentScope->insert(i32Type);
+  currentScope->insert(i64Type);
+  currentScope->insert(f32Type);
+  currentScope->insert(f64Type);
+  currentScope->insert(stringType);
+  currentScope->insert(voidType);
+  currentScope->insert(IntLiteral);
+  currentScope->insert(FloatLiteral);
 }
 
 Decl *funLang::SemaAnalyzer::lookup(llvm::StringRef var) {
@@ -219,15 +263,14 @@ bool funLang::SemaAnalyzer::actOnStructDecl(TypeDecl &StructDecl) {
   return Success;
 }
 bool funLang::SemaAnalyzer::actOnMultDivOp(BinaryOp &MultiplyOrDivide) {
-  if (MultiplyOrDivide.getLhs().getType()->isTypeOfMany({"i32", "i64"})) {
-
-  }
 }
+
 bool funLang::SemaAnalyzer::actOnAddSubOp(BinaryOp &AddOrSubtract) {
   return false;
 }
+
 bool funLang::SemaAnalyzer::actOnComparisonOp(BinaryOp &CmpOp) {
-  if (!CmpOp.getLhs().getType()->eq(*CmpOp.getRhs().getType())) {
+  if (!CmpOp.getLhs().getType()->eq(CmpOp.getRhs().getType())) {
 	diags->emitDiagMsgRange(
 		CmpOp.getLhs().getLoc(),
 		CmpOp.getRhs().getLoc(),
@@ -238,6 +281,34 @@ bool funLang::SemaAnalyzer::actOnComparisonOp(BinaryOp &CmpOp) {
 	CmpOp.setType(nullptr);
 	return false;
   }
-  CmpOp.setType(getBaseType("bool"));
+  CmpOp.setType(lookupType(Basic::Data::getBasicTypeSpelling(Basic::Data::bool_)));
   return true;
+}
+
+TypeDecl *funLang::SemaAnalyzer::lookupType(llvm::StringRef Type) {
+  if (Decl *Found = lookup(Type)) {
+	if (Found->getKind() != Decl::DK_TYPE) {
+	  return nullptr;
+	}
+	return llvm::dyn_cast<TypeDecl>(Found);
+  }
+  return nullptr;
+}
+
+TypeDecl *funLang::SemaAnalyzer::lookupBaseType(Basic::Data::Type Type) { // wrapper function to type less
+  return lookupType(Basic::Data::getBasicTypeSpelling(Type));
+}
+
+TypeDecl *funLang::SemaAnalyzer::isEqualToBaseType(std::initializer_list<Basic::Data::Type> Types, TypeDecl *Type) {
+  for (Basic::Data::Type T : Types) {
+	TypeDecl *Lookup = lookupType(Basic::Data::getBasicTypeSpelling(T));
+	if (Lookup == Type) {
+	  return Lookup;
+	}
+  }
+  return nullptr;
+}
+
+Decl *funLang::SemaAnalyzer::lookupOneScope(llvm::StringRef varName) {
+  return currentScope->find(varName);
 }

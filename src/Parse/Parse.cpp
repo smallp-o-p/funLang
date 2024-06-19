@@ -68,8 +68,8 @@ std::unique_ptr<TypeUse> Parser::type() {
 					  TypeName.getLexeme());
 	return nullptr;
   } else if (TypeName.isBaseType()) {
-	Decl *BaseType = semantics->getBaseType(TypeName.getLexeme());
-	return std::make_unique<TypeUse>((TypeDecl *)BaseType, TypeName.getLoc());
+	TypeDecl *BaseType = semantics->lookupType(TypeName.getLexeme());
+	return std::make_unique<TypeUse>(BaseType, TypeName.getLoc());
   } else {
 	Decl *FoundType = semantics->lookup(TypeName.getLexeme());
 	if (!FoundType) {
@@ -523,14 +523,14 @@ std::unique_ptr<Expr> Parser::primary() {
 	  uint32_t NumBits = llvm::APInt::getSufficientBitsNeeded(Token.getLexeme(), 10);
 	  llvm::APInt ApInt = llvm::APInt(NumBits < 32 ? 32 : 64, Token.getLexeme(), 10);
 	  auto IntLiteral = std::make_unique<IntegerLiteral>(ApInt, Token.getLoc());
-	  IntLiteral->setType(semantics->getBaseType("floating literal"));
+	  IntLiteral->setType(semantics->lookupBaseType(Basic::Data::int_literal));
 	  return IntLiteral;
 	}
 	case Basic::tok::floating_constant: {
 	  llvm::APFloat ApFloatSingle =
 		  llvm::APFloat(llvm::APFloat::IEEEdouble(), Token.getLexeme()); //TODO: find out how to use APFloat
 	  std::unique_ptr<FloatingLiteral> FloatLit = std::make_unique<FloatingLiteral>(ApFloatSingle, Token.getLoc());
-	  FloatLit->setType(semantics->getBaseType("floating literal"));
+	  FloatLit->setType(semantics->lookupBaseType(Basic::Data::floating_literal));
 	  return FloatLit;
 	}
 	case Basic::tok::string_literal: {
@@ -540,7 +540,7 @@ std::unique_ptr<Expr> Parser::primary() {
 	case Basic::tok::kw_true:
 	case Basic::tok::kw_false: {
 	  auto BoolLit = std::make_unique<BooleanLiteral>(Token.getTag() == Basic::tok::kw_true, Token.getLoc());
-	  BoolLit->setType((semantics->getBaseType("bool")));
+	  BoolLit->setType((semantics->lookupBaseType(Basic::Data::bool_)));
 	  return BoolLit;
 	}
 	}
