@@ -24,7 +24,6 @@ BINARY_OPERATION(BO_gt, ">")
 BINARY_OPERATION(BO_ltequals, "<=")
 BINARY_OPERATION(BO_gtequals, ">=")
 BINARY_OPERATION(BO_range, "..")
-
 UNARY_OPERATION(UO_unaryMinus, "-")
 UNARY_OPERATION(UO_preInc, "++")
 UNARY_OPERATION(UO_preDec, "--")
