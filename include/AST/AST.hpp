@@ -131,24 +131,13 @@ public:
 	}
 	return properties->lookupMember(MemberName);
   }
-  // TODO: i do not like how this is done, come back and figure out a non string-based way to do this
-  bool isTypeOfMany(std::initializer_list<llvm::StringRef> TypeNames) {
-	return std::any_of(TypeNames.begin(), TypeNames.end(),
-					   [this](llvm::StringRef Name) {
-						 return getName() == Name;
-					   });
-  }
 
   static bool classof(const Decl *d) {
 	return d->getKind() == DK_TYPE;
   }
 
-  bool eq(TypeDecl &other) {
-	return other.getName() == this->getName();
-  }
-
-  static bool areTypesEqual(TypeDecl &Lhs, TypeDecl &Rhs) {
-	return Lhs.getName() == Rhs.getName();
+  bool eq(TypeDecl *other) { // If the two pointers are the same then they're referring to the same type
+	return other == this;
   }
 };
 
@@ -160,7 +149,7 @@ public:
   explicit TypeUse(llvm::SMLoc loc) : type(nullptr) {}
   TypeUse(TypeDecl *type, llvm::SMLoc loc) : type(type), Node(loc) {}
 
-  TypeDecl &getType() { return *type; }
+  TypeDecl *getTypeDecl() { return type; }
   void accept(funLang::SemaAnalyzer &v) override {}
 };
 
@@ -192,8 +181,9 @@ private:
 public:
   ArgDecl(std::unique_ptr<TypeUse> type, llvm::StringRef name, llvm::SMLoc loc)
 	  : type(std::move(type)), Decl(DK_ARG, name, loc) {}
-
   void accept(funLang::SemaAnalyzer &v) override {}
+  TypeDecl *getUnderlyingTypeDecl() { return type->getTypeDecl(); }
+
 };
 
 class FunctionNode : public Decl {
@@ -395,8 +385,8 @@ public:
   Expr(ExprKind Kind, StmtKind StmtK, llvm::SMLoc Loc) : kind(Kind), Stmt(StmtK, Loc), resultType(nullptr) {};
 
   void accept(funLang::SemaAnalyzer &v);
-  void setType(TypeDecl *toSet);
-  TypeDecl *getType() { return resultType; };
+  void setType(TypeDecl *ToSet);
+  TypeDecl *getType() { return resultType; }
   ExprKind getExprKind() const { return kind; }
   static bool classof(StmtKind S) {
 	return S == SK_EXPR;

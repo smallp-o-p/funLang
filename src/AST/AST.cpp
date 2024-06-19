@@ -11,6 +11,6 @@ Expr *VarDeclStmt::getExpr() { return expr.get(); }
 std::vector<std::unique_ptr<Stmt>> &CompoundStmt::getStmts() { return stmts; }
 
 void Expr::accept(funLang::SemaAnalyzer &v) { ; }
-void Expr::setType(TypeDecl *toSet) {
-  resultType = toSet;
+void Expr::setType(TypeDecl *ToSet) {
+  resultType = ToSet;
 }
