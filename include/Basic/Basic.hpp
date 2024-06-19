@@ -25,7 +25,7 @@ enum Type : unsigned short {
   #include "Basic/defs/BuiltInTypes.def"
   NUM_DATA_TYPES
 };
-const char *getBasicTypeSpelling(Type t);
+const char *getBasicTypeSpelling(Type T);
 
 };
 
