@@ -5,4 +5,12 @@ compile_commands.json
 .git/
 .idea 
 cmake-build-debug/
+CMakeFiles/
+_deps/
 out
+DartConfiguration.tcl
+CMakeCache.txt
+tests/ClangExperimentation
+tests/ClangExperimentation
+tests/ClangExperimentation/clangFun.cpp
+tests/ClangExperimentation/clangFun.cpp

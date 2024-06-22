@@ -5,15 +5,16 @@ project(funLang
         LANGUAGES CXX
 )
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+set(CMAKE_EXPORT_COMPILE_COMMANDS)
+
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CMAKE_CXX_STANDARD 23)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+endif()
 
-endif ()
-
-if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     message("Using Clang")
     add_compile_options(-fstandalone-debug)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")

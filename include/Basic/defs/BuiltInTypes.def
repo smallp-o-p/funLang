@@ -11,4 +11,5 @@ DATA(string, "string")
 DATA(void_, "void")
 DATA(int_literal, "integer literal")
 DATA(floating_literal, "floating literal")
+DATA(other_type, "other")
 #undef DATA
