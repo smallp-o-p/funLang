@@ -2,74 +2,105 @@
 #include "AST/AST.hpp"
 #include "Basic/Basic.hpp"
 #include "Basic/Diag.hpp"
+#include <llvm/Support/Casting.h>
+#include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/SMLoc.h>
+#include <memory>
 
-bool funLang::SemaAnalyzer::actOnReturnStmt(ReturnStmt &RetExpr) {
+std::unique_ptr<ReturnStmt>
+funLang::SemaAnalyzer::actOnReturnStmt(llvm::SMLoc ReturnLoc,
+                                       std::unique_ptr<Expr> ReturnExpr) {
   if (!currentFnRetType) { // poison
-    return true;
+    return std::make_unique<ReturnStmt>(std::move(ReturnExpr));
+  }
+  if (!ReturnExpr) {
+    BuiltInType *ShouldBeVoid =
+        llvm::dyn_cast<BuiltInType>(currentFnRetType->getTypeDecl());
+    if (!ShouldBeVoid) {
+      diags->emitDiagMsg(ReturnLoc, diag::err_naked_return_on_non_void_fn);
+    } else {
+      if (!ShouldBeVoid->isVoid()) {
+        diags->emitDiagMsg(ReturnLoc, diag::err_return_on_void_fn);
+      }
+    }
+    return std::make_unique<ReturnStmt>(std::move(ReturnExpr));
   }
 
-  auto *RetExprInput = RetExpr.getExprInput();
-  auto *FnRetTypeDecl = currentFnRetType->getTypeDecl();
-  if (!RetExprInput) {
-    if (FnRetTypeDecl->isVoid()) {
-      diags->emitDiagMsg(RetExpr.getLoc(),
-                         diag::err_naked_return_on_non_void_fn);
-      return false;
+  if (llvm::isa<PointerType>(currentFnRetType->getTypeDecl())) {
+    PointerType *Ptr =
+        llvm::dyn_cast<PointerType>(currentFnRetType->getTypeDecl());
+    if (!llvm::isa<PointerType>(ReturnExpr->getType())) {
+      diags->emitDiagMsg(ReturnExpr->getLoc(), diag::err_incompatible_ret,
+                         Ptr->getFullName(), ReturnExpr->getType()->getName());
     } else {
-      return true;
+      PointerType *ExprPtr = llvm::dyn_cast<PointerType>(ReturnExpr->getType());
+
+      if (!Ptr->getPointee()->eq(ExprPtr->getPointee())) {
+        diags->emitDiagMsg(ReturnExpr->getLoc(), diag::err_incompatible_ret,
+                           Ptr->getFullName(),
+                           ReturnExpr->getType()->getName());
+      }
+    }
+
+  } else {
+    if (!currentFnRetType->getTypeDecl()->eq(ReturnExpr->getType())) {
+      diags->emitDiagMsg(ReturnExpr->getLoc(), diag::err_incompatible_ret,
+                         currentFnRetType->getTypeDecl()->getName(),
+                         ReturnExpr->getType()->getName());
     }
   }
-  if (!FnRetTypeDecl->areCompatible(RetExprInput->getType())) {
-    diags->emitDiagMsg(RetExprInput->getLoc(), diag::err_incompatible_ret,
-                       FnRetTypeDecl->getName(),
-                       RetExprInput->getType()->getName());
-    return false;
-  }
-
-  return true;
+  return std::make_unique<ReturnStmt>(std::move(ReturnExpr));
 }
 
-bool funLang::SemaAnalyzer::actOnUnaryOp(UnaryOp &unary) {
-  auto unaryExprInputType = unary.getExprInput().getType();
-  if (!unaryExprInputType) {
-    return true;
+std::unique_ptr<UnaryOp>
+funLang::SemaAnalyzer::actOnUnaryOp(Basic::Op::Unary Op,
+                                    std::unique_ptr<Expr> ExprInput) {
+  if (!llvm::isa<BuiltInType *>(ExprInput->getType())) {
+    diags->emitDiagMsg(ExprInput->getLoc(), diag::err_unary_op_incompatible,
+                       Basic::Op::getUnaryOpSpelling(Op),
+                       ExprInput->getType()->getName());
+    return std::make_unique<UnaryOp>(std::move(ExprInput), Op, nullptr);
   }
-  bool Failed = false;
-  switch (unary.getOp()) {
+  bool Mismatch = false;
+  TypeDecl *resultType = nullptr;
+  BuiltInType *BuiltIn = llvm::dyn_cast<BuiltInType>(ExprInput->getType());
+  switch (Op) {
   case Basic::Op::UO_unaryMinus: {
-    if (!unaryExprInputType->isNumericType()) {
-      Failed = true;
-      break;
+    if (!BuiltIn->isNumericType()) {
+      Mismatch = true;
+    } else {
+      resultType = ExprInput->getType();
     }
-    unary.setType(unaryExprInputType);
+    break;
   }
   case Basic::Op::UO_preInc:
   case Basic::Op::UO_preDec: {
-    if (unaryExprInputType->isIntType()) {
-      Failed = true;
-      break;
+    if (!BuiltIn->isIntType()) {
+      Mismatch = true;
+    } else {
+      resultType = ExprInput->getType();
     }
-    unary.setType(unaryExprInputType);
-  }
-  case Basic::Op::UO_lNot: {
-    if (!unaryExprInputType->isBoolType()) {
-      Failed = true;
-      break;
-    }
-    unary.setType(unaryExprInputType);
-  };
-  default:
     break;
   }
-
-  if (Failed) {
-    diags->emitDiagMsg(unary.getLoc(), diag::err_unary_op_incompatible,
-                       Basic::Op::getUnaryOpSpelling(unary.getOp()),
-                       unary.getType()->getName());
-
-    unary.setType(nullptr);
+  case Basic::Op::UO_lNot: {
+    if (!BuiltIn->isBoolType()) {
+      Mismatch = true;
+    } else {
+      resultType = ExprInput->getType();
+    }
+    break;
   }
-  return Failed;
+  case Basic::Op::NUM_UNARY:
+    llvm_unreachable("Invalid unary operator");
+    break;
+  }
+  if (Mismatch) {
+    diags->emitDiagMsg(ExprInput->getLoc(), diag::err_unary_op_incompatible,
+                       Basic::Op::getUnaryOpSpelling(Op),
+                       ExprInput->getType()->getName());
+  }
+
+  return std::make_unique<UnaryOp>(std::move(ExprInput), Op, resultType);
 }
 
 bool funLang::SemaAnalyzer::actOnFnCall(FunctionCall &fnCall) {
@@ -107,25 +138,45 @@ bool funLang::SemaAnalyzer::actOnFnCall(FunctionCall &fnCall) {
   return Success;
 }
 
-bool funLang::SemaAnalyzer::actOnVarDeclStmt(VarDeclStmt &declStmt) {
-  if (!currentScope->insert(declStmt.toDecl())) {
-    diags->emitDiagMsg(declStmt.getLoc(), diag::err_var_redefinition,
-                       declStmt.getName());
-    Decl *look = lookup(declStmt.getName());
-    diags->emitDiagMsg(look->getLoc(), diag::note_var_redefinition,
-                       look->getName());
-    return false;
-  }
-  if (!declStmt.getExpr()->getType()->areCompatible(
-          declStmt.getTypeUse().getTypeDecl())) {
-    diags->emitDiagMsg(declStmt.getExpr()->getLoc(),
-                       diag::err_incompatible_type_var_decl, declStmt.getName(),
-                       declStmt.getTypeUse().getTypeDecl()->getName(),
-                       declStmt.getExpr()->getType()->getName());
-    return false;
+std::unique_ptr<VarDeclStmt>
+funLang::SemaAnalyzer::actOnVarDeclStmt(std::unique_ptr<TypeUse> Type,
+                                        Token IDTok,
+                                        std::unique_ptr<Expr> ExprInput) {
+  if (Decl *Lookup = lookup(IDTok.getIdentifier())) {
+    diags->emitDiagMsg(IDTok.getLoc(), diag::err_var_redefinition,
+                       IDTok.getIdentifier());
+    diags->emitDiagMsg(Lookup->getLoc(), diag::note_var_redefinition,
+                       Lookup->getName());
+    return std::make_unique<VarDeclStmt>(std::move(Type), IDTok.getIdentifier(),
+                                         std::move(ExprInput), IDTok.getLoc());
   }
 
-  return true;
+  if (llvm::isa<BuiltInType>(Type->getTypeDecl()) &&
+      llvm::isa<BuiltInType>(ExprInput->getType())) {
+    BuiltInType *DeclType = llvm::dyn_cast<BuiltInType>(Type->getTypeDecl());
+    BuiltInType *ExprType = llvm::dyn_cast<BuiltInType>(ExprInput->getType());
+
+    if (!DeclType->areCompatible(ExprType)) {
+      diags->emitDiagMsg(
+          ExprType->getLoc(), diag::err_incompatible_type_var_decl,
+          IDTok.getIdentifier(), DeclType->getName(), ExprType->getName());
+    }
+
+    // TODO: Add an Expr class to represent well-formed, but semantically
+    // incorrect expressions, like the RecoveryExpr AST node in Clang.
+  } else if (!Type->getTypeDecl()->eq(ExprInput->getType())) {
+    diags->emitDiagMsg(ExprInput->getLoc(),
+                       diag::err_incompatible_type_var_decl,
+                       IDTok.getIdentifier(), Type->getTypeDecl()->getName(),
+                       ExprInput->getType()->getName());
+  }
+
+  auto ValidDeclStmt =
+      std::make_unique<VarDeclStmt>(std::move(Type), IDTok.getIdentifier(),
+                                    std::move(ExprInput), IDTok.getLoc());
+  currentScope->insert(ValidDeclStmt->toDecl());
+
+  return ValidDeclStmt;
 }
 
 void funLang::SemaAnalyzer::exitScope() {
@@ -138,15 +189,26 @@ void funLang::SemaAnalyzer::enterScope() {
   currentScope = innerScope;
 }
 
-bool funLang::SemaAnalyzer::actOnNameUsage(Token &identifier) {
-  assert(identifier.getTag() == Basic::tok::Tag::identifier &&
+std::unique_ptr<NameUsage>
+funLang::SemaAnalyzer::actOnNameUsage(Token &Identifier) {
+  assert(Identifier.getTag() == Basic::tok::Tag::identifier &&
          "Trying to lookup a tag that isn't an identifier");
-  if (!lookup(identifier.getLexeme())) {
-    diags->emitDiagMsg(identifier.getLoc(), diag::err_var_not_found,
-                       identifier.getLexeme());
-    return false;
+  Decl *Found = lookup(Identifier.getLexeme());
+  if (!Found) {
+    diags->emitDiagMsg(Identifier.getLoc(), diag::err_var_not_found,
+                       Identifier.getLexeme());
+    return std::make_unique<NameUsage>(Identifier.getIdentifier(),
+                                       Identifier.getLoc());
   }
-  return true;
+  VarDecl *Variable = llvm::dyn_cast<VarDecl>(Found);
+  if (!Variable) {
+    diags->emitDiagMsg(Identifier.getLoc(), diag::err_var_not_found,
+                       Identifier.getLexeme());
+    return nullptr;
+  }
+  return std::make_unique<NameUsage>(Identifier.getIdentifier(),
+                                     Identifier.getLoc(),
+                                     Variable->getUnderlyingTypeDecl());
 }
 
 bool funLang::SemaAnalyzer::actOnFnDecl(FunctionNode &Fn) {
@@ -201,25 +263,26 @@ bool funLang::SemaAnalyzer::actOnStructVarDecl(VarDeclStmt &DeclStmt) {
 }
 
 void funLang::SemaAnalyzer::init() {
-  auto boolType = new TypeDecl("bool", Basic::Data::Type::bool_);
-  auto i32Type = new TypeDecl("i32", Basic::Data::Type::i32);
-  auto i64Type = new TypeDecl("i64", Basic::Data::Type::i64);
-  auto f32Type = new TypeDecl("f32", Basic::Data::f32);
-  auto f64Type = new TypeDecl("f64", Basic::Data::f64);
-  auto stringType = new TypeDecl("string", Basic::Data::string);
-  auto voidType = new TypeDecl("void", Basic::Data::void_);
+  auto BoolTy = new BuiltInType(Basic::Data::Type::bool_, "bool");
+  auto I32Ty = new BuiltInType(Basic::Data::Type::i32, "i32");
+  auto I64Ty = new BuiltInType(Basic::Data::Type::i64, "i64");
+  auto F32Ty = new BuiltInType(Basic::Data::f32, "f32");
+  auto F64Ty = new BuiltInType(Basic::Data::f64, "f64");
+  auto StringTy = new BuiltInType(Basic::Data::string, "string");
+  auto VoidTy = new BuiltInType(Basic::Data::void_, "void");
 
-  auto IntLiteral = new TypeDecl("integer literal", Basic::Data::int_literal);
+  auto IntLiteral =
+      new BuiltInType(Basic::Data::int_literal, "integer literal");
   auto FloatLiteral =
-      new TypeDecl("floating literal", Basic::Data::floating_literal);
+      new BuiltInType(Basic::Data::floating_literal, "floating point literal");
 
-  currentScope->insert(boolType);
-  currentScope->insert(i32Type);
-  currentScope->insert(i64Type);
-  currentScope->insert(f32Type);
-  currentScope->insert(f64Type);
-  currentScope->insert(stringType);
-  currentScope->insert(voidType);
+  currentScope->insert(BoolTy);
+  currentScope->insert(I32Ty);
+  currentScope->insert(I64Ty);
+  currentScope->insert(F32Ty);
+  currentScope->insert(F64Ty);
+  currentScope->insert(StringTy);
+  currentScope->insert(VoidTy);
   currentScope->insert(IntLiteral);
   currentScope->insert(FloatLiteral);
 }
@@ -256,20 +319,7 @@ bool funLang::SemaAnalyzer::actOnAddSubOp(BinaryOp &AddOrSubtract) {
   return false;
 }
 
-bool funLang::SemaAnalyzer::actOnComparisonOp(BinaryOp &CmpOp) {
-  if (!CmpOp.getLhs().getType()->eq(CmpOp.getRhs().getType())) {
-    diags->emitDiagMsgRange(CmpOp.getLhs().getLoc(), CmpOp.getRhs().getLoc(),
-                            diag::err_incompatible_binary_operands,
-                            CmpOp.getLhs().getType()->getName(),
-                            CmpOp.getRhs().getType()->getName(),
-                            Basic::Op::getBinaryOpSpelling(CmpOp.getOp()));
-    CmpOp.setType(nullptr);
-    return false;
-  }
-  CmpOp.setType(
-      lookupType(Basic::Data::getBasicTypeSpelling(Basic::Data::bool_)));
-  return true;
-}
+bool funLang::SemaAnalyzer::actOnComparisonOp(BinaryOp &CmpOp) {}
 
 TypeDecl *funLang::SemaAnalyzer::lookupType(llvm::StringRef Type) {
   if (Decl *Found = lookup(Type)) {
@@ -277,22 +327,6 @@ TypeDecl *funLang::SemaAnalyzer::lookupType(llvm::StringRef Type) {
       return nullptr;
     }
     return llvm::dyn_cast<TypeDecl>(Found);
-  }
-  return nullptr;
-}
-
-TypeDecl *funLang::SemaAnalyzer::lookupBaseType(
-    Basic::Data::Type Type) { // wrapper function to type less
-  return lookupType(Basic::Data::getBasicTypeSpelling(Type));
-}
-
-TypeDecl *funLang::SemaAnalyzer::isEqualToBaseType(
-    std::initializer_list<Basic::Data::Type> Types, TypeDecl *Type) {
-  for (Basic::Data::Type T : Types) {
-    TypeDecl *Lookup = lookupType(Basic::Data::getBasicTypeSpelling(T));
-    if (Lookup == Type) {
-      return Lookup;
-    }
   }
   return nullptr;
 }

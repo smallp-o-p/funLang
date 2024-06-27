@@ -21,11 +21,12 @@ DIAG(err_incompatible_binary_operands,
 DIAG(err_unary_op_incompatible, Error, "Operation '{0}' is incompatible with operand of type '{1}'")
 DIAG(err_incompatible_ret,
 	 Error,
-	 "Type of return expression {0} is not compatible with function type declaration of {1}.")
+	 "Type of return expression <{0}> is not compatible with function type declaration of <{1}>.")
 DIAG(err_struct_var_initialization,
 	 Error,
 	 "Member initialization is disallowed for '{0}' in struct '{1}'.")
-DIAG(err_return_on_void_fn, Error, "Returning expression on function declared 'void'.")
+
+DIAG(err_return_on_void_fn, Error, "Returning expression on function declared \'void\'.")
 DIAG(err_naked_return_on_non_void_fn, Error, "Non-void function should return a value.")
 DIAG(err_access_member_of_type_without_members, Error, "Type '{0}' has no members.")
 DIAG(err_member_does_not_exist, Error, "Type '{0}' has no member named '{1}'")

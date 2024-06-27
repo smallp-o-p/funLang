@@ -79,7 +79,9 @@ expr
     : assign
     ;
 
-return : 'return' expr ';'; 
+return 
+    : 'return' expr? ';'
+    ; 
 
 assign 
     : eqExpr ('='|'+='|'-=') eqExpr

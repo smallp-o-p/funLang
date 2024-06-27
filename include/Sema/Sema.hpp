@@ -1,7 +1,9 @@
 #pragma once
 #include "AST/AST.hpp"
 #include "Basic/Basic.hpp"
+#include "Lex/Lex.hpp"
 #include "llvm/ADT/StringMap.h"
+#include <llvm/Support/SMLoc.h>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -49,13 +51,21 @@ public:
   }
 
   void enterScope();
+
+  std::unique_ptr<VarDeclStmt>
+  actOnVarDeclStmt(std::unique_ptr<TypeUse> Type, Token IDTok,
+                   std::unique_ptr<Expr> ExprInput);
   void enterFunction(std::unique_ptr<TypeUse> retType, ArgsList &args);
   std::unique_ptr<TypeUse> exitFunction();
   void exitScope();
-  bool actOnVarDeclStmt(VarDeclStmt &declStmt);
-  bool actOnNameUsage(Token &identifier);
+  void actOnVarDeclStmt(VarDeclStmt &declStmt);
+
+  std::unique_ptr<NameUsage> actOnNameUsage(Token &Identifier);
   bool actOnFnDecl(FunctionNode &Fn);
-  bool actOnReturnStmt(ReturnStmt &RetExpr);
+  std::unique_ptr<ReturnStmt> actOnReturnStmt(llvm::SMLoc ReturnLoc,
+                                              std::unique_ptr<Expr> ReturnExpr);
+  std::unique_ptr<UnaryOp> actOnUnaryOp(Basic::Op::Unary Op,
+                                        std::unique_ptr<Expr> ExprInput);
   bool actOnUnaryOp(UnaryOp &unary);
   bool actOnBinaryOp(BinaryOp &Binary);
   bool actOnAddSubOp(BinaryOp &AddOrSubtract);
@@ -69,8 +79,5 @@ public:
   Decl *lookup(llvm::StringRef var);
   Decl *lookupOneScope(llvm::StringRef varName);
   TypeDecl *lookupType(llvm::StringRef Type);
-  TypeDecl *lookupBaseType(Basic::Data::Type Type);
-  TypeDecl *isEqualToBaseType(std::initializer_list<Basic::Data::Type> Types,
-                              TypeDecl *Type);
 };
 } // namespace funLang

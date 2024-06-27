@@ -4,7 +4,9 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/StringMap.h"
+#include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/Support/SMLoc.h>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -35,6 +37,7 @@ class BinaryOp;
 class UnaryOp;
 class PostFix;
 class NameUsage;
+class ErrorExpr;
 class FloatingLiteral;
 class IntegerLiteral;
 class BooleanLiteral;
@@ -81,22 +84,24 @@ public:
     DK_FN,
     DK_VAR,
     DK_TYPE,
+    DK_TYPEBUILTIN,
+    DK_TYPEPTR,
     DK_ARG,
     DK_TRAIT,
   };
 
 private:
-  DeclKind kind;
-  llvm::StringRef name;
+  DeclKind Kind;
+  llvm::StringRef DeclName;
 
 public:
   explicit Decl(DeclKind kind, llvm::StringRef name)
-      : kind(kind), name(name), Node(llvm::SMLoc()) {}
+      : Kind(kind), DeclName(name), Node(llvm::SMLoc()) {}
   Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc loc)
-      : kind(kind), name(name), Node(loc) {}
+      : Kind(kind), DeclName(name), Node(loc) {}
 
-  DeclKind getKind() const { return kind; }
-  llvm::StringRef getName() { return name; }
+  DeclKind getKind() const { return Kind; }
+  llvm::StringRef getName() { return DeclName; }
   void accept(funLang::SemaAnalyzer &v) override {};
 };
 
@@ -117,18 +122,25 @@ public:
   }
 };
 
+class TraitDecl : public Decl {
+  TypeDecl *Other;
+
+public:
+  TraitDecl(llvm::StringRef Name, llvm::SMLoc Loc, TypeDecl *Other)
+      : Decl(DK_TRAIT, Name, Loc) {}
+};
+
 class TypeDecl : public Decl {
 private:
   std::unique_ptr<TypeProperties> properties;
-  Basic::Data::Type builtIn;
+  llvm::StringMap<TraitDecl *> Traits;
 
 public:
   TypeDecl(llvm::StringRef name, std::unique_ptr<TypeProperties> properties,
            llvm::SMLoc loc)
-      : Decl(DK_TYPE, name, loc), properties(std::move(properties)),
-        builtIn(Basic::Data::other_type) {}
-  explicit TypeDecl(llvm::StringRef name, Basic::Data::Type T)
-      : Decl(DK_TYPE, name), properties(nullptr) {}
+      : Decl(DK_TYPE, name, loc), properties(std::move(properties)) {}
+  TypeDecl(llvm::StringRef Name, DeclKind DKind)
+      : Decl(DKind, Name), properties(nullptr) {}
 
   TypeProperties *getProperties() { return properties.get(); }
 
@@ -137,35 +149,13 @@ public:
     return properties->lookupMember(MemberName);
   }
 
-  bool eqBaseType(Basic::Data::Type Other) {
-    assert(builtIn != Basic::Data::other_type);
-    return Other == builtIn;
+  static bool classof(const Decl *d) { return d->getKind() == DK_TYPE; }
+  static bool classof(const TypeDecl *TyDecl) {
+    return TyDecl->getKind() == DK_TYPE;
   }
-
-  bool isIntType() {
-    return builtIn == Basic::Data::i32 || builtIn == Basic::Data::i64;
-  }
-
-  bool canImplicitlyPromoteOther(TypeDecl *Other) {
-    return (isIntType() && Other->isIntLiteral()) ||
-           (isFloatType() && Other->isFloatLiteral());
-  }
-
-  bool isVoid() { return builtIn == Basic::Data::void_; }
-
-  bool isIntLiteral() { return builtIn == Basic::Data::int_literal; }
-
-  bool isFloatLiteral() { return builtIn == Basic::Data::floating_literal; }
-
-  bool isFloatType() {
-    return builtIn == Basic::Data::f32 || builtIn == Basic::Data::f64;
-  }
-
-  bool isBoolType() { return builtIn == Basic::Data::bool_; }
-
-  bool isNumericType() {
-    return isFloatType() || isNumericType() || isFloatLiteral() ||
-           isIntLiteral();
+  bool eq(TypeDecl *other) { // If the two pointers are the same then they're
+                             // referring to the same type
+    return other == this;
   }
 
   bool memberExists(llvm::StringRef MemberName) {
@@ -174,15 +164,70 @@ public:
     }
     return properties->lookupMember(MemberName);
   }
+};
 
-  static bool classof(const Decl *d) { return d->getKind() == DK_TYPE; }
+class PointerType : public TypeDecl {
+private:
+  TypeDecl *PointeeType;
 
-  bool eq(TypeDecl *other) { // If the two pointers are the same then they're
-                             // referring to the same type
-    return other == this;
+public:
+  PointerType(TypeDecl *Pointee)
+      : PointeeType(Pointee), TypeDecl("ptr", DK_TYPEPTR) {}
+
+  TypeDecl *getPointee() { return PointeeType; }
+
+  std::string getFullName() {
+    return std::string("pointer to ") + PointeeType->getName().str();
   }
 
-  bool areCompatible(TypeDecl *Other) {
+  static bool classof(const Decl *D) { return D->getKind() == DK_TYPEPTR; }
+};
+
+class BuiltInType : public TypeDecl {
+  friend class funLang::SemaAnalyzer;
+
+private:
+  Basic::Data::Type BuiltIn;
+
+protected:
+  BuiltInType(Basic::Data::Type BuiltIn, llvm::StringRef Name)
+      : TypeDecl(Name, DK_TYPEBUILTIN), BuiltIn(BuiltIn) {}
+
+public:
+  bool eqBaseType(Basic::Data::Type Other) {
+    assert(BuiltIn != Basic::Data::other_type);
+    return Other == BuiltIn;
+  }
+
+  static bool classof(const Decl *D) { return D->getKind() == DK_TYPEBUILTIN; }
+
+  bool isIntType() {
+    return BuiltIn == Basic::Data::i32 || BuiltIn == Basic::Data::i64;
+  }
+
+  bool canImplicitlyPromoteOther(BuiltInType *Other) {
+    return (isIntType() && Other->isIntLiteral()) ||
+           (isFloatType() && Other->isFloatLiteral());
+  }
+
+  bool isVoid() { return BuiltIn == Basic::Data::void_; }
+
+  bool isIntLiteral() { return BuiltIn == Basic::Data::int_literal; }
+
+  bool isFloatLiteral() { return BuiltIn == Basic::Data::floating_literal; }
+
+  bool isFloatType() {
+    return BuiltIn == Basic::Data::f32 || BuiltIn == Basic::Data::f64;
+  }
+
+  bool isBoolType() { return BuiltIn == Basic::Data::bool_; }
+
+  bool isNumericType() {
+    return isFloatType() || isNumericType() || isFloatLiteral() ||
+           isIntLiteral();
+  }
+
+  bool areCompatible(BuiltInType *Other) {
     return canImplicitlyPromoteOther(Other) || eq(Other);
   }
 };
@@ -396,6 +441,7 @@ public:
         Decl(DK_VAR, name, llvm::SMLoc().getFromPointer(name.data())) {}
 
   TypeUse &getType() const { return type; }
+  TypeDecl *getUnderlyingTypeDecl() const { return type.getTypeDecl(); }
   Expr *getExpr() const { return expr; }
   static bool classof(const Decl *D) { return D->getKind() == DK_VAR; }
 };
@@ -411,6 +457,7 @@ public:
               std::unique_ptr<Expr> expression, llvm::SMLoc loc)
       : type(std::move(t)), name(id), expr(std::move(expression)),
         Stmt(SK_VARDECL, loc) {}
+
   VarDeclStmt(std::unique_ptr<TypeUse> t, llvm::StringRef id, llvm::SMLoc loc)
       : type(std::move(t)), name(id), Stmt(SK_VARDECL, loc) {}
 
@@ -437,25 +484,38 @@ public:
     EXPR_FLOAT,
     EXPR_BOOL,
     EXPR_STRING,
+    EXPR_ERR
   };
-  ExprKind kind;
 
 protected:
+  ExprKind EKind;
   TypeDecl *resultType; // nullptr as a poison value to indicate a bad type to
                         // suppress error messages
-  bool IsLiteral;
 
 public:
   explicit Expr(ExprKind k, StmtKind K)
-      : kind(k), Stmt(K), resultType(nullptr) {};
+      : EKind(k), Stmt(K), resultType(nullptr) {};
   Expr(ExprKind Kind, StmtKind StmtK, llvm::SMLoc Loc)
-      : kind(Kind), Stmt(StmtK, Loc), resultType(nullptr) {};
+      : EKind(Kind), Stmt(StmtK, Loc), resultType(nullptr) {};
+
+  Expr(ExprKind Kind, llvm::SMLoc Loc, TypeDecl *Type)
+      : EKind(Kind), Stmt(SK_EXPR), resultType(Type) {}
 
   void accept(funLang::SemaAnalyzer &v);
   void setType(TypeDecl *ToSet);
   TypeDecl *getType() { return resultType; }
-  ExprKind getExprKind() const { return kind; }
+  ExprKind getExprKind() const { return EKind; }
   static bool classof(StmtKind S) { return S == SK_EXPR; }
+};
+
+class ErrorExpr : public Expr {
+protected:
+  std::unique_ptr<Expr> Expression;
+
+public:
+  ErrorExpr(std::unique_ptr<Expr> Expression)
+      : Expression(std::move(Expression)),
+        Expr(EXPR_ERR, Expression->getLoc(), nullptr) {}
 };
 
 class NameUsage : public Expr {
@@ -463,11 +523,16 @@ protected:
   llvm::StringRef name;
 
 public:
-  explicit NameUsage(llvm::StringRef name, llvm::SMLoc Loc)
-      : name(name), Expr(ExprKind::EXPR_LEAF, SK_EXPR_NAME, Loc) {}
+  NameUsage(llvm::StringRef name, llvm::SMLoc Loc, TypeDecl *Type)
+      : name(name), Expr(ExprKind::EXPR_LEAF, Loc, Type) {}
+
+  NameUsage(llvm::StringRef name, llvm::SMLoc Loc)
+      : name(name), Expr(EXPR_ERR, Loc, nullptr) {}
 
   llvm::StringRef getLexeme() { return name; };
   void accept(funLang::SemaAnalyzer &v) override {}
+
+  static bool classof(ExprKind K) { return K == EXPR_LEAF; }
 };
 
 class IntegerLiteral : public Expr {
@@ -518,7 +583,6 @@ public:
       : name(name), args(std::move(arguments)),
         Expr(ExprKind::EXPR_FNCALL, SK_EXPR_FNCALL, loc) {}
 
-  void accept(funLang::SemaAnalyzer &v) override {}
   llvm::StringRef getName() const { return name; }
   const std::unique_ptr<CallArgList> &getArgs() const { return args; }
 
@@ -528,15 +592,20 @@ public:
 class UnaryOp : public Expr {
 private:
   Basic::Op::Unary op;
-  std::unique_ptr<Expr> input;
+  std::unique_ptr<Expr> Input;
 
 public:
   UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
-      : input(std::move(inp)), op(opc),
+      : Input(std::move(inp)), op(opc),
         Expr(ExprKind::EXPR_UNARY, SK_EXPR_UNARY, inp->getLoc()) {}
-  void accept(funLang::SemaAnalyzer &v) override {}
+
+  UnaryOp(std::unique_ptr<Expr> Input, Basic::Op::Unary OpCode,
+          TypeDecl *ResultType)
+      : Input(std::move(Input)), op(OpCode),
+        Expr(EXPR_UNARY, Input->getLoc(), ResultType) {}
   Basic::Op::Unary getOp() { return op; }
-  Expr &getExprInput() { return *input; }
+  Expr &getExprInput() { return *Input; }
+  static bool classof(Expr *E) { return E->getExprKind() == EXPR_UNARY; }
 };
 
 class BinaryOp : public Expr {

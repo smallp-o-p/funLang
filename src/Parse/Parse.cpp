@@ -1,4 +1,5 @@
 #include "Parse/Parse.hpp"
+#include "AST/AST.hpp"
 #include <initializer_list>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/Error.h>
@@ -317,6 +318,7 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   Token Id = previous();
 
   if (check(Basic::tok::Tag::semi)) {
+
     return std::make_unique<VarDeclStmt>(std::move(TypeNode), Id.getLexeme(),
                                          Id.getLoc());
   }
@@ -328,9 +330,9 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   if (!ExprNode) {
     return nullptr;
   }
-  auto Decl = std::make_unique<VarDeclStmt>(std::move(TypeNode), Id.getLexeme(),
-                                            std::move(ExprNode), Id.getLoc());
-  return Decl;
+
+  return semantics->actOnVarDeclStmt(std::move(TypeNode), Id,
+                                     std::move(ExprNode));
 }
 
 std::unique_ptr<ReturnStmt> Parser::returnStmt() {
