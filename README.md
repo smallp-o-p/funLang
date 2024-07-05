@@ -1,5 +1,5 @@
 # funLang
-A statically typed programming language implemented with the LLVM ecosystem created for fun and as a substantial next step to Kaleidoscope.
+A statically typed programming language implemented with the LLVM ecosystem created for fun.
 
 FunLang is implemented with LLVM's srcManager for the front-end stuff like error reporting and source file management. I expect it to go through a few rounds of MLIR to represent some of the cool features I have in mind before finally emitting LLVM IR that can be run where LLVM is supported.  
 
@@ -15,10 +15,11 @@ will be basic, imagine C with some creature-comforts that I really like picked f
   - Error return types for error handling
 - Operations
   - All the basic ones you expect, arithmetic, comparisons
-  - Operator overloading   
 - Data Types
+  - Primities: i32, i64, f32, f64, char, string and arrays 
   - Construct your own data types with *structs*
-  - Data-backed *enums*   
+  - Sum type with enums
+  - A basic trait system
 - Control Flow
   - *If-else* statements
   - *For*, *while*, *infinite* loops    
