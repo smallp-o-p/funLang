@@ -65,6 +65,7 @@ KEYWORD(struct, KEYALL)
 KEYWORD(enum, KEYALL)
 KEYWORD(match, KEYALL)
 KEYWORD(last_keyword, KEYALL)
+KEYWORD(as, KEYALL)
 #undef KEYWORD
 #undef PUNCTUATOR
 #undef TOK

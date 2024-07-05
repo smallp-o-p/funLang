@@ -43,41 +43,59 @@ private:
   std::unique_ptr<Scope> baseTypeTable;
   void init();
 
+protected:
+  bool TypesAreEqual(TypeDecl *LHS, TypeDecl *RHS);
+  bool TypesAreEqualOrCompatible(TypeDecl *LHS, TypeDecl *RHS);
+  Decl *lookup(llvm::StringRef var);
+  Decl *lookupOneScope(llvm::StringRef varName);
+  TypeDecl *lookupType(llvm::StringRef Type);
+
 public:
   explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
       : currentScope(std::make_shared<Scope>()), diags(std::move(diag)),
-        baseTypeTable(std::make_unique<Scope>()) {
-    init();
-  }
+        baseTypeTable(std::make_unique<Scope>()) {}
 
   void enterScope();
+  void exitScope();
 
   std::unique_ptr<VarDeclStmt>
   actOnVarDeclStmt(std::unique_ptr<TypeUse> Type, Token IDTok,
                    std::unique_ptr<Expr> ExprInput);
   void enterFunction(std::unique_ptr<TypeUse> retType, ArgsList &args);
   std::unique_ptr<TypeUse> exitFunction();
-  void exitScope();
-  void actOnVarDeclStmt(VarDeclStmt &declStmt);
 
   std::unique_ptr<NameUsage> actOnNameUsage(Token &Identifier);
-  bool actOnFnDecl(FunctionNode &Fn);
+
+  std::unique_ptr<FunctionNode>
+  actOnFnDecl(std::unique_ptr<TypeUse> Type, Token ID,
+              std::unique_ptr<ArgsList> Args,
+              std::unique_ptr<CompoundStmt> Compound);
+  std::unique_ptr<Expr> actOnFnCall(Token &ID,
+                                    std::unique_ptr<CallArgList> PassedArgs);
   std::unique_ptr<ReturnStmt> actOnReturnStmt(llvm::SMLoc ReturnLoc,
                                               std::unique_ptr<Expr> ReturnExpr);
-  std::unique_ptr<UnaryOp> actOnUnaryOp(Basic::Op::Unary Op,
-                                        std::unique_ptr<Expr> ExprInput);
-  bool actOnUnaryOp(UnaryOp &unary);
-  bool actOnBinaryOp(BinaryOp &Binary);
-  bool actOnAddSubOp(BinaryOp &AddOrSubtract);
-  bool actOnMultDivOp(BinaryOp &MultiplyOrDivide);
-  bool actOnComparisonOp(BinaryOp &CmpOp);
+  std::unique_ptr<Expr> actOnUnaryOp(Basic::Op::Unary Op,
+                                     std::unique_ptr<Expr> ExprInput);
+  std::unique_ptr<Expr> actOnBinaryOp(std::unique_ptr<Expr> LHS,
+                                      Basic::Op::Binary Op,
+                                      std::unique_ptr<Expr> RHS);
+  std::unique_ptr<IntegerLiteral> actOnIntegerLiteral(Token &Literal);
+
+  std::unique_ptr<FloatingLiteral> actOnFloatingLiteral(Token &Literal);
+  std::unique_ptr<BooleanLiteral> actOnBooleanLiteral(Token &literal);
+  std::unique_ptr<TypeUse> actOnTypeUse(Token &TypeName);
+  std::unique_ptr<forStmt> actOnForStmt(std::unique_ptr<Stmt> Init,
+                                        std::unique_ptr<Expr> Cond,
+                                        std::unique_ptr<Expr> Inc,
+                                        std::unique_ptr<CompoundStmt> Body,
+                                        llvm::SMLoc Left, llvm::SMLoc Right);
+  std::unique_ptr<whileStmt>
+  actOnWhileStmt(std::unique_ptr<Expr> Condition,
+                 std::unique_ptr<CompoundStmt> Compound, llvm::SMLoc Left,
+                 llvm::SMLoc Right);
   void actOnFnArgsList(ArgsList &args);
-  bool actOnFnCall(FunctionCall &fnCall);
   bool actOnTopLevelDecl(Decl &TopLDecl);
   bool actOnStructVarDecl(VarDeclStmt &DeclStmt);
   bool actOnStructDecl(TypeDecl &StructDecl);
-  Decl *lookup(llvm::StringRef var);
-  Decl *lookupOneScope(llvm::StringRef varName);
-  TypeDecl *lookupType(llvm::StringRef Type);
 };
 } // namespace funLang

@@ -1,9 +1,11 @@
 #include "Parse/Parse.hpp"
 #include "AST/AST.hpp"
+#include "Basic/Basic.hpp"
 #include <initializer_list>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/Error.h>
 #include <memory>
+#include <utility>
 
 Token Parser::peek() { return lexer->peek(); }
 bool Parser::check(Basic::tok::Tag Tok) { return peek().getTag() == Tok; }
@@ -62,22 +64,13 @@ bool Parser::recoverFromError(CurrentNonTerminal WhereWeFailed) {
 
 std::unique_ptr<TypeUse> Parser::type() {
   Token &TypeName = advance();
-  if (!TypeName.isBaseType() && TypeName.isIdentifier()) {
+  if (!TypeName.isBaseType() && !TypeName.isIdentifier()) {
     diags.emitDiagMsg(TypeName.getLoc(), diag::err_expected,
                       llvm::StringRef("identifier or base type"),
                       TypeName.getLexeme());
     return nullptr;
-  } else if (TypeName.isBaseType()) {
-    TypeDecl *BaseType = semantics->lookupType(TypeName.getLexeme());
-    return std::make_unique<TypeUse>(BaseType, TypeName.getLoc());
-  } else {
-    Decl *FoundType = semantics->lookup(TypeName.getLexeme());
-    if (!FoundType) {
-      diags.emitDiagMsg(TypeName.getLoc(), diag::err_var_not_found,
-                        TypeName.getLexeme());
-    }
-    return std::make_unique<TypeUse>((TypeDecl *)FoundType, TypeName.getLoc());
   }
+  return semantics->actOnTypeUse(TypeName);
 }
 
 std::unique_ptr<CompilationUnit> Parser::program() {
@@ -190,11 +183,9 @@ std::unique_ptr<FunctionNode> Parser::function() {
   if (!Compound) {
     return nullptr;
   }
-  semantics->exitScope();
   TypeNode = semantics->exitFunction(); // give back
-  return std::make_unique<FunctionNode>(std::move(TypeNode), Id.getLexeme(),
-                                        std::move(Args), std::move(Compound),
-                                        Id.getLoc());
+  return semantics->actOnFnDecl(std::move(TypeNode), Id, std::move(Args),
+                                std::move(Compound));
 }
 
 std::unique_ptr<ArgsList> Parser::arguments() {
@@ -246,6 +237,9 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
       S = compoundStmt();
     } else {
       S = simpleStmt();
+      if (!expect(Basic::tok::semi)) {
+        return nullptr;
+      }
     }
     if (!S) {
       if (!recoverFromError(CurrentNonTerminal::STMT)) {
@@ -273,18 +267,12 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   case tok::Tag::kw_f64:
   case tok::Tag::kw_string: {
     StmtInq = declStmt();
-    if (auto *Vardecl = llvm::dyn_cast<VarDeclStmt>(StmtInq.get())) {
-      semantics->actOnVarDeclStmt(*Vardecl);
-    }
     break;
   }
-  case tok::Tag::identifier: {
+  case tok::Tag::identifier: { // TODO: this seems wrong
     if (lookahead(2).is(Basic::tok::equal) ||
         lookahead(2).is(Basic::tok::semi)) {
       StmtInq = declStmt();
-      if (auto *Vardecl = llvm::dyn_cast<VarDeclStmt>(StmtInq.get())) {
-        semantics->actOnVarDeclStmt(*Vardecl);
-      }
     } else {
       StmtInq = expr();
     }
@@ -294,16 +282,108 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
     StmtInq = returnStmt();
     break;
   }
+  case tok::Tag::kw_for: {
+    StmtInq = forStmt();
+    break;
+  }
+  case tok::Tag::kw_while:
+    StmtInq = whileStmt();
+    break;
+  case tok::Tag::kw_loop:
+    StmtInq = loopStmt();
   default:
     return nullptr;
   }
+
   if (!StmtInq) {
+    return nullptr;
+  }
+  return StmtInq;
+}
+
+std::unique_ptr<forStmt> Parser::forStmt() {
+  Token ForTok = advance();
+  assert(ForTok.is(Basic::tok::kw_for) &&
+         "first token in forStmt should be for");
+
+  llvm::SMLoc ForLoc = ForTok.getLoc();
+  if (!expect(Basic::tok::Tag::l_paren)) {
+    return nullptr;
+  }
+
+  std::unique_ptr<Stmt> Init = nullptr;
+  if (!peek().is(Basic::tok::semi)) {
+    if (peek().isBaseType()) {
+      Init = declStmt();
+    } else if (peek().is(Basic::tok::identifier)) {
+      if (lookahead(2).is(Basic::tok::identifier)) {
+        Init = declStmt(); // id id
+      } else {
+        Init = expr();
+      }
+    } else {
+      return nullptr;
+    }
+  }
+  if (!expect(Basic::tok::semi)) {
+    return nullptr;
+  }
+
+  std::unique_ptr<Expr> Cond = expr();
+  if (!Cond) {
     return nullptr;
   }
   if (!expect(Basic::tok::Tag::semi)) {
     return nullptr;
   }
-  return StmtInq;
+  std::unique_ptr<Expr> Inc = expr();
+
+  if (!Inc) {
+    return nullptr;
+  }
+
+  if (!expect(Basic::tok::Tag::r_paren)) {
+    return nullptr;
+  }
+
+  llvm::SMLoc RParenLoc = previous().getLoc();
+
+  std::unique_ptr<CompoundStmt> Compound = compoundStmt();
+
+  if (!Compound) {
+    return nullptr;
+  }
+
+  return semantics->actOnForStmt(std::move(Init), std::move(Cond),
+                                 std::move(Inc), std::move(Compound), ForLoc,
+                                 RParenLoc);
+}
+
+std::unique_ptr<whileStmt> Parser::whileStmt() {
+  Token &WhileTok = advance();
+  assert(WhileTok.is(Basic::tok::kw_while) && "not a while token in while");
+  if (!expect(Basic::tok::l_paren)) {
+    return nullptr;
+  }
+
+  std::unique_ptr<Expr> Condition = expr();
+
+  if (!Condition) {
+    return nullptr;
+  }
+
+  if (!expect(Basic::tok::r_paren)) {
+    return nullptr;
+  }
+  llvm::SMLoc RParenLoc = previous().getLoc();
+  std::unique_ptr<CompoundStmt> Compound = compoundStmt();
+
+  if (!Compound) {
+    return nullptr;
+  }
+
+  return semantics->actOnWhileStmt(std::move(Condition), std::move(Compound),
+                                   WhileTok.getLoc(), RParenLoc);
 }
 
 std::unique_ptr<VarDeclStmt> Parser::declStmt() {
@@ -318,9 +398,7 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
   Token Id = previous();
 
   if (check(Basic::tok::Tag::semi)) {
-
-    return std::make_unique<VarDeclStmt>(std::move(TypeNode), Id.getLexeme(),
-                                         Id.getLoc());
+    return semantics->actOnVarDeclStmt(std::move(TypeNode), Id, nullptr);
   }
   if (!expect(Basic::tok::Tag::equal)) {
     return nullptr;
@@ -336,51 +414,54 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
 }
 
 std::unique_ptr<ReturnStmt> Parser::returnStmt() {
-  if (!expect(Basic::tok::Tag::kw_return)) {
+  Token ReturnToken = advance();
+  if (!ReturnToken.is(Basic::tok::kw_return)) {
     return nullptr;
   }
-  std::unique_ptr<Expr> ExprNode = expr();
-  if (!ExprNode) {
-    return nullptr;
+  std::unique_ptr<Expr> ExprNode = nullptr;
+  if (!check(Basic::tok::semi)) {
+    ExprNode = expr();
+    if (!ExprNode) {
+      return nullptr;
+    }
   }
-  semantics->actOnReturnStmt(*ExprNode);
-
-  return std::make_unique<ReturnStmt>(std::move(ExprNode));
+  return semantics->actOnReturnStmt(ReturnToken.getLoc(), std::move(ExprNode));
 }
 
 std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
   std::unique_ptr<Expr> EqNode = eqExpr();
-  Basic::Op::Binary Opc = Basic::Op::Binary::BO_equals;
+  Basic::Op::Binary Opcode = Basic::Op::Binary::BO_equals;
   if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
                Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
                Basic::tok::Tag::slashequal})) {
     switch (advance().getTag()) {
     case Basic::tok::Tag::equal:
-      Opc = Basic::Op::Binary::BO_assign;
+      Opcode = Basic::Op::Binary::BO_assign;
       break;
     case Basic::tok::Tag::plusequal:
-      Opc = Basic::Op::Binary::BO_plusassign;
+      Opcode = Basic::Op::Binary::BO_plusassign;
       break;
     case Basic::tok::Tag::minusequal:
-      Opc = Basic::Op::Binary::BO_minusassign;
+      Opcode = Basic::Op::Binary::BO_minusassign;
       break;
     case Basic::tok::Tag::starequal:
-      Opc = Basic::Op::Binary::BO_multassign;
+      Opcode = Basic::Op::Binary::BO_multassign;
       break;
     case Basic::tok::Tag::slashequal:
-      Opc = Basic::Op::Binary::BO_divassign;
+      Opcode = Basic::Op::Binary::BO_divassign;
       break;
     default:
       return nullptr;
     }
-    std::unique_ptr<Expr> ExprNode = eqExpr();
-    if (!ExprNode) {
+    std::unique_ptr<Expr> EqNode2 = eqExpr();
+    if (!EqNode2) {
       return nullptr;
     }
-    return std::make_unique<BinaryOp>(std::move(EqNode), std::move(ExprNode),
-                                      Opc);
+    return semantics->actOnBinaryOp(std::move(EqNode), Opcode,
+                                    std::move(EqNode2));
+
   } else {
     return EqNode;
   }
@@ -400,8 +481,8 @@ std::unique_ptr<Expr> Parser::eqExpr() {
     if (!CmpNode2) {
       return nullptr;
     }
-    return std::make_unique<BinaryOp>(std::move(CmpNode), std::move(CmpNode2),
-                                      Opcode);
+    return semantics->actOnBinaryOp(std::move(CmpNode), Opcode,
+                                    std::move(CmpNode2));
   }
   return CmpNode;
 }
@@ -434,8 +515,9 @@ std::unique_ptr<Expr> Parser::cmpExpr() {
     if (!AddNode2) {
       return nullptr;
     }
-    return std::make_unique<BinaryOp>(std::move(AddNode), std::move(AddNode2),
-                                      Opcode);
+
+    return semantics->actOnBinaryOp(std::move(AddNode), Opcode,
+                                    std::move(AddNode2));
   }
   return AddNode;
 }
@@ -453,8 +535,8 @@ std::unique_ptr<Expr> Parser::addExpr() {
     if (!MultdivNode2) {
       return nullptr;
     }
-    return std::make_unique<BinaryOp>(std::move(MultdivNode),
-                                      std::move(MultdivNode2), Opcode);
+    return semantics->actOnBinaryOp(std::move(MultdivNode), Opcode,
+                                    std::move(MultdivNode2));
   }
   return MultdivNode;
 }
@@ -473,9 +555,8 @@ std::unique_ptr<Expr> Parser::multdiv() {
     if (!UnaryNode2) {
       return nullptr;
     }
-
-    return std::make_unique<BinaryOp>(std::move(UnaryNode),
-                                      std::move(UnaryNode2), Opcode);
+    return semantics->actOnBinaryOp(std::move(UnaryNode), Opcode,
+                                    std::move(UnaryNode2));
   }
   return UnaryNode;
 }
@@ -506,13 +587,9 @@ std::unique_ptr<Expr> Parser::unary() {
     return nullptr;
   }
   if (Opcode != Basic::Op::Unary::NUM_UNARY) {
-    std::unique_ptr<UnaryOp> Unary =
-        std::make_unique<UnaryOp>(std::move(PrimaryNode), Opcode);
-    semantics->actOnUnaryOp(*Unary);
-    return Unary;
-  } else {
-    return PrimaryNode;
+    return semantics->actOnUnaryOp(Opcode, std::move(PrimaryNode));
   }
+  return PrimaryNode;
 }
 
 std::unique_ptr<Expr> Parser::primary() {
@@ -528,18 +605,15 @@ std::unique_ptr<Expr> Parser::primary() {
     return ExprNode;
   } else if (check(Basic::tok::identifier)) {
     if (lookahead(2).getTag() == Basic::tok::Tag::l_paren) {
-      std::unique_ptr<FunctionCall> FncallNode = fnCall();
-      if (!FncallNode) {
+      std::unique_ptr<Expr> FunctionCall = fnCall();
+      if (!FunctionCall) {
         return nullptr;
       }
-      semantics->actOnFnCall(*FncallNode);
-      return FncallNode;
+
+      return FunctionCall;
     } else { /* identifier only */
       Token VarName = advance();
-      semantics->actOnNameUsage(VarName);
-      std::unique_ptr<NameUsage> Leaf =
-          std::make_unique<NameUsage>(VarName.getLexeme(), VarName.getLoc());
-      return Leaf;
+      return semantics->actOnNameUsage(VarName);
     }
   } else if (isOneOf({Basic::tok::floating_constant,
                       Basic::tok::numeric_constant, Basic::tok::string_literal,
@@ -549,23 +623,10 @@ std::unique_ptr<Expr> Parser::primary() {
     default:
       return nullptr;
     case Basic::tok::numeric_constant: {
-      uint32_t NumBits =
-          llvm::APInt::getSufficientBitsNeeded(Token.getLexeme(), 10);
-      llvm::APInt ApInt =
-          llvm::APInt(NumBits < 32 ? 32 : 64, Token.getLexeme(), 10);
-      auto IntLiteral = std::make_unique<IntegerLiteral>(ApInt, Token.getLoc());
-      IntLiteral->setType(semantics->lookupBaseType(Basic::Data::int_literal));
-      return IntLiteral;
+      return semantics->actOnIntegerLiteral(Token);
     }
     case Basic::tok::floating_constant: {
-      llvm::APFloat ApFloatSingle =
-          llvm::APFloat(llvm::APFloat::IEEEdouble(),
-                        Token.getLexeme()); // TODO: find out how to use APFloat
-      std::unique_ptr<FloatingLiteral> FloatLit =
-          std::make_unique<FloatingLiteral>(ApFloatSingle, Token.getLoc());
-      FloatLit->setType(
-          semantics->lookupBaseType(Basic::Data::floating_literal));
-      return FloatLit;
+      return semantics->actOnFloatingLiteral(Token);
     }
     case Basic::tok::string_literal: {
       auto StrLit = std::make_unique<StringLiteral>(
@@ -574,17 +635,14 @@ std::unique_ptr<Expr> Parser::primary() {
     }
     case Basic::tok::kw_true:
     case Basic::tok::kw_false: {
-      auto BoolLit = std::make_unique<BooleanLiteral>(
-          Token.getTag() == Basic::tok::kw_true, Token.getLoc());
-      BoolLit->setType((semantics->lookupBaseType(Basic::Data::bool_)));
-      return BoolLit;
+      return semantics->actOnBooleanLiteral(Token);
     }
     }
   }
   return nullptr;
 }
 
-std::unique_ptr<FunctionCall> Parser::fnCall() {
+std::unique_ptr<Expr> Parser::fnCall() {
   if (!expect(Basic::tok::identifier)) {
     return nullptr;
   }
@@ -599,9 +657,7 @@ std::unique_ptr<FunctionCall> Parser::fnCall() {
   if (!expect(Basic::tok::r_paren)) {
     return nullptr;
   }
-
-  return std::make_unique<FunctionCall>(Id.getLexeme(), std::move(CallargsNode),
-                                        Id.getLoc());
+  return semantics->actOnFnCall(Id, std::move(CallargsNode));
 }
 
 std::unique_ptr<CallArgList> Parser::callArgs() {

@@ -60,7 +60,7 @@ simpleStmt
     | return
     ;
 
-forStmt : FOR expr in expr, expr compoundStmt
+forStmt : FOR '(' (stmt|expr) ';' expr ';' expr ')' compoundStmt
 
 whileStmt : WHILE '(' expr ')' compoundStmt
 

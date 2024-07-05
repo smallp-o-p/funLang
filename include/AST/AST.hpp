@@ -27,6 +27,7 @@ class whileStmt;
 class loopStmt;
 class Decl;
 class TypeDecl;
+class PointerType;
 class TypeUse;
 class VarDeclStmt;
 class Expr;
@@ -53,13 +54,15 @@ class SemaAnalyzer;
 
 class Node {
 protected:
-  llvm::SMLoc locationInSrc;
+  llvm::SMLoc LeftLocInSrc;
+  llvm::SMLoc RightLocInSrc;
 
 public:
-  Node() : locationInSrc(llvm::SMLoc()) {}
-  explicit Node(llvm::SMLoc loc) : locationInSrc(loc) {}
-
-  llvm::SMLoc getLoc() { return locationInSrc; }
+  Node() : LeftLocInSrc(llvm::SMLoc()) {}
+  explicit Node(llvm::SMLoc loc) : LeftLocInSrc(loc) {}
+  Node(llvm::SMLoc Left, llvm::SMLoc Right)
+      : LeftLocInSrc(Left), RightLocInSrc(Right) {};
+  llvm::SMLoc getLoc() { return LeftLocInSrc; }
   virtual void accept(funLang::SemaAnalyzer &visitor) {}
 };
 
@@ -123,24 +126,28 @@ public:
 };
 
 class TraitDecl : public Decl {
-  TypeDecl *Other;
+  TypeDecl *OtherType;
+  std::unique_ptr<FunctionNode> ToCall;
 
 public:
-  TraitDecl(llvm::StringRef Name, llvm::SMLoc Loc, TypeDecl *Other)
-      : Decl(DK_TRAIT, Name, Loc) {}
+  TraitDecl(llvm::StringRef Name, llvm::SMLoc Loc, TypeDecl *Other,
+            std::unique_ptr<FunctionNode> ToCall)
+      : Decl(DK_TRAIT, Name, Loc), ToCall(std::move(ToCall)) {}
 };
 
 class TypeDecl : public Decl {
 private:
   std::unique_ptr<TypeProperties> properties;
   llvm::StringMap<TraitDecl *> Traits;
+  size_t SizeInBits;
 
 public:
   TypeDecl(llvm::StringRef name, std::unique_ptr<TypeProperties> properties,
-           llvm::SMLoc loc)
-      : Decl(DK_TYPE, name, loc), properties(std::move(properties)) {}
-  TypeDecl(llvm::StringRef Name, DeclKind DKind)
-      : Decl(DKind, Name), properties(nullptr) {}
+           llvm::SMLoc loc, size_t SizeInBits)
+      : Decl(DK_TYPE, name, loc), properties(std::move(properties)),
+        SizeInBits(SizeInBits) {}
+  TypeDecl(llvm::StringRef Name, DeclKind DKind, size_t SizeInBits)
+      : Decl(DKind, Name), properties(nullptr), SizeInBits(SizeInBits) {}
 
   TypeProperties *getProperties() { return properties.get(); }
 
@@ -165,14 +172,13 @@ public:
     return properties->lookupMember(MemberName);
   }
 };
-
 class PointerType : public TypeDecl {
 private:
   TypeDecl *PointeeType;
 
 public:
   PointerType(TypeDecl *Pointee)
-      : PointeeType(Pointee), TypeDecl("ptr", DK_TYPEPTR) {}
+      : PointeeType(Pointee), TypeDecl("ptr", DK_TYPEPTR, 64) {}
 
   TypeDecl *getPointee() { return PointeeType; }
 
@@ -190,8 +196,9 @@ private:
   Basic::Data::Type BuiltIn;
 
 protected:
-  BuiltInType(Basic::Data::Type BuiltIn, llvm::StringRef Name)
-      : TypeDecl(Name, DK_TYPEBUILTIN), BuiltIn(BuiltIn) {}
+  BuiltInType(Basic::Data::Type BuiltIn, llvm::StringRef Name,
+              size_t SizeInBits)
+      : TypeDecl(Name, DK_TYPEBUILTIN, SizeInBits), BuiltIn(BuiltIn) {}
 
 public:
   bool eqBaseType(Basic::Data::Type Other) {
@@ -204,13 +211,14 @@ public:
   bool isIntType() {
     return BuiltIn == Basic::Data::i32 || BuiltIn == Basic::Data::i64;
   }
-
+  // TODO:: check amount of bits required for literals and reject if too big for
+  // lhs
   bool canImplicitlyPromoteOther(BuiltInType *Other) {
     return (isIntType() && Other->isIntLiteral()) ||
            (isFloatType() && Other->isFloatLiteral());
   }
 
-  bool isVoid() { return BuiltIn == Basic::Data::void_; }
+  bool isVoidType() { return BuiltIn == Basic::Data::void_; }
 
   bool isIntLiteral() { return BuiltIn == Basic::Data::int_literal; }
 
@@ -227,7 +235,7 @@ public:
            isIntLiteral();
   }
 
-  bool areCompatible(BuiltInType *Other) {
+  bool isCompatible(BuiltInType *Other) {
     return canImplicitlyPromoteOther(Other) || eq(Other);
   }
 };
@@ -331,7 +339,8 @@ protected:
 public:
   explicit Stmt(StmtKind k) : kind(k) {}
   Stmt(StmtKind k, llvm::SMLoc loc) : kind(k), Node(loc) {}
-
+  Stmt(StmtKind K, llvm::SMLoc Left, llvm::SMLoc Right)
+      : kind(K), Node(Left, Right) {}
   StmtKind getKind() const { return kind; }
 };
 
@@ -397,9 +406,10 @@ private:
 
 public:
   whileStmt(std::unique_ptr<Expr> condition,
-            std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
+            std::unique_ptr<CompoundStmt> compound, llvm::SMLoc whileLoc,
+            llvm::SMLoc endLoc)
       : compound(std::move(compound)), condition(std::move(condition)),
-        Stmt(SK_WHILE, loc) {}
+        Stmt(SK_WHILE, whileLoc, endLoc) {}
 };
 
 class loopStmt : public Stmt {
@@ -516,6 +526,7 @@ public:
   ErrorExpr(std::unique_ptr<Expr> Expression)
       : Expression(std::move(Expression)),
         Expr(EXPR_ERR, Expression->getLoc(), nullptr) {}
+  ErrorExpr() : Expression(nullptr), Expr(EXPR_ERR, llvm::SMLoc(), nullptr) {}
 };
 
 class NameUsage : public Expr {
@@ -616,10 +627,9 @@ private:
 
 public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
-           Basic::Op::Binary opcode)
+           Basic::Op::Binary opcode, TypeDecl *Result)
       : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
-        Expr(ExprKind::EXPR_BINARY, StmtKind::SK_EXPR_BINARY) {}
-
+        Expr(ExprKind::EXPR_BINARY, left->getLoc(), Result) {}
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr &getLhs() { return *lhs; }
   Expr &getRhs() { return *rhs; }
