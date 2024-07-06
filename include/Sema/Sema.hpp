@@ -54,7 +54,9 @@ protected:
 public:
   explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
       : currentScope(std::make_shared<Scope>()), diags(std::move(diag)),
-        baseTypeTable(std::make_unique<Scope>()) {}
+        baseTypeTable(std::make_unique<Scope>()) {
+    init();
+  }
 
   void enterScope();
   void exitScope();
@@ -95,7 +97,7 @@ public:
                  std::unique_ptr<CompoundStmt> Compound, llvm::SMLoc Left,
                  llvm::SMLoc Right);
   void actOnFnArgsList(ArgsList &args);
-  bool actOnTopLevelDecl(Decl &TopLDecl);
+  bool actOnTopLevelDecl(Decl *TopLDecl);
   bool actOnStructMemberDecl(VarDeclStmt &DeclStmt);
   std::unique_ptr<TypeDecl>
   actOnStructDecl(Token &TypeName, std::unique_ptr<TypeProperties> Properties,
