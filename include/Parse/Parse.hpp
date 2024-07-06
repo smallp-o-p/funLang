@@ -46,6 +46,7 @@ public:
   std::unique_ptr<TypeUse> type();
   std::unique_ptr<ArgsList> arguments();
   std::unique_ptr<ArgDecl> arg();
+  std::unique_ptr<VarDecl> nameDecl();
   std::unique_ptr<CompoundStmt> compoundStmt();
   std::unique_ptr<Stmt> simpleStmt();
   std::unique_ptr<VarDeclStmt> declStmt();

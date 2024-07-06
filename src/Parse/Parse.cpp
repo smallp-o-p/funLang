@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/Error.h>
+#include <llvm/Support/SMLoc.h>
 #include <memory>
 #include <utility>
 
@@ -92,7 +93,6 @@ std::unique_ptr<TopLevelDecls> Parser::topLevels() {
 
     if (check(Basic::tok::kw_struct)) {
       TopLevel = typeDecl();
-      semantics->actOnStructDecl(*llvm::dyn_cast<TypeDecl>(TopLevel.get()));
     } else if (isOneOf({Basic::tok::Tag::identifier}) || peek().isBaseType()) {
       TopLevel = function();
     }
@@ -120,41 +120,54 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
   if (!expect(Basic::tok::l_brace)) {
     return nullptr;
   }
-
   semantics->enterScope();
 
   std::unique_ptr<TypeProperties> Members = typeProperties();
-  semantics->exitScope();
   if (!Members) {
     return nullptr;
   }
+  semantics->exitScope();
+  if (!expect(Basic::tok::r_brace)) {
+    return nullptr;
+  }
 
-  return std::make_unique<TypeDecl>(Id.getLexeme(), std::move(Members),
-                                    Id.getLoc());
+  llvm::SMLoc RBraceLoc = previous().getLoc();
+  return semantics->actOnStructDecl(Id, std::move(Members), RBraceLoc);
 }
 
 std::unique_ptr<TypeProperties> Parser::typeProperties() {
-  llvm::StringMap<std::unique_ptr<VarDeclStmt>> Properties;
+  std::unique_ptr<llvm::StringMap<std::unique_ptr<Decl>>> Properties;
   while (true) {
     if (check(Basic::tok::Tag::r_brace)) {
       break;
     }
-    std::unique_ptr<VarDeclStmt> VarDecl = declStmt();
+
+    std::unique_ptr<Decl> VarDecl = nameDecl();
     if (!VarDecl) {
       return nullptr;
     }
-    if (semantics->actOnStructVarDecl(*VarDecl)) {
-      if (!expect(Basic::tok::semi)) {
-        reportExpect(Basic::tok::semi, previous());
-        return nullptr;
-      }
-      Properties.insert(
-          std::pair<llvm::StringRef, std::unique_ptr<VarDeclStmt>>(
-              VarDecl->getName(), std::move(VarDecl)));
+    if (!expect(Basic::tok::semi)) {
+      reportExpect(Basic::tok::semi, previous());
+      return nullptr;
     }
+    Properties->insert(std::pair<llvm::StringRef, std::unique_ptr<Decl>>(
+        VarDecl->getName(), std::move(VarDecl)));
   }
 
   return std::make_unique<TypeProperties>(std::move(Properties));
+}
+
+std::unique_ptr<VarDecl> Parser::nameDecl() {
+  std::unique_ptr<TypeUse> T = type();
+  if (!T) {
+    return nullptr;
+  }
+
+  if (!expect(Basic::tok::identifier)) {
+    return nullptr;
+  }
+  Token ID = previous();
+  return semantics->actOnNameDecl(std::move(T), ID);
 }
 
 std::unique_ptr<FunctionNode> Parser::function() {
@@ -270,8 +283,7 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
     break;
   }
   case tok::Tag::identifier: { // TODO: this seems wrong
-    if (lookahead(2).is(Basic::tok::equal) ||
-        lookahead(2).is(Basic::tok::semi)) {
+    if (lookahead(2).is(Basic::tok::identifier)) {
       StmtInq = declStmt();
     } else {
       StmtInq = expr();
@@ -387,18 +399,15 @@ std::unique_ptr<whileStmt> Parser::whileStmt() {
 }
 
 std::unique_ptr<VarDeclStmt> Parser::declStmt() {
-  std::unique_ptr<TypeUse> TypeNode = type();
-  if (!TypeNode) {
-    return nullptr;
-  }
-  if (!expect(Basic::tok::Tag::identifier)) {
-    return nullptr;
-  }
 
-  Token Id = previous();
+  std::unique_ptr<VarDecl> D = nameDecl();
+  if (!D) {
+    return nullptr;
+  }
 
   if (check(Basic::tok::Tag::semi)) {
-    return semantics->actOnVarDeclStmt(std::move(TypeNode), Id, nullptr);
+    return semantics->actOnVarDeclStmt(std::move(D), nullptr,
+                                       previous().getLoc());
   }
   if (!expect(Basic::tok::Tag::equal)) {
     return nullptr;
@@ -409,8 +418,8 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
     return nullptr;
   }
 
-  return semantics->actOnVarDeclStmt(std::move(TypeNode), Id,
-                                     std::move(ExprNode));
+  return semantics->actOnVarDeclStmt(std::move(D), std::move(ExprNode),
+                                     previous().getLoc());
 }
 
 std::unique_ptr<ReturnStmt> Parser::returnStmt() {

@@ -3,6 +3,7 @@
 #include "Basic/Basic.hpp"
 #include "Lex/Lex.hpp"
 #include "llvm/ADT/StringMap.h"
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SMLoc.h>
 #include <memory>
 #include <string>
@@ -47,7 +48,7 @@ protected:
   bool TypesAreEqual(TypeDecl *LHS, TypeDecl *RHS);
   bool TypesAreEqualOrCompatible(TypeDecl *LHS, TypeDecl *RHS);
   Decl *lookup(llvm::StringRef var);
-  Decl *lookupOneScope(llvm::StringRef varName);
+  Decl *lookupCurrentScope(llvm::StringRef varName);
   TypeDecl *lookupType(llvm::StringRef Type);
 
 public:
@@ -59,8 +60,8 @@ public:
   void exitScope();
 
   std::unique_ptr<VarDeclStmt>
-  actOnVarDeclStmt(std::unique_ptr<TypeUse> Type, Token IDTok,
-                   std::unique_ptr<Expr> ExprInput);
+  actOnVarDeclStmt(std::unique_ptr<VarDecl> NameDecl,
+                   std::unique_ptr<Expr> ExprInput, llvm::SMLoc RightLoc);
   void enterFunction(std::unique_ptr<TypeUse> retType, ArgsList &args);
   std::unique_ptr<TypeUse> exitFunction();
 
@@ -95,7 +96,12 @@ public:
                  llvm::SMLoc Right);
   void actOnFnArgsList(ArgsList &args);
   bool actOnTopLevelDecl(Decl &TopLDecl);
-  bool actOnStructVarDecl(VarDeclStmt &DeclStmt);
-  bool actOnStructDecl(TypeDecl &StructDecl);
+  bool actOnStructMemberDecl(VarDeclStmt &DeclStmt);
+  std::unique_ptr<TypeDecl>
+  actOnStructDecl(Token &TypeName, std::unique_ptr<TypeProperties> Properties,
+                  llvm::SMLoc RBraceLoc);
+
+  std::unique_ptr<VarDecl> actOnNameDecl(std::unique_ptr<TypeUse> Type,
+                                         Token &Name);
 };
 } // namespace funLang
