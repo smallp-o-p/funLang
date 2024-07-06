@@ -62,7 +62,13 @@ public:
   explicit Node(llvm::SMLoc loc) : LeftLocInSrc(loc) {}
   Node(llvm::SMLoc Left, llvm::SMLoc Right)
       : LeftLocInSrc(Left), RightLocInSrc(Right) {};
-  llvm::SMLoc getLoc() { return LeftLocInSrc; }
+  llvm::SMLoc getLeftLoc() { return LeftLocInSrc; }
+  llvm::SMLoc getRightLoc() { return RightLocInSrc; }
+  llvm::SMRange getRange() {
+    assert(LeftLocInSrc.isValid() && RightLocInSrc.isValid() &&
+           "left or right loc not valid when calling node locrange");
+    return llvm::SMRange(LeftLocInSrc, RightLocInSrc);
+  }
   virtual void accept(funLang::SemaAnalyzer &visitor) {}
 };
 
@@ -100,9 +106,10 @@ private:
 public:
   explicit Decl(DeclKind kind, llvm::StringRef name)
       : Kind(kind), DeclName(name), Node(llvm::SMLoc()) {}
-  Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc loc)
-      : Kind(kind), DeclName(name), Node(loc) {}
-
+  Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc Left, llvm::SMLoc Right)
+      : Kind(kind), DeclName(name), Node(Left, Right) {}
+  Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc Left)
+      : Kind(kind), DeclName(name), Node(Left) {}
   DeclKind getKind() const { return Kind; }
   llvm::StringRef getName() { return DeclName; }
   void accept(funLang::SemaAnalyzer &v) override {};
@@ -110,15 +117,16 @@ public:
 
 class TypeProperties {
 private:
-  llvm::StringMap<std::unique_ptr<VarDeclStmt>> decls;
+  std::unique_ptr<llvm::StringMap<std::unique_ptr<Decl>>> decls;
 
 public:
-  explicit TypeProperties(llvm::StringMap<std::unique_ptr<VarDeclStmt>> Decls)
+  explicit TypeProperties(
+      std::unique_ptr<llvm::StringMap<std::unique_ptr<Decl>>> Decls)
       : decls(std::move(Decls)) {}
-  llvm::StringMap<std::unique_ptr<VarDeclStmt>> &getDecls() { return decls; }
-  VarDeclStmt *lookupMember(llvm::StringRef MemberName) {
-    auto Found = decls.find(MemberName);
-    if (Found != decls.end()) {
+  llvm::StringMap<std::unique_ptr<Decl>> &getDecls() { return *decls; }
+  Decl *lookupMember(llvm::StringRef MemberName) {
+    auto Found = decls->find(MemberName);
+    if (Found != decls->end()) {
       return Found->getValue().get();
     }
     return nullptr;
@@ -143,18 +151,13 @@ private:
 
 public:
   TypeDecl(llvm::StringRef name, std::unique_ptr<TypeProperties> properties,
-           llvm::SMLoc loc, size_t SizeInBits)
-      : Decl(DK_TYPE, name, loc), properties(std::move(properties)),
-        SizeInBits(SizeInBits) {}
+           llvm::SMLoc TypeLoc, llvm::SMLoc NameLoc, size_t SizeInBits)
+      : Decl(DK_TYPE, name, TypeLoc, NameLoc),
+        properties(std::move(properties)), SizeInBits(SizeInBits) {}
   TypeDecl(llvm::StringRef Name, DeclKind DKind, size_t SizeInBits)
       : Decl(DKind, Name), properties(nullptr), SizeInBits(SizeInBits) {}
 
   TypeProperties *getProperties() { return properties.get(); }
-
-  VarDeclStmt *getMember(llvm::StringRef MemberName) {
-    assert(properties && "Attempted to access member of nullptr properties");
-    return properties->lookupMember(MemberName);
-  }
 
   static bool classof(const Decl *d) { return d->getKind() == DK_TYPE; }
   static bool classof(const TypeDecl *TyDecl) {
@@ -172,6 +175,7 @@ public:
     return properties->lookupMember(MemberName);
   }
 };
+
 class PointerType : public TypeDecl {
 private:
   TypeDecl *PointeeType;
@@ -442,41 +446,33 @@ public:
 
 class VarDecl : public Decl {
 private:
-  TypeUse &type;
-  Expr *expr;
-
+  std::unique_ptr<TypeUse> Type;
+  // qualifiers and stuff would go here?
 public:
-  VarDecl(TypeUse &t, llvm::StringRef name, Expr *expr)
-      : type(t), expr(expr),
-        Decl(DK_VAR, name, llvm::SMLoc().getFromPointer(name.data())) {}
+  VarDecl(std::unique_ptr<TypeUse> Type, llvm::StringRef Name, llvm::SMLoc Left,
+          llvm::SMLoc Right)
+      : Decl(DK_VAR, Name, Left, Right), Type(std::move(Type)) {}
 
-  TypeUse &getType() const { return type; }
-  TypeDecl *getUnderlyingTypeDecl() const { return type.getTypeDecl(); }
-  Expr *getExpr() const { return expr; }
+  TypeUse *getType() const { return Type.get(); }
+  TypeDecl *getUnderlyingTypeDecl() const { return Type->getTypeDecl(); }
   static bool classof(const Decl *D) { return D->getKind() == DK_VAR; }
 };
 
 class VarDeclStmt : public Stmt {
 private:
-  std::unique_ptr<TypeUse> type;
-  llvm::StringRef name;
-  std::unique_ptr<Expr> expr;
+  std::unique_ptr<VarDecl> NameDeclaration;
+  std::unique_ptr<Expr> RHS;
 
 public:
-  VarDeclStmt(std::unique_ptr<TypeUse> t, llvm::StringRef id,
-              std::unique_ptr<Expr> expression, llvm::SMLoc loc)
-      : type(std::move(t)), name(id), expr(std::move(expression)),
-        Stmt(SK_VARDECL, loc) {}
+  VarDeclStmt(std::unique_ptr<VarDecl> NameDeclaration,
+              std::unique_ptr<Expr> Expression, llvm::SMLoc Left,
+              llvm::SMLoc Right)
+      : NameDeclaration(std::move(NameDeclaration)), RHS(std::move(Expression)),
+        Stmt(SK_VARDECL, Left, Right) {}
 
-  VarDeclStmt(std::unique_ptr<TypeUse> t, llvm::StringRef id, llvm::SMLoc loc)
-      : type(std::move(t)), name(id), Stmt(SK_VARDECL, loc) {}
-
-  llvm::StringRef getName() { return name; };
+  llvm::StringRef getName() { return NameDeclaration->getName(); };
   Expr *getExpr();
-  TypeUse &getTypeUse() { return *type; }
-  VarDecl *toDecl() {
-    return new VarDecl(*type, name, expr == nullptr ? nullptr : expr.get());
-  }
+  TypeUse &getTypeUse() { return *NameDeclaration->getType(); }
   void accept(funLang::SemaAnalyzer &v) override {}
   static bool classof(const Stmt *S) {
     return S->getKind() == StmtKind::SK_VARDECL;
@@ -525,7 +521,7 @@ protected:
 public:
   ErrorExpr(std::unique_ptr<Expr> Expression)
       : Expression(std::move(Expression)),
-        Expr(EXPR_ERR, Expression->getLoc(), nullptr) {}
+        Expr(EXPR_ERR, Expression->getLeftLoc(), nullptr) {}
   ErrorExpr() : Expression(nullptr), Expr(EXPR_ERR, llvm::SMLoc(), nullptr) {}
 };
 
@@ -608,12 +604,12 @@ private:
 public:
   UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
       : Input(std::move(inp)), op(opc),
-        Expr(ExprKind::EXPR_UNARY, SK_EXPR_UNARY, inp->getLoc()) {}
+        Expr(ExprKind::EXPR_UNARY, SK_EXPR_UNARY, inp->getLeftLoc()) {}
 
   UnaryOp(std::unique_ptr<Expr> Input, Basic::Op::Unary OpCode,
           TypeDecl *ResultType)
       : Input(std::move(Input)), op(OpCode),
-        Expr(EXPR_UNARY, Input->getLoc(), ResultType) {}
+        Expr(EXPR_UNARY, Input->getLeftLoc(), ResultType) {}
   Basic::Op::Unary getOp() { return op; }
   Expr &getExprInput() { return *Input; }
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_UNARY; }
@@ -629,14 +625,14 @@ public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
            Basic::Op::Binary opcode, TypeDecl *Result)
       : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
-        Expr(ExprKind::EXPR_BINARY, left->getLoc(), Result) {}
+        Expr(ExprKind::EXPR_BINARY, left->getLeftLoc(), Result) {}
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr &getLhs() { return *lhs; }
   Expr &getRhs() { return *rhs; }
   Basic::Op::Binary getOp() { return op; }
   TypeDecl *getLHSType() { return lhs->getType(); }
   TypeDecl *getRHSType() { return rhs->getType(); }
-  llvm::SMRange getRange() { return {lhs->getLoc(), rhs->getLoc()}; };
+  llvm::SMRange getRange() { return {lhs->getLeftLoc(), rhs->getLeftLoc()}; };
   static bool classof(StmtKind K) { return K == StmtKind::SK_EXPR_BINARY; }
 };
 

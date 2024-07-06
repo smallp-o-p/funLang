@@ -7,7 +7,7 @@ TopLevelDecls::getTopLevelMap() {
   return fnMap;
 }
 
-Expr *VarDeclStmt::getExpr() { return expr.get(); }
+Expr *VarDeclStmt::getExpr() { return RHS.get(); }
 
 std::vector<std::unique_ptr<Stmt>> &CompoundStmt::getStmts() { return stmts; }
 
