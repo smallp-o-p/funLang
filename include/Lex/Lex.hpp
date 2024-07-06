@@ -54,7 +54,7 @@ public:
   llvm::SMLoc getLoc() { return llvm::SMLoc::getFromPointer(Lexeme.data()); }
 
   llvm::SMLoc getRightmostLoc() {
-    return llvm::SMLoc::getFromPointer(Lexeme.data() + Lexeme.size());
+    return llvm::SMLoc::getFromPointer(Lexeme.data() + Lexeme.size() - 1);
   }
 
   llvm::SMRange getLocRange() {
