@@ -62,13 +62,13 @@ public:
   Node() : LeftLocInSrc(llvm::SMLoc()) {}
   explicit Node(llvm::SMLoc loc) : LeftLocInSrc(loc) {}
   Node(llvm::SMLoc Left, llvm::SMLoc Right)
-      : LeftLocInSrc(Left), RightLocInSrc(Right) {};
+	  : LeftLocInSrc(Left), RightLocInSrc(Right) {};
   llvm::SMLoc getLeftLoc() { return LeftLocInSrc; }
   llvm::SMLoc getRightLoc() { return RightLocInSrc; }
   llvm::SMRange getRange() {
-    assert(LeftLocInSrc.isValid() && RightLocInSrc.isValid() &&
-           "left or right loc not valid when calling node locrange");
-    return llvm::SMRange(LeftLocInSrc, RightLocInSrc);
+	assert(LeftLocInSrc.isValid() && RightLocInSrc.isValid() &&
+		"left or right loc not valid when calling node locrange");
+	return llvm::SMRange(LeftLocInSrc, RightLocInSrc);
   }
   virtual void accept(funLang::SemaAnalyzer &visitor) {}
 };
@@ -80,10 +80,10 @@ private:
 
 public:
   explicit CompilationUnit(std::unique_ptr<TopLevelDecls> fncs)
-      : funcs(std::move(fncs)), globalSymbols(nullptr) {};
+	  : funcs(std::move(fncs)), globalSymbols(nullptr) {};
   CompilationUnit(std::unique_ptr<TopLevelDecls> fncs,
-                  std::unique_ptr<std::unordered_map<std::string, int>> globs)
-      : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
+				  std::unique_ptr<std::unordered_map<std::string, int>> globs)
+	  : funcs(std::move(fncs)), globalSymbols(std::move(globs)) {}
   auto &getGlobs();
   void accept(funLang::SemaAnalyzer &visitor) override {}
 };
@@ -91,13 +91,13 @@ public:
 class Decl : public Node {
 public:
   enum DeclKind {
-    DK_FN,
-    DK_VAR,
-    DK_TYPE,
-    DK_TYPEBUILTIN,
-    DK_TYPEPTR,
-    DK_ARG,
-    DK_TRAIT,
+	DK_FN,
+	DK_VAR,
+	DK_TYPE,
+	DK_TYPEBUILTIN,
+	DK_TYPEPTR,
+	DK_ARG,
+	DK_TRAIT,
   };
 
 private:
@@ -106,11 +106,11 @@ private:
 
 public:
   explicit Decl(DeclKind kind, llvm::StringRef name)
-      : Kind(kind), DeclName(name), Node(llvm::SMLoc()) {}
+	  : Kind(kind), DeclName(name), Node(llvm::SMLoc()) {}
   Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc Left, llvm::SMLoc Right)
-      : Kind(kind), DeclName(name), Node(Left, Right) {}
+	  : Kind(kind), DeclName(name), Node(Left, Right) {}
   Decl(DeclKind kind, llvm::StringRef name, llvm::SMLoc Left)
-      : Kind(kind), DeclName(name), Node(Left) {}
+	  : Kind(kind), DeclName(name), Node(Left) {}
   DeclKind getKind() const { return Kind; }
   llvm::StringRef getName() { return DeclName; }
   void accept(funLang::SemaAnalyzer &v) override {};
@@ -122,15 +122,15 @@ private:
 
 public:
   explicit TypeProperties(
-      std::unique_ptr<llvm::StringMap<std::unique_ptr<VarDecl>>> Decls)
-      : decls(std::move(Decls)) {}
+	  std::unique_ptr<llvm::StringMap<std::unique_ptr<VarDecl>>> Decls)
+	  : decls(std::move(Decls)) {}
   llvm::StringMap<std::unique_ptr<VarDecl>> &getDecls() { return *decls; }
   VarDecl *lookupMember(llvm::StringRef MemberName) {
-    auto Found = decls->find(MemberName);
-    if (Found != decls->end()) {
-      return Found->getValue().get();
-    }
-    return nullptr;
+	auto Found = decls->find(MemberName);
+	if (Found != decls->end()) {
+	  return Found->getValue().get();
+	}
+	return nullptr;
   }
 };
 
@@ -140,8 +140,8 @@ class TraitDecl : public Decl {
 
 public:
   TraitDecl(llvm::StringRef Name, llvm::SMLoc Loc, TypeDecl *Other,
-            std::unique_ptr<FunctionNode> ToCall)
-      : Decl(DK_TRAIT, Name, Loc), ToCall(std::move(ToCall)) {}
+			std::unique_ptr<FunctionNode> ToCall)
+	  : Decl(DK_TRAIT, Name, Loc), ToCall(std::move(ToCall)) {}
 };
 
 class TypeDecl : public Decl {
@@ -152,28 +152,28 @@ private:
 
 public:
   TypeDecl(llvm::StringRef name, std::unique_ptr<TypeProperties> properties,
-           llvm::SMLoc TypeLoc, llvm::SMLoc NameLoc, size_t SizeInBits)
-      : Decl(DK_TYPE, name, TypeLoc, NameLoc),
-        properties(std::move(properties)), SizeInBits(SizeInBits) {}
+		   llvm::SMLoc TypeLoc, llvm::SMLoc NameLoc, size_t SizeInBits)
+	  : Decl(DK_TYPE, name, TypeLoc, NameLoc),
+		properties(std::move(properties)), SizeInBits(SizeInBits) {}
   TypeDecl(llvm::StringRef Name, DeclKind DKind, size_t SizeInBits)
-      : Decl(DKind, Name), properties(nullptr), SizeInBits(SizeInBits) {}
+	  : Decl(DKind, Name), properties(nullptr), SizeInBits(SizeInBits) {}
 
   auto &getMembers() { return properties->getDecls(); }
   static bool classof(const Decl *D) {
-    return D->getKind() >= DK_TYPE && D->getKind() <= DK_TYPEBUILTIN;
+	return D->getKind() >= DK_TYPE && D->getKind() <= DK_TYPEBUILTIN;
   }
   size_t getSize() { return SizeInBits; }
 
   bool eq(TypeDecl *other) { // If the two pointers are the same then they're
-    // referring to the same type
-    return other == this;
+	// referring to the same type
+	return other == this;
   }
 
   bool memberExists(llvm::StringRef MemberName) {
-    if (!properties) {
-      return false;
-    }
-    return properties->lookupMember(MemberName);
+	if (!properties) {
+	  return false;
+	}
+	return properties->lookupMember(MemberName);
   }
 };
 
@@ -183,12 +183,12 @@ private:
 
 public:
   PointerType(TypeDecl *Pointee)
-      : PointeeType(Pointee), TypeDecl("ptr", DK_TYPEPTR, 64) {}
+	  : PointeeType(Pointee), TypeDecl("ptr", DK_TYPEPTR, 64) {}
 
   TypeDecl *getPointee() { return PointeeType; }
 
   std::string getFullName() {
-    return std::string("pointer to ") + PointeeType->getName().str();
+	return std::string("pointer to ") + PointeeType->getName().str();
   }
 
   static bool classof(const Decl *D) { return D->getKind() == DK_TYPEPTR; }
@@ -202,33 +202,30 @@ private:
 
 protected:
   BuiltInType(Basic::Data::Type BuiltIn, llvm::StringRef Name,
-              size_t SizeInBits)
-      : TypeDecl(Name, DK_TYPEBUILTIN, SizeInBits), BuiltIn(BuiltIn) {}
+			  size_t SizeInBits)
+	  : TypeDecl(Name, DK_TYPEBUILTIN, SizeInBits), BuiltIn(BuiltIn) {}
 
 public:
   bool eqBaseType(Basic::Data::Type Other) {
-    assert(BuiltIn != Basic::Data::other_type);
-    return Other == BuiltIn;
+	assert(BuiltIn != Basic::Data::other_type);
+	return Other == BuiltIn;
   }
 
   bool isIntType() {
-    return BuiltIn == Basic::Data::i32 || BuiltIn == Basic::Data::i64;
+	return BuiltIn == Basic::Data::i32 || BuiltIn == Basic::Data::i64;
   }
   // TODO:: check amount of bits required for literals and reject if too big for
   // lhs
   bool canImplicitlyPromoteOther(BuiltInType *Other) {
-    switch (BuiltIn) {
-    case Basic::Data::i32:
-    case Basic::Data::i64:
-    case Basic::Data::int_literal:
-      return Other->isIntType() || Other->isIntLiteral();
-    case Basic::Data::f32:
-    case Basic::Data::f64:
-    case Basic::Data::floating_literal:
-      return Other->isFloatType() || Other->isFloatLiteral();
-    default:
-      return false;
-    }
+	switch (BuiltIn) {
+	case Basic::Data::i32:
+	case Basic::Data::i64:
+	case Basic::Data::int_literal:return Other->isIntType() || Other->isIntLiteral();
+	case Basic::Data::f32:
+	case Basic::Data::f64:
+	case Basic::Data::floating_literal:return Other->isFloatType() || Other->isFloatLiteral();
+	default:return false;
+	}
   }
 
   bool isVoidType() { return BuiltIn == Basic::Data::void_; }
@@ -238,18 +235,18 @@ public:
   bool isFloatLiteral() { return BuiltIn == Basic::Data::floating_literal; }
 
   bool isFloatType() {
-    return BuiltIn == Basic::Data::f32 || BuiltIn == Basic::Data::f64;
+	return BuiltIn == Basic::Data::f32 || BuiltIn == Basic::Data::f64;
   }
 
   bool isBoolType() { return BuiltIn == Basic::Data::bool_; }
 
   bool isNumericType() {
-    return isFloatType() || isNumericType() || isFloatLiteral() ||
-           isIntLiteral();
+	return isFloatType() || isNumericType() || isFloatLiteral() ||
+		isIntLiteral();
   }
 
   bool isCompatible(BuiltInType *Other) {
-    return canImplicitlyPromoteOther(Other) || eq(Other);
+	return canImplicitlyPromoteOther(Other) || eq(Other);
   }
 };
 
@@ -271,8 +268,8 @@ private:
 
 public:
   explicit TopLevelDecls(
-      std::unordered_map<std::string, std::unique_ptr<Decl>> fnMap)
-      : fnMap(std::move(fnMap)) {}
+	  std::unordered_map<std::string, std::unique_ptr<Decl>> fnMap)
+	  : fnMap(std::move(fnMap)) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
   std::unordered_map<std::string, std::unique_ptr<Decl>> &getTopLevelMap();
@@ -284,7 +281,7 @@ private:
 
 public:
   explicit ArgsList(std::vector<std::unique_ptr<VarDecl>> &args)
-      : Args(std::move(args)) {}
+	  : Args(std::move(args)) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
   const std::vector<std::unique_ptr<VarDecl>> &getArgList() { return Args; }
@@ -296,7 +293,7 @@ private:
 
 public:
   ArgDecl(std::unique_ptr<TypeUse> type, llvm::StringRef name, llvm::SMLoc loc)
-      : type(std::move(type)), Decl(DK_ARG, name, loc) {}
+	  : type(std::move(type)), Decl(DK_ARG, name, loc) {}
   void accept(funLang::SemaAnalyzer &v) override {}
   TypeDecl *getUnderlyingTypeDecl() { return type->getTypeDecl(); }
 };
@@ -309,14 +306,14 @@ private:
 
 public:
   FunctionNode(std::unique_ptr<TypeUse> retType, llvm::StringRef name,
-               std::unique_ptr<ArgsList> argDecls,
-               std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
-      : retType(std::move(retType)), argDecls(std::move(argDecls)),
-        compound(std::move(compound)), Decl(DK_FN, name, loc) {}
+			   std::unique_ptr<ArgsList> argDecls,
+			   std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
+	  : retType(std::move(retType)), argDecls(std::move(argDecls)),
+		compound(std::move(compound)), Decl(DK_FN, name, loc) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
   const std::vector<std::unique_ptr<VarDecl>> &getArgDecls() {
-    return argDecls->getArgList();
+	return argDecls->getArgList();
   };
 
   TypeDecl *getTypeDecl() { return retType->getTypeDecl(); }
@@ -327,25 +324,16 @@ public:
 class Stmt : public Node {
 public:
   enum StmtKind {
-    SK_VARDECL,
-    SK_EXPR,
-    SK_EXPR_BINARY,
-    SK_EXPR_UNARY,
-    SK_EXPR_FNCALL,
-    SK_EXPR_LEAF,
-    SK_EXPR_INT,
-    SK_EXPR_FLOAT,
-    SK_EXPR_BOOL,
-    SK_EXPR_STRING,
-    SK_EXPR_NAME,
-    SK_RETURN,
-    SK_COMPOUND,
-    SK_IF,
-    SK_FOR,
-    SK_WHILE,
-    SK_LOOP,
-    SK_MATCH,
-    SK_MATCHARM
+	SK_VARDECL,
+	SK_EXPR,
+	SK_RETURN,
+	SK_COMPOUND,
+	SK_IF,
+	SK_FOR,
+	SK_WHILE,
+	SK_LOOP,
+	SK_MATCH,
+	SK_MATCHARM
   };
 
 protected:
@@ -355,7 +343,7 @@ public:
   explicit Stmt(StmtKind k) : kind(k) {}
   Stmt(StmtKind k, llvm::SMLoc loc) : kind(k), Node(loc) {}
   Stmt(StmtKind K, llvm::SMLoc Left, llvm::SMLoc Right)
-      : kind(K), Node(Left, Right) {}
+	  : kind(K), Node(Left, Right) {}
   StmtKind getKind() const { return kind; }
 };
 
@@ -365,7 +353,7 @@ private:
 
 public:
   explicit CompoundStmt(std::vector<std::unique_ptr<Stmt>> simples)
-      : stmts(std::move(simples)), Stmt(SK_COMPOUND) {}
+	  : stmts(std::move(simples)), Stmt(SK_COMPOUND) {}
 
   void accept(funLang::SemaAnalyzer &sema) override {};
   std::vector<std::unique_ptr<Stmt>> &getStmts();
@@ -380,9 +368,9 @@ private:
 
 public:
   elifStmt(StmtKind K, llvm::SMLoc Loc, std::unique_ptr<Expr> cond,
-           std::unique_ptr<CompoundStmt> block, std::unique_ptr<elifStmt> elif)
-      : Stmt(K, Loc), cond(std::move(cond)), block(std::move(block)),
-        elif (std::move(elif)) {}
+		   std::unique_ptr<CompoundStmt> block, std::unique_ptr<elifStmt> elif)
+	  : Stmt(K, Loc), cond(std::move(cond)), block(std::move(block)),
+		elif(std::move(elif)) {}
 };
 
 class ifStmt : public Stmt {
@@ -394,9 +382,9 @@ private:
 
 public:
   ifStmt(std::unique_ptr<Expr> cond, std::unique_ptr<CompoundStmt> block1,
-         std::unique_ptr<elifStmt> elif, std::unique_ptr<CompoundStmt> block2)
-      : cond(std::move(cond)), block1(std::move(block1)),
-        elif (std::move(elif)), block2(std::move(block2)), Stmt(SK_IF) {}
+		 std::unique_ptr<elifStmt> elif, std::unique_ptr<CompoundStmt> block2)
+	  : cond(std::move(cond)), block1(std::move(block1)),
+		elif(std::move(elif)), block2(std::move(block2)), Stmt(SK_IF) {}
 };
 
 class forStmt : public Stmt {
@@ -408,10 +396,10 @@ private:
 
 public:
   forStmt(std::unique_ptr<Expr> var, std::unique_ptr<Expr> range,
-          std::unique_ptr<Expr> iter, std::unique_ptr<CompoundStmt> compound,
-          llvm::SMLoc loc)
-      : Stmt(SK_FOR, loc), var(std::move(var)), range(std::move(range)),
-        iterator(std::move(iter)), compound(std::move(compound)) {}
+		  std::unique_ptr<Expr> iter, std::unique_ptr<CompoundStmt> compound,
+		  llvm::SMLoc loc)
+	  : Stmt(SK_FOR, loc), var(std::move(var)), range(std::move(range)),
+		iterator(std::move(iter)), compound(std::move(compound)) {}
 };
 
 class whileStmt : public Stmt {
@@ -421,10 +409,10 @@ private:
 
 public:
   whileStmt(std::unique_ptr<Expr> condition,
-            std::unique_ptr<CompoundStmt> compound, llvm::SMLoc whileLoc,
-            llvm::SMLoc endLoc)
-      : compound(std::move(compound)), condition(std::move(condition)),
-        Stmt(SK_WHILE, whileLoc, endLoc) {}
+			std::unique_ptr<CompoundStmt> compound, llvm::SMLoc whileLoc,
+			llvm::SMLoc endLoc)
+	  : compound(std::move(compound)), condition(std::move(condition)),
+		Stmt(SK_WHILE, whileLoc, endLoc) {}
 };
 
 class loopStmt : public Stmt {
@@ -433,7 +421,7 @@ private:
 
 public:
   loopStmt(std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
-      : compound(std::move(compound)), Stmt(SK_LOOP, loc) {}
+	  : compound(std::move(compound)), Stmt(SK_LOOP, loc) {}
 };
 class matchArm : public Stmt {
 private:
@@ -442,8 +430,8 @@ private:
 
 public:
   matchArm(std::unique_ptr<Expr> lhs, std::unique_ptr<CompoundStmt> rhs,
-           llvm::SMLoc begin)
-      : lhs(std::move(lhs)), rhs(std::move(rhs)), Stmt(SK_MATCHARM, begin) {}
+		   llvm::SMLoc begin)
+	  : lhs(std::move(lhs)), rhs(std::move(rhs)), Stmt(SK_MATCHARM, begin) {}
 };
 
 class matchStmt : public Stmt {
@@ -452,7 +440,7 @@ private:
 
 public:
   matchStmt(std::vector<std::unique_ptr<matchArm>> arms, llvm::SMLoc loc)
-      : arms(std::move(arms)), Stmt(SK_MATCH, loc) {}
+	  : arms(std::move(arms)), Stmt(SK_MATCH, loc) {}
 };
 
 class VarDecl : public Decl {
@@ -461,8 +449,8 @@ private:
   // qualifiers and stuff would go here?
 public:
   VarDecl(std::unique_ptr<TypeUse> Type, llvm::StringRef Name, llvm::SMLoc Left,
-          llvm::SMLoc Right)
-      : Decl(DK_VAR, Name, Left, Right), Type(std::move(Type)) {}
+		  llvm::SMLoc Right)
+	  : Decl(DK_VAR, Name, Left, Right), Type(std::move(Type)) {}
 
   TypeUse *getType() const { return Type.get(); }
   TypeDecl *getUnderlyingTypeDecl() const { return Type->getTypeDecl(); }
@@ -476,32 +464,32 @@ private:
 
 public:
   VarDeclStmt(std::unique_ptr<VarDecl> NameDeclaration,
-              std::unique_ptr<Expr> Expression, llvm::SMLoc Left,
-              llvm::SMLoc Right)
-      : NameDeclaration(std::move(NameDeclaration)), RHS(std::move(Expression)),
-        Stmt(SK_VARDECL, Left, Right) {}
+			  std::unique_ptr<Expr> Expression, llvm::SMLoc Left,
+			  llvm::SMLoc Right)
+	  : NameDeclaration(std::move(NameDeclaration)), RHS(std::move(Expression)),
+		Stmt(SK_VARDECL, Left, Right) {}
 
   llvm::StringRef getName() { return NameDeclaration->getName(); };
   Expr *getExpr();
   TypeUse &getTypeUse() { return *NameDeclaration->getType(); }
   void accept(funLang::SemaAnalyzer &v) override {}
   static bool classof(const Stmt *S) {
-    return S->getKind() == StmtKind::SK_VARDECL;
+	return S->getKind() == StmtKind::SK_VARDECL;
   }
 };
 
 class Expr : public Stmt {
 public:
   enum ExprKind {
-    EXPR_BINARY,
-    EXPR_UNARY,
-    EXPR_FNCALL,
-    EXPR_LEAF,
-    EXPR_INT,
-    EXPR_FLOAT,
-    EXPR_BOOL,
-    EXPR_STRING,
-    EXPR_ERR
+	EXPR_BINARY,
+	EXPR_UNARY,
+	EXPR_FNCALL,
+	EXPR_LEAF,
+	EXPR_INT,
+	EXPR_FLOAT,
+	EXPR_BOOL,
+	EXPR_STRING,
+	EXPR_ERR
   };
 
 protected:
@@ -510,13 +498,11 @@ protected:
   // suppress error messages
 
 public:
-  explicit Expr(ExprKind k, StmtKind K)
-      : EKind(k), Stmt(K), resultType(nullptr) {};
-  Expr(ExprKind Kind, StmtKind StmtK, llvm::SMLoc Loc)
-      : EKind(Kind), Stmt(StmtK, Loc), resultType(nullptr) {};
+  explicit Expr(ExprKind k, llvm::SMLoc Loc)
+	  : EKind(k), Stmt(SK_EXPR, Loc), resultType(nullptr) {};
 
   Expr(ExprKind Kind, llvm::SMLoc Loc, TypeDecl *Type)
-      : EKind(Kind), Stmt(SK_EXPR), resultType(Type) {}
+	  : EKind(Kind), Stmt(SK_EXPR, Loc), resultType(Type) {}
 
   void accept(funLang::SemaAnalyzer &v);
   void setType(TypeDecl *ToSet);
@@ -531,8 +517,8 @@ protected:
 
 public:
   ErrorExpr(std::unique_ptr<Expr> Expression)
-      : Expression(std::move(Expression)),
-        Expr(EXPR_ERR, Expression->getLeftLoc(), nullptr) {}
+	  : Expression(std::move(Expression)),
+		Expr(EXPR_ERR, Expression->getLeftLoc(), nullptr) {}
   ErrorExpr() : Expression(nullptr), Expr(EXPR_ERR, llvm::SMLoc(), nullptr) {}
   static bool classof(const Expr *E) { return E->getExprKind() == EXPR_ERR; }
 };
@@ -543,10 +529,7 @@ protected:
 
 public:
   NameUsage(llvm::StringRef name, llvm::SMLoc Loc, TypeDecl *Type)
-      : name(name), Expr(ExprKind::EXPR_LEAF, Loc, Type) {}
-
-  NameUsage(llvm::StringRef name, llvm::SMLoc Loc)
-      : name(name), Expr(EXPR_ERR, Loc, nullptr) {}
+	  : name(name), Expr(ExprKind::EXPR_LEAF, Loc, Type) {}
 
   llvm::StringRef getLexeme() { return name; };
   void accept(funLang::SemaAnalyzer &v) override {}
@@ -560,9 +543,9 @@ private:
 
 public:
   explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc litLoc)
-      : val(std::move(value)), Expr(EXPR_INT, SK_EXPR_INT, litLoc) {}
+	  : val(std::move(value)), Expr(EXPR_INT, litLoc) {}
 
-  static bool classof(const Expr *E) { return E->getExprKind() == EXPR_LEAF; }
+  static bool classof(const Expr *E) { return E->getExprKind() == EXPR_INT; }
 };
 
 class FloatingLiteral : public Expr {
@@ -571,7 +554,7 @@ private:
 
 public:
   explicit FloatingLiteral(llvm::APFloat value, llvm::SMLoc litLoc)
-      : val(std::move(value)), Expr(EXPR_FLOAT, SK_EXPR_FLOAT) {}
+	  : val(std::move(value)), Expr(EXPR_FLOAT, litLoc) {}
 
   static bool classof(const Expr *E) { return E->getExprKind() == EXPR_FLOAT; }
 };
@@ -582,7 +565,7 @@ private:
 
 public:
   explicit BooleanLiteral(bool value, llvm::SMLoc loc)
-      : Expr(EXPR_BOOL, SK_EXPR_BOOL, loc), val(value) {}
+	  : Expr(EXPR_BOOL, loc), val(value) {}
 
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_BOOL; }
 };
@@ -593,8 +576,9 @@ private:
   uint32_t len;
 
 public:
-  explicit StringLiteral(uint32_t len, llvm::StringRef str, llvm::SMLoc loc)
-      : Expr(EXPR_STRING, SK_EXPR_STRING, loc) {}
+  explicit StringLiteral(uint32_t len, llvm::StringRef str,
+						 llvm::SMLoc LeftQuoteLoc, TypeDecl *StringType)
+	  : Expr(EXPR_STRING, LeftQuoteLoc, StringType) {}
 
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_STRING; }
 };
@@ -606,15 +590,14 @@ private:
 
 public:
   FunctionCall(llvm::StringRef name, std::unique_ptr<CallArgList> arguments,
-               llvm::SMLoc loc, TypeDecl *Type = nullptr)
-      : name(name), args(std::move(arguments)),
-        Expr(ExprKind::EXPR_FNCALL, loc, Type) {}
+			   llvm::SMLoc loc, TypeDecl *Type = nullptr)
+	  : name(name), args(std::move(arguments)),
+		Expr(ExprKind::EXPR_FNCALL, loc, Type) {}
 
   llvm::StringRef getName() const { return name; }
   const std::unique_ptr<CallArgList> &getArgs() const { return args; }
 
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_FNCALL; }
-  static bool classof(Stmt *S) { return S->getKind() == SK_EXPR_FNCALL; }
 };
 
 class UnaryOp : public Expr {
@@ -624,13 +607,13 @@ private:
 
 public:
   UnaryOp(std::unique_ptr<Expr> inp, Basic::Op::Unary opc)
-      : Input(std::move(inp)), op(opc),
-        Expr(ExprKind::EXPR_UNARY, SK_EXPR_UNARY, inp->getLeftLoc()) {}
+	  : Input(std::move(inp)), op(opc),
+		Expr(ExprKind::EXPR_UNARY, inp->getLeftLoc()) {}
 
   UnaryOp(std::unique_ptr<Expr> Input, Basic::Op::Unary OpCode,
-          TypeDecl *ResultType)
-      : Input(std::move(Input)), op(OpCode),
-        Expr(EXPR_UNARY, Input->getLeftLoc(), ResultType) {}
+		  TypeDecl *ResultType)
+	  : Input(std::move(Input)), op(OpCode),
+		Expr(EXPR_UNARY, Input->getLeftLoc(), ResultType) {}
   Basic::Op::Unary getOp() { return op; }
   Expr &getExprInput() { return *Input; }
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_UNARY; }
@@ -644,9 +627,9 @@ private:
 
 public:
   BinaryOp(std::unique_ptr<Expr> left, std::unique_ptr<Expr> right,
-           Basic::Op::Binary opcode, TypeDecl *Result)
-      : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
-        Expr(ExprKind::EXPR_BINARY, left->getLeftLoc(), Result) {}
+		   Basic::Op::Binary opcode, TypeDecl *Result)
+	  : lhs(std::move(left)), rhs(std::move(right)), op(opcode),
+		Expr(ExprKind::EXPR_BINARY, left->getLeftLoc(), Result) {}
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr &getLhs() { return *lhs; }
   Expr &getRhs() { return *rhs; }
@@ -663,7 +646,7 @@ private:
 
 public:
   explicit CallArgList(std::vector<std::unique_ptr<Expr>> a)
-      : args(std::move(a)) {}
+	  : args(std::move(a)) {}
 
   size_t getSize() { return args.size(); }
   std::vector<std::unique_ptr<Expr>> &getArgsVec() { return args; };
@@ -676,7 +659,7 @@ private:
 
 public:
   explicit ReturnStmt(std::unique_ptr<Expr> exprNode)
-      : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
+	  : expr(std::move(exprNode)), Stmt(SK_RETURN) {}
 
   void accept(funLang::SemaAnalyzer &v) override {}
   Expr *getExprInput() { return expr.get(); }
