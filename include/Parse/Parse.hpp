@@ -23,11 +23,11 @@ private:
 
 public:
   Parser(std::unique_ptr<Lexer> Lex, DiagEngine &Diags,
-         std::unique_ptr<SemaAnalyzer> Sema)
-      : lexer(std::move(Lex)), error(false), diags(Diags),
-        semantics(std::move(Sema)) {}
+		 std::unique_ptr<SemaAnalyzer> Sema)
+	  : lexer(std::move(Lex)), error(false), diags(Diags),
+		semantics(std::move(Sema)) {}
   bool atEnd();
-  bool isOneOf(std::initializer_list<Basic::tok::Tag> Tok, bool Peeking);
+  bool isOneOf(std::initializer_list<Basic::tok::Tag> Tok, bool Peeking = true);
   Token peek();
   Token previous();
   Token &advance();
@@ -45,7 +45,6 @@ public:
   std::unique_ptr<TypeProperties> typeProperties();
   std::unique_ptr<TypeUse> type();
   std::unique_ptr<ArgsList> arguments();
-  std::unique_ptr<ArgDecl> arg();
   std::unique_ptr<VarDecl> nameDecl();
   std::unique_ptr<CompoundStmt> compoundStmt();
   std::unique_ptr<Stmt> simpleStmt();
