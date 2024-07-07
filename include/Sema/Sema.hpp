@@ -86,6 +86,7 @@ public:
 
   std::unique_ptr<FloatingLiteral> actOnFloatingLiteral(Token &Literal);
   std::unique_ptr<BooleanLiteral> actOnBooleanLiteral(Token &literal);
+  std::unique_ptr<StringLiteral> actOnStrLiteral(Token &Literal);
   std::unique_ptr<TypeUse> actOnTypeUse(Token &TypeName);
   std::unique_ptr<forStmt> actOnForStmt(std::unique_ptr<Stmt> Init,
                                         std::unique_ptr<Expr> Cond,
