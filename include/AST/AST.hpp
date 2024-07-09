@@ -37,7 +37,8 @@ class FunctionCall;
 class CallArgList;
 class BinaryOp;
 class UnaryOp;
-class PostFix;
+class Member;
+class ArrayIndex;
 class NameUsage;
 class ErrorExpr;
 class FloatingLiteral;
@@ -141,7 +142,7 @@ class TraitDecl : public Decl {
 public:
   TraitDecl(llvm::StringRef Name, llvm::SMLoc Loc, TypeDecl *Other,
 			std::unique_ptr<FunctionNode> ToCall)
-	  : Decl(DK_TRAIT, Name, Loc), ToCall(std::move(ToCall)) {}
+	  : Decl(DK_TRAIT, Name, Loc), ToCall(std::move(ToCall)), OtherType(Other) {}
 };
 
 class TypeDecl : public Decl {
@@ -489,6 +490,8 @@ public:
 	EXPR_FLOAT,
 	EXPR_BOOL,
 	EXPR_STRING,
+	EXPR_MEMBER,
+	EXPR_ARRINDEX,
 	EXPR_ERR
   };
 
@@ -581,6 +584,28 @@ public:
 	  : Expr(EXPR_STRING, LeftQuoteLoc, StringType) {}
 
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_STRING; }
+};
+
+class Member : public Expr {
+private:
+  Stmt *Accessed;
+  VarDecl *MemberDecl;
+public:
+  Member(Stmt *Accessed, VarDecl *MemberDecl, TypeDecl *ResultTy, llvm::SMLoc Left)
+	  : Accessed(Accessed), MemberDecl(MemberDecl), Expr(EXPR_MEMBER, Left, ResultTy) {}
+  static bool classof(const Expr *E) { return E->getExprKind() == EXPR_MEMBER; }
+};
+
+class ArrayIndex : public Expr {
+private:
+  Stmt *Accessed;
+  std::unique_ptr<Expr> AccessExpr;
+public:
+  ArrayIndex(Stmt *Accessed, std::unique_ptr<Expr> AccessExpr, TypeDecl *ResultTy, llvm::SMLoc Left)
+	  : Accessed(Accessed), AccessExpr(std::move(AccessExpr)),
+		Expr(EXPR_ARRINDEX, Left, ResultTy) {}
+
+  static bool classof(const Expr *E) { return E->getExprKind() == EXPR_ARRINDEX; }
 };
 
 class FunctionCall : public Expr {
