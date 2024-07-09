@@ -1,13 +1,13 @@
-#include "gtest/gtest.h"
 #include "Parse/Parse.hpp"
 #include "Sema/Sema.hpp"
+#include "gtest/gtest.h"
 
 std::unique_ptr<Parser> makeParser(const std::string &Filename) {
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> FileOrErr =
-	  llvm::MemoryBuffer::getFile(Filename);
+      llvm::MemoryBuffer::getFile(Filename);
   if (std::error_code BufferErr = FileOrErr.getError()) {
-	std::cout << BufferErr.message() << " " << BufferErr.value();
-	return nullptr;
+    std::cout << BufferErr.message() << " " << BufferErr.value();
+    return nullptr;
   }
   auto SrcMgr = std::make_shared<llvm::SourceMgr>();
   SrcMgr->AddNewSourceBuffer(std::move(*FileOrErr), llvm::SMLoc());
@@ -17,7 +17,8 @@ std::unique_ptr<Parser> makeParser(const std::string &Filename) {
 
   std::unique_ptr<SemaAnalyzer> Sema = std::make_unique<SemaAnalyzer>(Diag);
 
-  std::unique_ptr<Parser> Parse = std::make_unique<Parser>(std::move(LexerObj), *Diag, std::move(Sema));
+  std::unique_ptr<Parser> Parse =
+      std::make_unique<Parser>(std::move(LexerObj), *Diag, std::move(Sema));
 
   return std::move(Parse);
 }
@@ -64,7 +65,6 @@ TEST(ParseTesting, cmpExpr) {
   ASSERT_NE(nullptr, ParserPtr);
   std::unique_ptr<Expr> CmpExpr = ParserPtr->cmpExpr();
   ASSERT_NE(nullptr, CmpExpr);
-
 }
 TEST(ParseTesting, bigCompilationUnit) {
   auto ParserPtr = makeParser("./bigCompilationUnit.fun");
