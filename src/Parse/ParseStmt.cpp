@@ -1,6 +1,35 @@
 #include "Parse/Parse.hpp"
 
-std::unique_ptr<loopStmt> Parser::loopStmt() { return nullptr; } /// TODO
+std::unique_ptr<ifStmt> Parser::ifStmt() {
+  assert(advance().is(Basic::tok::kw_if) && "if stmt did not begin with if");
+  llvm::SMLoc IfLoc = previous().getLoc();
+  std::unique_ptr<Expr> Condition = expr();
+  if (!Condition) {
+	return nullptr;
+  }
+
+  std::unique_ptr<CompoundStmt> Compound = compoundStmt();
+  if (!Compound) {
+	return nullptr;
+  }
+  std::unique_ptr<CompoundStmt> ElseBlock = nullptr;
+  if (peek().is(Basic::tok::kw_else)) {
+	advance();
+	ElseBlock = compoundStmt();
+  }
+
+  return semantics->actOnIfStmt(IfLoc, std::move(Condition), std::move(Compound), nullptr, std::move(ElseBlock));
+}
+
+std::unique_ptr<loopStmt> Parser::loopStmt() {
+  Token LoopTok = advance();
+  std::unique_ptr<CompoundStmt> Compound = compoundStmt();
+
+  if (Compound) {
+	return nullptr;
+  }
+  return semantics->actOnLoopStmt(std::move(Compound), LoopTok.getLoc());
+}
 
 std::unique_ptr<forStmt> Parser::forStmt() {
   Token ForTok = advance();
@@ -107,6 +136,10 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
 	return nullptr;
   }
 
+  if (!expect(Basic::tok::semi)) {
+	return nullptr;
+  }
+
   return semantics->actOnVarDeclStmt(std::move(D), std::move(ExprNode),
 									 previous().getLoc());
 }
@@ -119,6 +152,9 @@ std::unique_ptr<ReturnStmt> Parser::returnStmt() {
 	if (!ExprNode) {
 	  return nullptr;
 	}
+  }
+  if (!expect(Basic::tok::semi)) {
+	return nullptr;
   }
   return semantics->actOnReturnStmt(ReturnToken.getLoc(), std::move(ExprNode));
 }

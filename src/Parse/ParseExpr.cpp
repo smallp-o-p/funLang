@@ -4,7 +4,7 @@ std::unique_ptr<Expr> Parser::expr() { return assign(); }
 
 std::unique_ptr<Expr> Parser::assign() {
   std::unique_ptr<Expr> EqNode = eqExpr();
-  Basic::Op::Binary Opcode = Basic::Op::Binary::BO_equals;
+  Basic::Op::Binary Opcode;
   if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
 			   Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
 			   Basic::tok::Tag::slashequal})) {
@@ -27,7 +27,6 @@ std::unique_ptr<Expr> Parser::assign() {
 	}
 	return semantics->actOnBinaryOp(std::move(EqNode), Opcode,
 									std::move(EqNode2));
-
   } else {
 	return EqNode;
   }
@@ -126,7 +125,7 @@ std::unique_ptr<Expr> Parser::unary() {
   using namespace Basic;
   Op::Unary Opcode = Basic::Op::Unary::NUM_UNARY;
   if (isOneOf(
-	  {tok::plusplus, tok::minusminus, tok::exclaim, tok::Tag::minus})) {
+	  {tok::plusplus, tok::minusminus, tok::exclaim, tok::minus, tok::at})) {
 	switch (advance().getTag()) {
 	case tok::plusplus: Opcode = Basic::Op::Unary::UO_preInc;
 	  break;
@@ -136,17 +135,79 @@ std::unique_ptr<Expr> Parser::unary() {
 	  break;
 	case tok::minus: Opcode = Basic::Op::Unary::UO_unaryMinus;
 	  break;
+	case tok::at : return deref();
 	default:;
 	}
   }
-  std::unique_ptr<Expr> PrimaryNode = primary();
-  if (!PrimaryNode) {
+  std::unique_ptr<Expr> Postfix = postfix();
+  if (!Postfix) {
 	return nullptr;
   }
   if (Opcode != Basic::Op::Unary::NUM_UNARY) {
-	return semantics->actOnUnaryOp(Opcode, std::move(PrimaryNode));
+	return semantics->actOnUnaryOp(Opcode, std::move(Postfix));
   }
-  return PrimaryNode;
+  return Postfix;
+}
+
+std::unique_ptr<Expr> Parser::deref() {
+  assert(previous().is(Basic::tok::at) && "entered deref() without having the deref token before it");
+  size_t derefCount = 1;
+  while (peek().is(Basic::tok::at)) {
+	derefCount++;
+	advance();
+  }
+
+  std::unique_ptr<Expr> Postfix = postfix();
+  if (!Postfix) {
+	return nullptr;
+  }
+
+  return semantics->actOnDereference(std::move(Postfix), derefCount);
+
+}
+
+std::unique_ptr<Expr> Parser::postfix() {
+  std::unique_ptr<Expr> Primary = primary();
+  if (!Primary) {
+	return nullptr;
+  }
+  using namespace Basic;
+  if (peek().is(tok::dot)) {
+	return member(std::move(Primary));
+  } else if (peek().is(tok::l_square)) {
+	return arrayIndex(std::move(Primary));
+  }
+  return Primary;
+}
+
+std::unique_ptr<Expr> Parser::arrayIndex(std::unique_ptr<Expr> Input) {
+  assert(advance().is(Basic::tok::l_square) && "Peek() should've been a l_square");
+  llvm::SMLoc LSquareLoc = previous().getLoc();
+  std::unique_ptr<Expr> Indexed = expr();
+
+  if (!Indexed) {
+	return nullptr;
+  }
+  if (!expect(Basic::tok::l_brace)) {
+	return nullptr;
+  }
+
+  llvm::SMLoc RSquareLoc = previous().getLoc();
+
+  return semantics->actOnIndexOperation(std::move(Input), std::move(Input), LSquareLoc, RSquareLoc);
+}
+
+std::unique_ptr<Expr> Parser::member(std::unique_ptr<Expr> Input) {
+  assert(advance().is(Basic::tok::dot) && "should be a dot here");
+
+  if (!expect(Basic::tok::identifier)) {
+	return nullptr;
+  }
+  std::unique_ptr<Expr> Primary = primary();
+  return semantics->actOnMemberExpr(std::move(Input),
+									std::move(Primary),
+									Input->getLeftLoc(),
+									Primary->getRightLoc());
 }
 
 std::unique_ptr<Expr> Parser::primary() {
