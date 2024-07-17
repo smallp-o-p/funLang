@@ -14,14 +14,14 @@ DIAG(err_expr_not_assignable, Error, "Expression is not assignable.")
 DIAG(err_incompatible_type_passed,
 	 Error,
 	 "Formal argument <{0}> is of type <{1}>, but expression of type <{2}> was passed.")
-
 DIAG(err_incompatible_type_var_decl,
 	 Error,
 	 "Type of declared variable <{0}> is <{1}>, however expression results in a type of <{2}>")
 DIAG(err_incompatible_binary_operands,
 	 Error,
 	 "Type of LHS <{0}> is incompatible with type of RHS <{1}> for operation <{2}>.")
-DIAG(err_unary_op_incompatible, Error, "Operation '{0}' is incompatible with operand of type '{1}'")
+DIAG(err_unary_op_incompatible, Error, "Operation <{0}> is incompatible with operand of type <{1}>")
+DIAG(err_dereferenced_non_pointer, Error, "Dereference requires a pointer, type <{0}> invalid.")
 DIAG(err_incompatible_ret,
 	 Error,
 	 "Type of return expression <{0}> is not compatible with function type declaration of <{1}>.")
@@ -38,6 +38,9 @@ DIAG(err_member_does_not_exist, Error, "Type <{0}> has no member named <{1}>")
 DIAG(err_array_index_expr_not_whole_number,
 	 Error,
 	 "Expression used for array indexing does not result in <i32, i64, integer literal> but <{0}>")
+DIAG(err_if_condition_does_not_evaluate_to_bool,
+	 Error,
+	 "Condition used to evaluate <if> does not result in <bool> but <{0}>")
 DIAG(err_indexing_on_non_array, Error, "Attempting to index type <{0}> which is not an array.")
 DIAG(err_struct_var_redefinition, Error, "Redefinition of member '{0}' in struct '{1}'")
 DIAG(err_int_literal_too_big, Error, "Integer literal <{0}> is too big to fit into <{1}>.")
