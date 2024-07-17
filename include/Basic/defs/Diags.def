@@ -11,7 +11,9 @@ DIAG(err_var_redefinition, Error, "Redefinition of variable '{0}' in same scope.
 DIAG(err_toplevel_redefinition, Error, "Redefinition of top-level declaration <{0}>.")
 DIAG(err_wrong_number_of_parameters, Error, "Function <{0}> takes {1} parameters, but {2} passed.")
 DIAG(err_expr_not_assignable, Error, "Expression is not assignable.")
-DIAG(err_incompatible_type_passed, Error, "Formal argument <{0}> is of type <{1}>, but expression of type <{2}> was passed.")
+DIAG(err_incompatible_type_passed,
+	 Error,
+	 "Formal argument <{0}> is of type <{1}>, but expression of type <{2}> was passed.")
 
 DIAG(err_incompatible_type_var_decl,
 	 Error,
@@ -25,13 +27,18 @@ DIAG(err_incompatible_ret,
 	 "Type of return expression <{0}> is not compatible with function type declaration of <{1}>.")
 DIAG(err_struct_var_initialization,
 	 Error,
-	 "Member initialization is disallowed for '{0}' in struct '{1}'.")
+	 "MemberAccess initialization is disallowed for '{0}' in struct '{1}'.")
 DIAG(err_while_condition_not_bool, Error, "Expression in while statement does not evaluate to <bool>.")
+DIAG(err_stmt_no_members, Error, "Attempting to access member of statement.")
 DIAG(err_called_fn_on_var, Error, "Variable <{0}> is not a function.")
-DIAG(err_return_on_void_fn, Error, "Returning expression on function declared \'void\'.")
+DIAG(err_return_on_void_fn, Error, "Returning non-void type on function declared <void>.")
 DIAG(err_naked_return_on_non_void_fn, Error, "Non-void function should return a value.")
 DIAG(err_access_member_of_type_without_members, Error, "Type '{0}' has no members.")
-DIAG(err_member_does_not_exist, Error, "Type '{0}' has no member named '{1}'")
+DIAG(err_member_does_not_exist, Error, "Type <{0}> has no member named <{1}>")
+DIAG(err_array_index_expr_not_whole_number,
+	 Error,
+	 "Expression used for array indexing does not result in <i32, i64, integer literal> but <{0}>")
+DIAG(err_indexing_on_non_array, Error, "Attempting to index type <{0}> which is not an array.")
 DIAG(err_struct_var_redefinition, Error, "Redefinition of member '{0}' in struct '{1}'")
 DIAG(err_int_literal_too_big, Error, "Integer literal <{0}> is too big to fit into <{1}>.")
 DIAG(last_err, Error, "last err")
