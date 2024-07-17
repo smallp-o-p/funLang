@@ -54,17 +54,21 @@ compoundStmt
     ;
     
 simpleStmt
-    : declStmt ';'
+    : declStmt
     | expr ';'
     | ifStmt
     | forStmt
     | whileStmt
     | loopStmt
-    | matchStmt ';'
+    | matchStmt
     | returnStmt
     ;
 
-if expr compoundStmt
+ifStmt : 'if' expr compoundStmt (elifArm*) (elseArm)?
+
+elifArm : 'elif' expr compoundStmt
+
+elseStmt : 'else' compoundStmt
 
 forStmt : FOR '(' (declStmt|expr) ';' expr ';' expr ')' compoundStmt
 
@@ -78,9 +82,8 @@ matchArm
     : (expr | 'default') '=>' compoundStmt;
 
 declStmt
-    : nameDecl '=' expr
+    : nameDecl '=' expr ';'
     ;
-
 
 expr 
     : assign
