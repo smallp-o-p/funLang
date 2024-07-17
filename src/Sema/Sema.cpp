@@ -9,7 +9,7 @@ bool funLang::SemaAnalyzer::TypesAreEqual(TypeDecl *LHS, TypeDecl *RHS) {
 
   assert(LHS && RHS && "LHS or RHS are nullptrs");
 
-  if (llvm::isa<PointerType>(LHS) && llvm::isa<PointerType>(RHS)) {
+  if (llvm::isa<PointerType>(LHS) && llvm::isa<PointerType>(RHS)) { //TODO: allow type checking for multi-pointers
 	auto RHSPtr = llvm::dyn_cast<PointerType>(RHS);
 	auto LHSPtr = llvm::dyn_cast<PointerType>(LHS);
 
@@ -23,13 +23,12 @@ bool funLang::SemaAnalyzer::TypesAreEqualOrCompatible(TypeDecl *LHS,
 													  TypeDecl *RHS) {
   if (TypesAreEqual(LHS, RHS)) {
 	return true;
-
   } else {
 	if (!llvm::isa<BuiltInType>(LHS) && !llvm::isa<BuiltInType>(RHS)) {
 	  return false;
 	}
-	BuiltInType *Left = llvm::dyn_cast<BuiltInType>(LHS);
-	BuiltInType *Right = llvm::dyn_cast<BuiltInType>(RHS);
+	auto *Left = llvm::dyn_cast<BuiltInType>(LHS);
+	auto *Right = llvm::dyn_cast<BuiltInType>(RHS);
 
 	return Left->isCompatible(Right);
   }
@@ -38,7 +37,9 @@ bool funLang::SemaAnalyzer::TypesAreEqualOrCompatible(TypeDecl *LHS,
 std::unique_ptr<forStmt> SemaAnalyzer::actOnForStmt(
 	std::unique_ptr<Stmt> Init, std::unique_ptr<Expr> Cond,
 	std::unique_ptr<Expr> Inc, std::unique_ptr<CompoundStmt> Body,
-	llvm::SMLoc Left, llvm::SMLoc Right) {}
+	llvm::SMLoc Left, llvm::SMLoc Right) {
+  return std::make_unique<forStmt>(std::move(Init), std::move(Cond), std::move(Inc), std::move(Body), Left);
+}
 
 std::unique_ptr<whileStmt>
 SemaAnalyzer::actOnWhileStmt(std::unique_ptr<Expr> Condition,
@@ -59,9 +60,21 @@ SemaAnalyzer::actOnWhileStmt(std::unique_ptr<Expr> Condition,
   return std::make_unique<whileStmt>(std::move(Condition), std::move(Compound),
 									 Left, Right);
 }
-std::unique_ptr<TypeUse> SemaAnalyzer::actOnTypeUse(Token &TypeName) {
+std::unique_ptr<TypeUse> SemaAnalyzer::actOnTypeUse(Token &TypeName, size_t IndirectionCount) {
   if (TypeDecl *FoundType = lookupType(TypeName.getLexeme())) {
-	return std::make_unique<TypeUse>(FoundType, TypeName.getLoc());
+	PointerType *Ptr = nullptr;
+	if (IndirectionCount-- > 0) {
+	  Ptr = new PointerType(FoundType);
+	  while (IndirectionCount > 0) {
+		Ptr = new PointerType(Ptr);
+		IndirectionCount--;
+	  }
+	}
+	if (Ptr) {
+	  return std::make_unique<TypeUse>(Ptr, TypeName.getLoc());
+	} else {
+	  return std::make_unique<TypeUse>(FoundType, TypeName.getLoc());
+	}
 
   } else {
 	diags->emitDiagMsg(TypeName.getLoc(), diag::err_var_not_found,
@@ -105,6 +118,10 @@ funLang::SemaAnalyzer::actOnReturnStmt(llvm::SMLoc ReturnLoc,
 std::unique_ptr<Expr>
 funLang::SemaAnalyzer::actOnUnaryOp(Basic::Op::Unary Op,
 									std::unique_ptr<Expr> ExprInput) {
+  if (!ExprInput->getType()) {
+	return std::make_unique<ErrorExpr>(std::make_unique<UnaryOp>(std::move(ExprInput), Op, nullptr));
+  }
+
   if (!llvm::isa<BuiltInType>(ExprInput->getType())) {
 	diags->emitDiagMsg(ExprInput->getLeftLoc(), diag::err_unary_op_incompatible,
 					   Basic::Op::getUnaryOpSpelling(Op),
@@ -112,10 +129,6 @@ funLang::SemaAnalyzer::actOnUnaryOp(Basic::Op::Unary Op,
 
 	return std::make_unique<UnaryOp>(
 		std::make_unique<ErrorExpr>(std::move(ExprInput)), Op, nullptr);
-  }
-
-  if (!ExprInput->getType()) {
-	return std::make_unique<UnaryOp>(std::move(ExprInput), Op, nullptr);
   }
 
   bool Mismatch = false;
@@ -504,4 +517,110 @@ TypeDecl *funLang::SemaAnalyzer::lookupType(llvm::StringRef Type) {
 
 Decl *funLang::SemaAnalyzer::lookupCurrentScope(llvm::StringRef varName) {
   return currentScope->find(varName);
+}
+std::unique_ptr<Expr> SemaAnalyzer::actOnIndexOperation(std::unique_ptr<Expr> Accessed,
+														std::unique_ptr<Expr> AccessExpr,
+														llvm::SMLoc Left,
+														llvm::SMLoc Right) {
+  if (auto *ShouldBeIntegerNumeric = llvm::dyn_cast<BuiltInType>(AccessExpr->getType())) {
+	if (!ShouldBeIntegerNumeric->isNumericType()) {
+	  diags->emitDiagMsgRange(Left,
+							  Right,
+							  diag::err_array_index_expr_not_whole_number,
+							  AccessExpr->getType()->getName());
+	  return std::make_unique<ErrorExpr>(std::make_unique<ArrayIndex>(std::move(Accessed),
+																	  std::move(AccessExpr),
+																	  nullptr,
+																	  Left));
+	}
+  } else {
+	diags->emitDiagMsgRange(Left, Right, diag::err_array_index_expr_not_whole_number, AccessExpr->getType()->getName());
+	return std::make_unique<ErrorExpr>(std::make_unique<ArrayIndex>(std::move(Accessed),
+																	std::move(AccessExpr),
+																	nullptr,
+																	Left));
+  }
+
+  auto *ArrTy = llvm::dyn_cast<PointerType>(Accessed->getType());;
+  if (!ArrTy) {
+	diags->emitDiagMsgRange(Left, Right, diag::err_indexing_on_non_array, Accessed->getType()->getName());
+	return std::make_unique<ErrorExpr>(std::make_unique<ArrayIndex>(std::move(Accessed),
+																	std::move(AccessExpr),
+																	nullptr,
+																	Left));
+  }
+
+  return std::make_unique<ArrayIndex>(std::move(Accessed),
+									  std::move(AccessExpr),
+									  ArrTy->getPointee(),
+									  Left);
+}
+std::unique_ptr<Expr> SemaAnalyzer::actOnMemberExpr(std::unique_ptr<Expr> Accessed,
+													std::unique_ptr<Expr> Accessee,
+													llvm::SMLoc Left,
+													llvm::SMLoc Right) {
+  TypeDecl *AccessedType = Accessed->getType();
+  if (!AccessedType) {
+	return std::make_unique<ErrorExpr>(std::make_unique<MemberAccess>(std::move(Accessed), nullptr, nullptr, Left));
+  }
+
+  if (auto *Name = llvm::dyn_cast<NameUsage>(Accessee.get())) {
+	VarDecl *Get = AccessedType->getMember(Name->getLexeme());
+	if (!Get) {
+	  diags->emitDiagMsgRange(Left, Right, diag::err_member_does_not_exist, AccessedType->getName(), Name->getLexeme());
+	  return std::make_unique<ErrorExpr>(std::make_unique<MemberAccess>(std::move(Accessed), nullptr, nullptr, Left));
+	}
+	return std::make_unique<MemberAccess>(std::move(Accessed), Get, Get->getUnderlyingTypeDecl(), Left);
+  } else if (auto *MemberFunction = llvm::dyn_cast<FunctionCall>(Accessee.get())) {
+	// not supported;
+	return std::make_unique<ErrorExpr>(std::make_unique<MemberAccess>(std::move(Accessed), nullptr, nullptr, Left));
+  }
+  return std::make_unique<ErrorExpr>(std::make_unique<MemberAccess>(std::move(Accessed), nullptr, nullptr, Left));
+}
+
+std::unique_ptr<loopStmt> SemaAnalyzer::actOnLoopStmt(std::unique_ptr<CompoundStmt> Compound, llvm::SMLoc LoopLoc) {
+  return std::make_unique<loopStmt>(std::move(Compound), LoopLoc);
+}
+
+std::unique_ptr<Expr> SemaAnalyzer::actOnDereference(std::unique_ptr<Expr> ExprInput, size_t DerefCount) {
+  TypeDecl *Dereferenced = ExprInput->getType();
+
+  while (DerefCount-- > 0) {
+	if (auto *Ptr = llvm::dyn_cast<PointerType>(Dereferenced)) {
+	  Dereferenced = Ptr->getPointee();
+	} else {
+	  diags->emitDiagMsg(ExprInput->getLeftLoc(), diag::err_dereferenced_non_pointer, Dereferenced->getName());
+	  return std::make_unique<ErrorExpr>();
+	}
+  }
+  return std::unique_ptr<UnaryOp>();
+}
+std::unique_ptr<ifStmt> SemaAnalyzer::actOnIfStmt(llvm::SMLoc IfLoc, std::unique_ptr<Expr> IfCondition,
+												  std::unique_ptr<CompoundStmt> FirstBlock,
+												  std::unique_ptr<elifStmt> ElifChain,
+												  std::unique_ptr<CompoundStmt> ElseBlock) {
+  if (!IfCondition->getType()) {
+	return std::make_unique<ifStmt>(IfLoc, std::move(IfCondition),
+									std::move(FirstBlock),
+									std::move(ElifChain),
+									std::move(ElseBlock));
+  }
+  if (auto *ShouldBeBool = llvm::dyn_cast<BuiltInType>(IfCondition->getType())) {
+	if (!ShouldBeBool->isBoolType()) {
+	  diags->emitDiagMsgRange(IfCondition->getLeftLoc(),
+							  IfCondition->getRightLoc(),
+							  diag::err_if_condition_does_not_evaluate_to_bool,
+							  IfCondition->getType()->getName());
+	}
+  } else {
+	diags->emitDiagMsgRange(IfCondition->getLeftLoc(),
+							IfCondition->getRightLoc(),
+							diag::err_if_condition_does_not_evaluate_to_bool,
+							IfCondition->getType()->getName());
+  }
+
+  return std::make_unique<ifStmt>(IfLoc, std::move(IfCondition),
+								  std::move(FirstBlock),
+								  std::move(ElifChain),
+								  std::move(ElseBlock));
 }
