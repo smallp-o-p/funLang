@@ -31,7 +31,7 @@ public:
   Token previous();
   Token &advance();
   bool expect(Basic::tok::Tag Tok);
-  bool check(Basic::tok::Tag Tok);
+  bool nextTokIs(Basic::tok::Tag Tok);
   Token lookahead(uint32_t HowMuch);
   void reportExpect(Basic::tok::Tag Expected, Token Received);
   void emitWarning(unsigned int DiagId, llvm::SMLoc Loc, llvm::StringRef Name);

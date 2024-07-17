@@ -7,7 +7,7 @@
 #include <utility>
 
 Token Parser::peek() { return lexer->peek(); }
-bool Parser::check(Basic::tok::Tag Tok) { return peek().getTag() == Tok; }
+bool Parser::nextTokIs(Basic::tok::Tag Tok) { return lexer->peek().is(Tok); }
 Token Parser::previous() { return lexer->previous(); }
 Token &Parser::advance() { return lexer->advance(); }
 bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> ToExpect,
@@ -45,17 +45,17 @@ bool Parser::recoverFromError(CurrentNonTerminal WhereWeFailed) {
 	do {
 	  advance(); // discard symbols until we find a semicolon and eat the
 	  // semicolon
-	} while (!check(Basic::tok::Tag::semi) && !check(Basic::tok::Tag::eof));
+	} while (!nextTokIs(Basic::tok::Tag::semi) && !nextTokIs(Basic::tok::Tag::eof));
 	break;
   }
   case FUNCTION: {
 	do {
 	  advance();
-	} while (!check(Basic::tok::Tag::r_brace) && !check(Basic::tok::Tag::eof));
+	} while (!nextTokIs(Basic::tok::Tag::r_brace) && !nextTokIs(Basic::tok::Tag::eof));
 	break;
   }
   }
-  if (peek().getTag() == Basic::tok::Tag::eof) {
+  if (nextTokIs(Basic::tok::eof)) {
 	return false;
   }
   return true;
@@ -63,7 +63,7 @@ bool Parser::recoverFromError(CurrentNonTerminal WhereWeFailed) {
 
 std::unique_ptr<TypeUse> Parser::type() {
   size_t IndirectionCount = 0;
-  while (peek().is(Basic::tok::star)) {
+  while (nextTokIs(Basic::tok::star)) {
 	IndirectionCount++;
 	advance();
   }
@@ -95,7 +95,7 @@ std::unique_ptr<TopLevelDecls> Parser::topLevels() {
   while (true) {
 	std::unique_ptr<Decl> TopLevel;
 
-	if (check(Basic::tok::kw_struct)) {
+	if (nextTokIs(Basic::tok::kw_struct)) {
 	  TopLevel = typeDecl();
 	} else if (isOneOf({Basic::tok::Tag::identifier}) || peek().isBaseType()) {
 	  TopLevel = function();
@@ -105,11 +105,11 @@ std::unique_ptr<TopLevelDecls> Parser::topLevels() {
 	}
 	if (semantics->actOnTopLevelDecl(
 		TopLevel
-			.get())) { // check if top level name has been defined before
+			.get())) { // nextTokIs if top level name has been defined before
 	  TopLevelList.insert(std::pair<llvm::StringRef, std::unique_ptr<Decl>>(
 		  TopLevel->getName(), std::move(TopLevel)));
 	}
-	if (check(Basic::tok::Tag::eof)) {
+	if (nextTokIs(Basic::tok::Tag::eof)) {
 	  break;
 	}
   }
@@ -144,7 +144,7 @@ std::unique_ptr<TypeProperties> Parser::typeProperties() {
   auto Properties =
 	  std::make_unique<llvm::StringMap<std::unique_ptr<VarDecl>>>();
   while (true) {
-	if (check(Basic::tok::Tag::r_brace)) {
+	if (nextTokIs(Basic::tok::Tag::r_brace)) {
 	  break;
 	}
 
@@ -210,7 +210,7 @@ std::unique_ptr<FunctionNode> Parser::function() {
 std::unique_ptr<ArgsList> Parser::arguments() {
   std::vector<std::unique_ptr<VarDecl>> ArgList;
   while (true) {
-	if (check(Basic::tok::Tag::r_paren)) {
+	if (nextTokIs(Basic::tok::Tag::r_paren)) {
 	  break;
 	}
 	if (!ArgList.empty() && !expect(Basic::tok::Tag::comma)) {
@@ -231,12 +231,12 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
   }
   std::vector<std::unique_ptr<Stmt>> Stmts;
   while (true) {
-	if (check(Basic::tok::Tag::r_brace)) {
+	if (nextTokIs(Basic::tok::Tag::r_brace)) {
 	  advance();
 	  break;
 	}
 	std::unique_ptr<Stmt> S;
-	if (check(Basic::tok::Tag::l_brace)) {
+	if (nextTokIs(Basic::tok::Tag::l_brace)) {
 	  advance();
 	  semantics->enterScope();
 	  S = compoundStmt();
@@ -311,7 +311,7 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
 std::unique_ptr<CallArgList> Parser::callArgs() {
   std::vector<std::unique_ptr<Expr>> Args;
   while (true) {
-	if (check(Basic::tok::r_paren)) {
+	if (nextTokIs(Basic::tok::r_paren)) {
 	  break;
 	}
 	if (!Args.empty() && !expect(Basic::tok::Tag::comma)) {

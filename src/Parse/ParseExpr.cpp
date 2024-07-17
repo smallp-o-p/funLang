@@ -152,7 +152,7 @@ std::unique_ptr<Expr> Parser::unary() {
 std::unique_ptr<Expr> Parser::deref() {
   assert(previous().is(Basic::tok::at) && "entered deref() without having the deref token before it");
   size_t derefCount = 1;
-  while (peek().is(Basic::tok::at)) {
+  while (nextTokIs(Basic::tok::at)) {
 	derefCount++;
 	advance();
   }
@@ -172,9 +172,9 @@ std::unique_ptr<Expr> Parser::postfix() {
 	return nullptr;
   }
   using namespace Basic;
-  if (peek().is(tok::dot)) {
+  if (nextTokIs(tok::dot)) {
 	return member(std::move(Primary));
-  } else if (peek().is(tok::l_square)) {
+  } else if (nextTokIs(tok::l_square)) {
 	return arrayIndex(std::move(Primary));
   }
   return Primary;
@@ -211,7 +211,7 @@ std::unique_ptr<Expr> Parser::member(std::unique_ptr<Expr> Input) {
 }
 
 std::unique_ptr<Expr> Parser::primary() {
-  if (check(Basic::tok::l_paren)) {
+  if (nextTokIs(Basic::tok::l_paren)) {
 	advance();
 	std::unique_ptr<Expr> ExprNode = expr();
 	if (!ExprNode) {
@@ -221,7 +221,7 @@ std::unique_ptr<Expr> Parser::primary() {
 	  return nullptr;
 	}
 	return ExprNode;
-  } else if (check(Basic::tok::identifier)) {
+  } else if (nextTokIs(Basic::tok::identifier)) {
 	if (lookahead(2).getTag() == Basic::tok::Tag::l_paren) {
 	  std::unique_ptr<Expr> FunctionCall = fnCall();
 	  if (!FunctionCall) {

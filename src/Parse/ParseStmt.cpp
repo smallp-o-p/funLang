@@ -13,7 +13,7 @@ std::unique_ptr<ifStmt> Parser::ifStmt() {
 	return nullptr;
   }
   std::unique_ptr<CompoundStmt> ElseBlock = nullptr;
-  if (peek().is(Basic::tok::kw_else)) {
+  if (nextTokIs(Basic::tok::kw_else)) {
 	advance();
 	ElseBlock = compoundStmt();
   }
@@ -42,10 +42,10 @@ std::unique_ptr<forStmt> Parser::forStmt() {
   }
 
   std::unique_ptr<Stmt> Init = nullptr;
-  if (!peek().is(Basic::tok::semi)) {
+  if (!nextTokIs(Basic::tok::semi)) {
 	if (peek().isBaseType()) {
 	  Init = declStmt();
-	} else if (peek().is(Basic::tok::identifier)) {
+	} else if (nextTokIs(Basic::tok::identifier)) {
 	  if (lookahead(2).is(Basic::tok::identifier)) {
 		Init = declStmt(); // id id
 	  } else {
@@ -123,7 +123,7 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
 	return nullptr;
   }
 
-  if (check(Basic::tok::Tag::semi)) {
+  if (nextTokIs(Basic::tok::Tag::semi)) {
 	return semantics->actOnVarDeclStmt(std::move(D), nullptr,
 									   previous().getLoc());
   }
@@ -147,7 +147,7 @@ std::unique_ptr<VarDeclStmt> Parser::declStmt() {
 std::unique_ptr<ReturnStmt> Parser::returnStmt() {
   Token ReturnToken = advance();
   std::unique_ptr<Expr> ExprNode = nullptr;
-  if (!check(Basic::tok::semi)) {
+  if (!nextTokIs(Basic::tok::semi)) {
 	ExprNode = expr();
 	if (!ExprNode) {
 	  return nullptr;
