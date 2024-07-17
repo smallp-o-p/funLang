@@ -28,6 +28,7 @@ UNARY_OPERATION(UO_unaryMinus, "-")
 UNARY_OPERATION(UO_preInc, "++")
 UNARY_OPERATION(UO_preDec, "--")
 UNARY_OPERATION(UO_lNot, "!")
+UNARY_OPERATION(UO_deref, "@")
 
 POSTFIX_OPERATION(access, '.')
 POSTFIX_OPERATION(index, "[]")
