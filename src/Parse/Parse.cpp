@@ -62,6 +62,12 @@ bool Parser::recoverFromError(CurrentNonTerminal WhereWeFailed) {
 }
 
 std::unique_ptr<TypeUse> Parser::type() {
+  size_t IndirectionCount = 0;
+  while (peek().is(Basic::tok::star)) {
+	IndirectionCount++;
+	advance();
+  }
+
   Token &TypeName = advance();
   if (!TypeName.isBaseType() && !TypeName.isIdentifier()) {
 	diags.emitDiagMsg(TypeName.getLoc(), diag::err_expected,
@@ -69,7 +75,7 @@ std::unique_ptr<TypeUse> Parser::type() {
 					  TypeName.getLexeme());
 	return nullptr;
   }
-  return semantics->actOnTypeUse(TypeName);
+  return semantics->actOnTypeUse(TypeName, IndirectionCount);
 }
 
 std::unique_ptr<CompilationUnit> Parser::program() {
@@ -236,8 +242,10 @@ std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
 	  S = compoundStmt();
 	} else {
 	  S = simpleStmt();
-	  if (!expect(Basic::tok::semi)) {
-		return nullptr;
+	  if (llvm::isa<Expr>(S.get())) {
+		if (!expect(Basic::tok::semi)) {
+		  return nullptr;
+		}
 	  }
 	}
 	if (!S) {
@@ -278,6 +286,10 @@ std::unique_ptr<Stmt> Parser::simpleStmt() {
   }
   case tok::Tag::kw_return: {
 	StmtInq = returnStmt();
+	break;
+  }
+  case tok::Tag::kw_if: {
+	StmtInq = ifStmt();
 	break;
   }
   case tok::Tag::kw_for: {

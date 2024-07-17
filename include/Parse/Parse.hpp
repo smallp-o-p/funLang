@@ -26,7 +26,6 @@ public:
 		 std::unique_ptr<SemaAnalyzer> Sema)
 	  : lexer(std::move(Lex)), error(false), diags(Diags),
 		semantics(std::move(Sema)) {}
-  bool atEnd();
   bool isOneOf(std::initializer_list<Basic::tok::Tag> Tok, bool Peeking = true);
   Token peek();
   Token previous();
@@ -53,6 +52,7 @@ public:
   std::unique_ptr<whileStmt> whileStmt();
   std::unique_ptr<loopStmt> loopStmt();
   std::unique_ptr<ReturnStmt> returnStmt();
+  std::unique_ptr<ifStmt> ifStmt();
   std::unique_ptr<Expr> expr();
   std::unique_ptr<Expr> assign();
   std::unique_ptr<Expr> eqExpr();
@@ -62,6 +62,10 @@ public:
   std::unique_ptr<Expr> unary();
   std::unique_ptr<Expr> primary();
   std::unique_ptr<Expr> fnCall();
+  std::unique_ptr<Expr> postfix();
+  std::unique_ptr<Expr> arrayIndex(std::unique_ptr<Expr> Input);
+  std::unique_ptr<Expr> member(std::unique_ptr<Expr> Input);
+  std::unique_ptr<Expr> deref();
   std::unique_ptr<CallArgList> callArgs();
   bool recoverFromError(CurrentNonTerminal WhereWeFailed);
 };
