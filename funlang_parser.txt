@@ -21,13 +21,17 @@ struct
     : 'struct' ID '{' structMembers '}'
     ;
 
+nameDecl
+    : type ID
+    ;
+
 structMembers
     : structMember*
+    | impl
     ;
-structMember
-    : type ID ';'
-    : impl
-    ;
+
+structMember 
+    : nameDecl ';'
 
 impl
     : 'impl' '{' functions '}'
@@ -36,31 +40,33 @@ functions
     : func+
     ; 
 
-func : type ID '(' args ')' compoundStmt;
+func : nameDecl '(' args ')' compoundStmt;
 
 args 
     : (arg (',' arg)*)?
     ; 
 
-arg : type ID
+arg : nameDecl
     ;
 
 compoundStmt
-    : '{' (simpleStmt ';')+ '}'
+    : '{' (simpleStmt )+ '}'
     ;
     
 simpleStmt
-    : declare
-    | expr
+    : declStmt ';'
+    | expr ';'
     | ifStmt
     | forStmt
     | whileStmt
     | loopStmt
-    | matchStmt
-    | return
+    | matchStmt ';'
+    | returnStmt
     ;
 
-forStmt : FOR '(' (stmt|expr) ';' expr ';' expr ')' compoundStmt
+if expr compoundStmt
+
+forStmt : FOR '(' (declStmt|expr) ';' expr ';' expr ')' compoundStmt
 
 whileStmt : WHILE '(' expr ')' compoundStmt
 
@@ -71,15 +77,16 @@ matchStmt : MATCH '(' ID ')' '{' matchArm+ '}'
 matchArm
     : (expr | 'default') '=>' compoundStmt;
 
-declare
-    : type ID '=' expr
+declStmt
+    : nameDecl '=' expr
     ;
-    
+
+
 expr 
     : assign
     ;
 
-return 
+returnStmt
     : 'return' expr? ';'
     ; 
 
@@ -109,8 +116,13 @@ multdiv
     ;
 
 unary 
-    : ('++'|'--'| '!'| '-') primary 
-    | primary
+    : ('++'|'--'| '!'| '-'| '@') postfix
+    | postfix
+    ;
+
+postfix
+    : primary ('.'| '[' expr ']' | '->')
+    : primary
     ;
 
 primary 
@@ -131,13 +143,5 @@ callArgs
     : (expr (',' expr)*)?
     ;
 
-type : VOID 
-    | BOOL 
-    | CHAR 
-    | I32
-    | I64
-    | I32 
-    | F64
-    | F32
-    | ID
+type : '*'* VOID | BOOL | CHAR | I32| I64 | I32 | F64 | F32 | ID
     ;
