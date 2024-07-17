@@ -27,6 +27,7 @@ class whileStmt;
 class loopStmt;
 class Decl;
 class TypeDecl;
+class ArrayType;
 class PointerType;
 class TypeUse;
 class VarDeclStmt;
@@ -37,7 +38,7 @@ class FunctionCall;
 class CallArgList;
 class BinaryOp;
 class UnaryOp;
-class Member;
+class MemberAccess;
 class ArrayIndex;
 class NameUsage;
 class ErrorExpr;
@@ -96,6 +97,7 @@ public:
 	DK_VAR,
 	DK_TYPE,
 	DK_TYPEBUILTIN,
+	DK_TYPEARRAY,
 	DK_TYPEPTR,
 	DK_ARG,
 	DK_TRAIT,
@@ -161,7 +163,7 @@ public:
 
   auto &getMembers() { return properties->getDecls(); }
   static bool classof(const Decl *D) {
-	return D->getKind() >= DK_TYPE && D->getKind() <= DK_TYPEBUILTIN;
+	return D->getKind() >= DK_TYPE && D->getKind() <= DK_TYPEPTR;
   }
   size_t getSize() { return SizeInBits; }
 
@@ -176,22 +178,32 @@ public:
 	}
 	return properties->lookupMember(MemberName);
   }
+
+  VarDecl *getMember(llvm::StringRef MemberName) {
+	return properties->lookupMember(MemberName);
+  }
+};
+
+class ArrayType : public TypeDecl {
+private:
+  TypeDecl *ArrayedType;
+  std::unique_ptr<Expr> AllocatedSize;
+public:
+  ArrayType(TypeDecl *Arrayed, std::unique_ptr<Expr> AllocatedSize)
+	  : ArrayedType(Arrayed), AllocatedSize(std::move(AllocatedSize)), TypeDecl("array", DK_TYPEARRAY, 64) {}
+  std::string getName() { return std::string("[]") + ArrayedType->getName().str(); }
+  TypeDecl *getArrayed() { return ArrayedType; }
 };
 
 class PointerType : public TypeDecl {
 private:
   TypeDecl *PointeeType;
-
 public:
-  PointerType(TypeDecl *Pointee)
-	  : PointeeType(Pointee), TypeDecl("ptr", DK_TYPEPTR, 64) {}
+  explicit PointerType(TypeDecl *Pointee)
+	  : PointeeType(Pointee), TypeDecl("*", DK_TYPEPTR, 64) {}
 
   TypeDecl *getPointee() { return PointeeType; }
-
-  std::string getFullName() {
-	return std::string("pointer to ") + PointeeType->getName().str();
-  }
-
+  std::string getName() { return std::string("*") + PointeeType->getName().str(); }
   static bool classof(const Decl *D) { return D->getKind() == DK_TYPEPTR; }
 };
 
@@ -200,23 +212,15 @@ class BuiltInType : public TypeDecl {
 
 private:
   Basic::Data::Type BuiltIn;
-
-protected:
+public:
   BuiltInType(Basic::Data::Type BuiltIn, llvm::StringRef Name,
 			  size_t SizeInBits)
 	  : TypeDecl(Name, DK_TYPEBUILTIN, SizeInBits), BuiltIn(BuiltIn) {}
-
-public:
   bool eqBaseType(Basic::Data::Type Other) {
 	assert(BuiltIn != Basic::Data::other_type);
 	return Other == BuiltIn;
   }
-
-  bool isIntType() {
-	return BuiltIn == Basic::Data::i32 || BuiltIn == Basic::Data::i64;
-  }
-  // TODO:: check amount of bits required for literals and reject if too big for
-  // lhs
+  // TODO: check amount of bits required for literals and reject if too big for lhs
   bool canImplicitlyPromoteOther(BuiltInType *Other) {
 	switch (BuiltIn) {
 	case Basic::Data::i32:
@@ -229,26 +233,21 @@ public:
 	}
   }
 
+  bool isIntType() { return BuiltIn == Basic::Data::i32 || BuiltIn == Basic::Data::i64; }
+
   bool isVoidType() { return BuiltIn == Basic::Data::void_; }
 
   bool isIntLiteral() { return BuiltIn == Basic::Data::int_literal; }
 
   bool isFloatLiteral() { return BuiltIn == Basic::Data::floating_literal; }
 
-  bool isFloatType() {
-	return BuiltIn == Basic::Data::f32 || BuiltIn == Basic::Data::f64;
-  }
+  bool isFloatType() { return BuiltIn == Basic::Data::f32 || BuiltIn == Basic::Data::f64; }
 
   bool isBoolType() { return BuiltIn == Basic::Data::bool_; }
 
-  bool isNumericType() {
-	return isFloatType() || isNumericType() || isFloatLiteral() ||
-		isIntLiteral();
-  }
+  bool isNumericType() { return isFloatType() || isFloatLiteral() || isIntType() || isIntLiteral(); }
 
-  bool isCompatible(BuiltInType *Other) {
-	return canImplicitlyPromoteOther(Other) || eq(Other);
-  }
+  bool isCompatible(BuiltInType *Other) { return canImplicitlyPromoteOther(Other) || eq(Other); }
 };
 
 class TypeUse : public Node {
@@ -330,6 +329,7 @@ public:
 	SK_RETURN,
 	SK_COMPOUND,
 	SK_IF,
+	SK_ELIF,
 	SK_FOR,
 	SK_WHILE,
 	SK_LOOP,
@@ -364,43 +364,48 @@ public:
 class elifStmt : public Stmt {
 private:
   std::unique_ptr<Expr> cond;
-  std::unique_ptr<CompoundStmt> block;
-  std::unique_ptr<elifStmt> elif;
+  std::unique_ptr<CompoundStmt> Block;
+  std::unique_ptr<elifStmt> NextElif;
 
 public:
-  elifStmt(StmtKind K, llvm::SMLoc Loc, std::unique_ptr<Expr> cond,
+  elifStmt(llvm::SMLoc Loc, std::unique_ptr<Expr> cond,
 		   std::unique_ptr<CompoundStmt> block, std::unique_ptr<elifStmt> elif)
-	  : Stmt(K, Loc), cond(std::move(cond)), block(std::move(block)),
-		elif(std::move(elif)) {}
+	  : Stmt(SK_ELIF, Loc), cond(std::move(cond)), Block(std::move(block)),
+		NextElif(std::move(elif)) {}
+  void setNextInChain(std::unique_ptr<elifStmt> Elif) {
+	NextElif = std::move(Elif);
+  }
 };
 
 class ifStmt : public Stmt {
 private:
-  std::unique_ptr<Expr> cond;
-  std::unique_ptr<CompoundStmt> block1;
+  std::unique_ptr<Expr> Condition;
+  std::unique_ptr<CompoundStmt> Block;
   std::unique_ptr<elifStmt> elif;
-  std::unique_ptr<CompoundStmt> block2;
+  std::unique_ptr<CompoundStmt> ElseBlock;
 
 public:
-  ifStmt(std::unique_ptr<Expr> cond, std::unique_ptr<CompoundStmt> block1,
+  ifStmt(llvm::SMLoc IfLoc, std::unique_ptr<Expr> cond, std::unique_ptr<CompoundStmt> block1,
 		 std::unique_ptr<elifStmt> elif, std::unique_ptr<CompoundStmt> block2)
-	  : cond(std::move(cond)), block1(std::move(block1)),
-		elif(std::move(elif)), block2(std::move(block2)), Stmt(SK_IF) {}
+	  : Condition(std::move(cond)), Block(std::move(block1)),
+		elif(std::move(elif)), ElseBlock(std::move(block2)), Stmt(SK_IF, IfLoc) {}
 };
 
 class forStmt : public Stmt {
 private:
-  std::unique_ptr<Expr> var;
+  std::unique_ptr<Stmt> var;
   std::unique_ptr<Expr> range;
   std::unique_ptr<Expr> iterator;
   std::unique_ptr<CompoundStmt> compound;
 
 public:
-  forStmt(std::unique_ptr<Expr> var, std::unique_ptr<Expr> range,
+  forStmt(std::unique_ptr<Stmt> var, std::unique_ptr<Expr> range,
 		  std::unique_ptr<Expr> iter, std::unique_ptr<CompoundStmt> compound,
 		  llvm::SMLoc loc)
 	  : Stmt(SK_FOR, loc), var(std::move(var)), range(std::move(range)),
 		iterator(std::move(iter)), compound(std::move(compound)) {}
+
+  static bool classof(const Stmt *S) { return S->getKind() == SK_FOR; }
 };
 
 class whileStmt : public Stmt {
@@ -414,6 +419,8 @@ public:
 			llvm::SMLoc endLoc)
 	  : compound(std::move(compound)), condition(std::move(condition)),
 		Stmt(SK_WHILE, whileLoc, endLoc) {}
+
+  static bool classof(const Stmt *S) { return S->getKind() == SK_WHILE; }
 };
 
 class loopStmt : public Stmt {
@@ -586,23 +593,23 @@ public:
   static bool classof(Expr *E) { return E->getExprKind() == EXPR_STRING; }
 };
 
-class Member : public Expr {
+class MemberAccess : public Expr {
 private:
-  Stmt *Accessed;
+  std::unique_ptr<Expr> Accessed;
   VarDecl *MemberDecl;
 public:
-  Member(Stmt *Accessed, VarDecl *MemberDecl, TypeDecl *ResultTy, llvm::SMLoc Left)
-	  : Accessed(Accessed), MemberDecl(MemberDecl), Expr(EXPR_MEMBER, Left, ResultTy) {}
+  MemberAccess(std::unique_ptr<Expr> Accessed, VarDecl *MemberDecl, TypeDecl *ResultTy, llvm::SMLoc Left)
+	  : Accessed(std::move(Accessed)), MemberDecl(MemberDecl), Expr(EXPR_MEMBER, Left, ResultTy) {}
   static bool classof(const Expr *E) { return E->getExprKind() == EXPR_MEMBER; }
 };
 
 class ArrayIndex : public Expr {
 private:
-  Stmt *Accessed;
+  std::unique_ptr<Expr> Accessed;
   std::unique_ptr<Expr> AccessExpr;
 public:
-  ArrayIndex(Stmt *Accessed, std::unique_ptr<Expr> AccessExpr, TypeDecl *ResultTy, llvm::SMLoc Left)
-	  : Accessed(Accessed), AccessExpr(std::move(AccessExpr)),
+  ArrayIndex(std::unique_ptr<Expr> Accessed, std::unique_ptr<Expr> AccessExpr, TypeDecl *ResultTy, llvm::SMLoc Left)
+	  : Accessed(std::move(Accessed)), AccessExpr(std::move(AccessExpr)),
 		Expr(EXPR_ARRINDEX, Left, ResultTy) {}
 
   static bool classof(const Expr *E) { return E->getExprKind() == EXPR_ARRINDEX; }
@@ -622,7 +629,7 @@ public:
   llvm::StringRef getName() const { return name; }
   const std::unique_ptr<CallArgList> &getArgs() const { return args; }
 
-  static bool classof(Expr *E) { return E->getExprKind() == EXPR_FNCALL; }
+  static bool classof(const Expr *E) { return E->getExprKind() == EXPR_FNCALL; }
 };
 
 class UnaryOp : public Expr {
