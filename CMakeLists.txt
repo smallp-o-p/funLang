@@ -31,8 +31,6 @@ message(STATUS "LLVM includes: ${LLVM_INCLUDE_DIRS}")
 message(STATUS "LLVM definitions: ${LLVM_DEFINITIONS}")
 message(STATUS "LLVM tools: ${LLVM_TOOLS_BINARY_DIR}")
 
-llvm_map_components_to_libnames(llvm_libs support core irreader)
-
 set(NO_RTTI "-fno-rtti")
 add_definitions(${NO_RTTI})
 include_directories(${LLVM_INCLUDE_DIRS})
