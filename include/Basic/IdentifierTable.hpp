@@ -9,11 +9,9 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/Allocator.h"
-#include "Lex/Lex.hpp"
 
 namespace funLang {
-
-class IdentifierInfo;
+class Lexer;
 class IdentifierTable;
 
 class IdentifierTable {
