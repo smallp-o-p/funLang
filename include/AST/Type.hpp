@@ -1,15 +1,16 @@
 //
 // Created by will on 7/17/24.
 //
-
-#ifndef FUNLANG_INCLUDE_TYPE_TYPE_HPP
-#define FUNLANG_INCLUDE_TYPE_TYPE_HPP
+#pragma once
 #include "Basic/Basic.hpp"
 #include "Sema/Sema.hpp"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/FoldingSet.h"
 
 namespace funLang {
+class Decl;
+class RecordDecl;
+
 class TypeTestFixture;
 class Type;
 class BuiltInType;
@@ -20,7 +21,7 @@ class PointerType;
 class ArrayType;
 
 class Type {
-  friend class funLang::SemaAnalyzer;
+  friend class SemaAnalyzer;
   friend class TypeTestFixture;
 protected:
   enum TypeClass {
@@ -40,8 +41,6 @@ public:
 
   bool isIntType();
   bool isVoidType();
-  bool isIntLiteral();
-  bool isFloatLiteral();
   bool isI32();
   bool isI64();
   bool isF32();
@@ -50,15 +49,17 @@ public:
   bool isBoolType();
   bool ArithmeticCompatibleWithEachOther(Type *Other);
   bool eqTo(Type *Other) { return this == Other; }
+  llvm::StringRef getName() { return "placeholder name for types"; }
 };
 
 class BuiltInType : public Type {
   friend class Type;
+  friend class SemaAnalyzer;
   friend class TypeTestFixture;
 protected:
   enum BTKind {
 	#define DATA(ID, SP) ID,
-	#include "Basic/defs/BuiltInTypes.def"
+	#include "../Basic/defs/BuiltInTypes.def"
 	NUM_DATA_TYPES
   };
 private:
@@ -69,13 +70,33 @@ public:
   static bool classof(const Type *T) { return T->getClass() == TK_BUILTIN; }
   BTKind getKind() { return BuiltInKind; }
 };
-class PointerType : public Type {
+class PointerType : public Type, llvm::FoldingSetNodeID {
 private:
   Type *PointeeType;
 public:
-  PointerType(Type *PointeeType) : PointeeType(PointeeType), Type(this, TK_POINTER) {}
+  explicit PointerType(Type *PointeeType) : PointeeType(PointeeType), Type(this, TK_POINTER) {}
   Type *getPointeeType() { return PointeeType; }
+
+  static bool classof(const Type *T) { return T->getClass() == TK_POINTER; }
+};
+
+class RecordType : public Type {
+  friend class Type;
+protected:
+  RecordDecl *Record;
+public:
+  explicit RecordType(RecordDecl *Record) : Record(Record), Type(this, TK_RECORD) {}
+  Decl *lookup(llvm::StringRef MemberName);
+
+  static bool classof(const Type *T) { return T->getClass() == TK_RECORD; }
+};
+
+class EnumType : public Type {
+  friend class Type;
+
+public:
+  static bool classof(const Type *T) { return T->getClass() == TK_ENUM; }
+
 };
 }
 
-#endif //FUNLANG_INCLUDE_TYPE_TYPE_HPP

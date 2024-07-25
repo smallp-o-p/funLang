@@ -1,7 +1,7 @@
 //
 // Created by will on 7/17/24.
 //
-#include "Type/Type.hpp"
+#include "AST/Type.hpp"
 using namespace funLang;
 bool funLang::Type::isIntType() {
   if (auto *Ty = llvm::dyn_cast<BuiltInType>(OriginalType)) {
@@ -13,20 +13,6 @@ bool funLang::Type::isIntType() {
 bool funLang::Type::isVoidType() {
   if (auto *Ty = llvm::dyn_cast<BuiltInType>(OriginalType)) {
 	return Ty->getKind() == BuiltInType::void_;
-  }
-  return false;
-}
-
-bool funLang::Type::isIntLiteral() {
-  if (auto *Ty = llvm::dyn_cast<BuiltInType>(OriginalType)) {
-	return Ty->getKind() == BuiltInType::int_literal;
-  }
-  return false;
-}
-
-bool funLang::Type::isFloatLiteral() {
-  if (auto *Ty = llvm::dyn_cast<BuiltInType>(OriginalType)) {
-	return Ty->getKind() == BuiltInType::floating_literal;
   }
   return false;
 }
@@ -83,13 +69,12 @@ bool funLang::Type::ArithmeticCompatibleWithEachOther(Type *Other) {
 	return false;
   }
   switch (LHS->getKind()) {
-  case BuiltInType::i32: return Other->isI32() || Other->isIntLiteral();
-  case BuiltInType::i64: return Other->isI64() || Other->isIntLiteral();
-  case BuiltInType::int_literal: return Other->isIntLiteral() || Other->isIntType();
-  case BuiltInType::f32: return Other->isF32() || Other->isFloatLiteral();
-  case BuiltInType::f64: return Other->isF64() || Other->isFloatLiteral();
-  case BuiltInType::floating_literal: return Other->isFloatLiteral();
+  case BuiltInType::i32: return Other->isI32();
+  case BuiltInType::i64: return Other->isI64();
+  case BuiltInType::f32: return Other->isF32();
+  case BuiltInType::f64: return Other->isF64();
   default: return false;
   }
 }
 
+Decl *RecordType::lookup(llvm::StringRef MemberName) { return Record->getCtx()->lookup(MemberName); }
