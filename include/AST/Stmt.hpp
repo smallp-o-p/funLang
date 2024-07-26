@@ -26,6 +26,8 @@ class IntegerLiteral;
 class BooleanLiteral;
 class FloatingLiteral;
 class FunctionCall;
+class MatchExpr;
+class MatchArm;
 
 class Decl;
 class VarDecl;
@@ -43,8 +45,6 @@ public:
 	SK_FOR,
 	SK_WHILE,
 	SK_LOOP,
-	SK_MATCH,
-	SK_MATCHARM,
 	SK_EXPR,
 	SK_UNARYEXPR,
 	SK_BINARYEXPR,
@@ -56,6 +56,7 @@ public:
 	SK_MEMBEREXPR,
 	SK_INDEXEXPR,
 	SK_NAMEEXPR,
+	SK_MATCHEXPR,
 	SK_ERROREXPR
   };
 
@@ -146,29 +147,11 @@ public:
   loopStmt(std::unique_ptr<CompoundStmt> compound, llvm::SMLoc loc)
 	  : compound(std::move(compound)), Stmt(SK_LOOP, loc) {}
 };
-class matchArm : public Stmt {
-private:
-  std::unique_ptr<Expr> lhs;
-  std::unique_ptr<CompoundStmt> rhs;
-
-public:
-  matchArm(std::unique_ptr<Expr> lhs, std::unique_ptr<CompoundStmt> rhs,
-		   llvm::SMLoc begin);
-};
-
-class matchStmt : public Stmt {
-private:
-  std::vector<std::unique_ptr<matchArm>> arms;
-
-public:
-  matchStmt(std::vector<std::unique_ptr<matchArm>> arms, llvm::SMLoc loc)
-	  : arms(std::move(arms)), Stmt(SK_MATCH, loc) {}
-};
 
 class DeclStmt : public Stmt {
 private:
   VarDecl *NamedDecl;
-  std::unique_ptr<Expr> RHS;
+  std::unique_ptr<Expr> Init;
 
 public:
   DeclStmt(VarDecl *NamedDecl,
@@ -176,7 +159,7 @@ public:
 		   llvm::SMLoc Right);
 
   llvm::StringRef getName();
-  Expr *getExpr() { return RHS.get(); };
+  Expr *getInit() { return Init.get(); };
   static bool classof(const Stmt *S) {
 	return S->getKind() == StmtKind::SK_VARDECL;
   }
@@ -207,7 +190,7 @@ public:
 
   void setType(Type *ToSet) { resultType = ToSet; };
   Type *getType() { return resultType; }
-  static bool classof(const Stmt *S) { return S->getKind() <= SK_EXPR && S->getKind() >= SK_ERROREXPR; }
+  static bool classof(const Stmt *S) { return S->getKind() >= SK_EXPR && S->getKind() <= SK_ERROREXPR; }
 };
 
 class ErrorExpr : public Expr {
@@ -354,5 +337,21 @@ public:
   Type *getRHSType() { return RHS->getType(); }
   static bool classof(Expr *E) { return E->getKind() == SK_BINARYEXPR; }
 };
+
+class MatchArm {
+  std::unique_ptr<Expr> Val;
+};
+
+class MatchExpr : public Expr {
+  llvm::SmallVector<std::unique_ptr<MatchArm>> Arms;
+  std::unique_ptr<Expr> MatchingOn;
+public:
+  MatchExpr(llvm::SmallVector<std::unique_ptr<MatchArm>> Arms,
+			std::unique_ptr<Expr> MatchingOn,
+			llvm::SMLoc MatchLoc,
+			llvm::SMLoc RBraceLoc) : Expr(SK_MATCHEXPR, MatchLoc, RBraceLoc), Arms(std::move(Arms)),
+									 MatchingOn(std::move(MatchingOn)) {}
+};
+
 }
 #endif //FUNLANG_INCLUDE_AST_STMT_HPP

@@ -7,7 +7,7 @@ using namespace funLang;
 llvm::StringRef funLang::DeclStmt::getName() { return NamedDecl->getName(); }
 
 DeclStmt::DeclStmt(VarDecl *NamedDecl, std::unique_ptr<Expr> Expression, llvm::SMLoc Left, llvm::SMLoc Right)
-	: NamedDecl(NamedDecl), RHS(std::move(Expression)),
+	: NamedDecl(NamedDecl), Init(std::move(Expression)),
 	  Stmt(SK_VARDECL, Left, Right) {}
 
 Stmt::Stmt(funLang::Stmt::StmtKind k, llvm::SMLoc loc) : kind(k) {}
