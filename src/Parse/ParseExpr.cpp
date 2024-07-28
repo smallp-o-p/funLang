@@ -1,13 +1,18 @@
 #include "Parse/Parse.hpp"
 
-std::unique_ptr<Expr> Parser::expr() { return assign(); }
+std::unique_ptr<Expr> Parser::expr() {
+  if (nextTokIs(Basic::tok::kw_match)) { ;
+	return match();
+  }
+  return assign();
+}
 
 std::unique_ptr<Expr> Parser::assign() {
   std::unique_ptr<Expr> EqNode = eqExpr();
   Basic::Op::Binary Opcode;
-  if (isOneOf({Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
-			   Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
-			   Basic::tok::Tag::slashequal})) {
+  if (nextIsOneOf(Basic::tok::Tag::equal, Basic::tok::Tag::plusequal,
+				  Basic::tok::Tag::minusequal, Basic::tok::Tag::starequal,
+				  Basic::tok::Tag::slashequal)) {
 	switch (advance().getTag()) {
 	case Basic::tok::Tag::equal: Opcode = Basic::Op::Binary::BO_assign;
 	  break;
@@ -25,7 +30,7 @@ std::unique_ptr<Expr> Parser::assign() {
 	if (!EqNode2) {
 	  return nullptr;
 	}
-	return semantics->actOnBinaryOp(std::move(EqNode), Opcode,
+	return Semantics->actOnBinaryOp(std::move(EqNode), Opcode,
 									std::move(EqNode2));
   } else {
 	return EqNode;
@@ -37,7 +42,7 @@ std::unique_ptr<Expr> Parser::eqExpr() {
   if (!CmpNode) {
 	return nullptr;
   }
-  if (isOneOf({Basic::tok::Tag::equalequal, Basic::tok::Tag::exclaimequal})) {
+  if (nextIsOneOf(Basic::tok::Tag::equalequal, Basic::tok::Tag::exclaimequal)) {
 	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::equalequal
 							   ? Basic::Op::Binary::BO_equals
 							   : Basic::Op::Binary::BO_notequals;
@@ -46,7 +51,7 @@ std::unique_ptr<Expr> Parser::eqExpr() {
 	if (!CmpNode2) {
 	  return nullptr;
 	}
-	return semantics->actOnBinaryOp(std::move(CmpNode), Opcode,
+	return Semantics->actOnBinaryOp(std::move(CmpNode), Opcode,
 									std::move(CmpNode2));
   }
   return CmpNode;
@@ -57,8 +62,8 @@ std::unique_ptr<Expr> Parser::cmpExpr() {
   if (!AddNode) {
 	return nullptr;
   }
-  if (isOneOf({Basic::tok::Tag::less, Basic::tok::Tag::lessequal,
-			   Basic::tok::Tag::greater, Basic::tok::Tag::greaterequal})) {
+  if (nextIsOneOf(Basic::tok::Tag::less, Basic::tok::Tag::lessequal,
+				  Basic::tok::Tag::greater, Basic::tok::Tag::greaterequal)) {
 	Basic::Op::Binary Opcode;
 	switch (advance().getTag()) {
 	case Basic::tok::Tag::less: Opcode = Basic::Op::BO_lt;
@@ -76,7 +81,7 @@ std::unique_ptr<Expr> Parser::cmpExpr() {
 	  return nullptr;
 	}
 
-	return semantics->actOnBinaryOp(std::move(AddNode), Opcode,
+	return Semantics->actOnBinaryOp(std::move(AddNode), Opcode,
 									std::move(AddNode2));
   }
   return AddNode;
@@ -87,7 +92,7 @@ std::unique_ptr<Expr> Parser::addExpr() {
   if (!MultdivNode) {
 	return nullptr;
   }
-  if (isOneOf({Basic::tok::Tag::plus, Basic::tok::Tag::minus})) {
+  if (nextIsOneOf(Basic::tok::Tag::plus, Basic::tok::Tag::minus)) {
 	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::plus
 							   ? Basic::Op::BO_plus
 							   : Basic::Op::BO_minus;
@@ -95,7 +100,7 @@ std::unique_ptr<Expr> Parser::addExpr() {
 	if (!MultdivNode2) {
 	  return nullptr;
 	}
-	return semantics->actOnBinaryOp(std::move(MultdivNode), Opcode,
+	return Semantics->actOnBinaryOp(std::move(MultdivNode), Opcode,
 									std::move(MultdivNode2));
   }
   return MultdivNode;
@@ -107,7 +112,7 @@ std::unique_ptr<Expr> Parser::multdiv() {
   if (!UnaryNode) {
 	return nullptr;
   }
-  if (isOneOf({Basic::tok::Tag::star, Basic::tok::Tag::slash})) {
+  if (nextIsOneOf(Basic::tok::Tag::star, Basic::tok::Tag::slash)) {
 	Basic::Op::Binary Opcode = advance().getTag() == Basic::tok::Tag::star
 							   ? Basic::Op::BO_multiply
 							   : Basic::Op::BO_divide;
@@ -115,7 +120,7 @@ std::unique_ptr<Expr> Parser::multdiv() {
 	if (!UnaryNode2) {
 	  return nullptr;
 	}
-	return semantics->actOnBinaryOp(std::move(UnaryNode), Opcode,
+	return Semantics->actOnBinaryOp(std::move(UnaryNode), Opcode,
 									std::move(UnaryNode2));
   }
   return UnaryNode;
@@ -124,8 +129,8 @@ std::unique_ptr<Expr> Parser::multdiv() {
 std::unique_ptr<Expr> Parser::unary() {
   using namespace Basic;
   Op::Unary Opcode = Basic::Op::Unary::NUM_UNARY;
-  if (isOneOf(
-	  {tok::plusplus, tok::minusminus, tok::exclaim, tok::minus, tok::at})) {
+  if (nextIsOneOf(
+	  tok::plusplus, tok::minusminus, tok::exclaim, tok::minus, tok::at)) {
 	switch (advance().getTag()) {
 	case tok::plusplus: Opcode = Basic::Op::Unary::UO_preInc;
 	  break;
@@ -144,7 +149,7 @@ std::unique_ptr<Expr> Parser::unary() {
 	return nullptr;
   }
   if (Opcode != Basic::Op::Unary::NUM_UNARY) {
-	return semantics->actOnUnaryOp(Opcode, std::move(Postfix));
+	return Semantics->actOnUnaryOp(Opcode, std::move(Postfix), llvm::SMLoc());
   }
   return Postfix;
 }
@@ -162,7 +167,7 @@ std::unique_ptr<Expr> Parser::deref() {
 	return nullptr;
   }
 
-  return semantics->actOnDereference(std::move(Postfix), derefCount);
+  return Semantics->actOnDereference(std::move(Postfix), derefCount);
 
 }
 
@@ -173,7 +178,12 @@ std::unique_ptr<Expr> Parser::postfix() {
   }
   using namespace Basic;
   if (nextTokIs(tok::dot)) {
-	return member(std::move(Primary));
+	advance();
+	u_ptr<Expr> MemberUsage = primary();
+	if (!MemberUsage) {
+	  return nullptr;
+	}
+	return Semantics->actOnMemberExpr(std::move(Primary), std::move(MemberUsage));
   } else if (nextTokIs(tok::l_square)) {
 	return arrayIndex(std::move(Primary));
   }
@@ -194,20 +204,7 @@ std::unique_ptr<Expr> Parser::arrayIndex(std::unique_ptr<Expr> Input) {
 
   llvm::SMLoc RSquareLoc = previous().getLoc();
 
-  return semantics->actOnIndexOperation(std::move(Input), std::move(Input), LSquareLoc, RSquareLoc);
-}
-
-std::unique_ptr<Expr> Parser::member(std::unique_ptr<Expr> Input) {
-  assert(advance().is(Basic::tok::dot) && "should be a dot here");
-
-  if (!expect(Basic::tok::identifier)) {
-	return nullptr;
-  }
-  std::unique_ptr<Expr> Primary = primary();
-  return semantics->actOnMemberExpr(std::move(Input),
-									std::move(Primary),
-									Input->getLeftLoc(),
-									Primary->getRightLoc());
+  return Semantics->actOnIndexOperation(std::move(Input), std::move(Input), LSquareLoc, RSquareLoc);
 }
 
 std::unique_ptr<Expr> Parser::primary() {
@@ -231,27 +228,27 @@ std::unique_ptr<Expr> Parser::primary() {
 	  return FunctionCall;
 	} else { /* identifier only */
 	  Token VarName = advance();
-	  return semantics->actOnNameUsage(VarName);
+	  return Semantics->actOnNameUsage(VarName);
 	}
-  } else if (isOneOf({Basic::tok::floating_constant,
-					  Basic::tok::numeric_constant, Basic::tok::string_literal,
-					  Basic::tok::kw_true, Basic::tok::kw_false})) {
+  } else if (nextIsOneOf(Basic::tok::floating_constant,
+						 Basic::tok::numeric_constant, Basic::tok::string_literal,
+						 Basic::tok::kw_true, Basic::tok::kw_false)) {
 	auto Token = advance();
 	switch (Token.getTag()) {
-	default: return nullptr;
 	case Basic::tok::numeric_constant: {
-	  return semantics->actOnIntegerLiteral(Token);
+	  return Semantics->actOnIntegerLiteral(Token);
 	}
 	case Basic::tok::floating_constant: {
-	  return semantics->actOnFloatingLiteral(Token);
+	  return Semantics->actOnFloatingLiteral(Token);
 	}
 	case Basic::tok::string_literal: {
-	  return semantics->actOnStrLiteral(Token);
+	  u_ptr<funLang::StrLiteral> StrLit = Semantics->actOnStrLiteral(Token);
 	}
 	case Basic::tok::kw_true:
 	case Basic::tok::kw_false: {
-	  return semantics->actOnBooleanLiteral(Token);
+	  return Semantics->actOnBooleanLiteral(Token);
 	}
+	default: return nullptr;
 	}
   }
   return nullptr;
@@ -265,12 +262,35 @@ std::unique_ptr<Expr> Parser::fnCall() {
   if (!expect(Basic::tok::l_paren)) {
 	return nullptr;
   }
-  std::unique_ptr<CallArgList> CallargsNode = callArgs();
-  if (!CallargsNode) {
+  u_ptr<llvm::SmallVector<u_ptr<Expr>>> Arguments = callArgs();
+  if (!Arguments) {
 	return nullptr;
   }
   if (!expect(Basic::tok::r_paren)) {
 	return nullptr;
   }
-  return semantics->actOnFnCall(Id, std::move(CallargsNode));
+  return Semantics->actOnFunctionCall(Id, llvm::SMLoc(), std::move(Arguments));
+}
+
+u_ptr<llvm::SmallVector<u_ptr<Expr>>> Parser::callArgs() {
+  auto Args = std::make_unique<llvm::SmallVector<u_ptr<Expr>>>();
+  while (true) {
+	if (nextTokIs(Basic::tok::r_paren)) {
+	  break;
+	}
+	if (!Args->empty() && !expect(Basic::tok::Tag::comma)) {
+	  return nullptr;
+	}
+	std::unique_ptr<Expr> ExprPtr = expr();
+	if (!ExprPtr) {
+	  return nullptr;
+	}
+	Args->push_back(std::move(ExprPtr));
+  }
+
+  return Args;
+}
+
+std::unique_ptr<Expr> Parser::match() {
+  return std::unique_ptr<MatchExpr>();
 }
