@@ -2,6 +2,9 @@
 // Created by will on 7/17/24.
 //
 #include "AST/Type.hpp"
+#include "AST/Decl.hpp"
+#include "AST/Stmt.hpp"
+#include "llvm/Support/Casting.h"
 using namespace funLang;
 bool funLang::Type::isIntType() {
   if (auto *Ty = llvm::dyn_cast<BuiltInType>(OriginalType)) {
@@ -77,4 +80,4 @@ bool funLang::Type::ArithmeticCompatibleWithEachOther(Type *Other) {
   }
 }
 
-Decl *RecordType::lookup(llvm::StringRef MemberName) { return Record->getCtx()->lookup(MemberName); }
+Decl *RecordType::lookup(IDTableEntry *MemberName) { return Record->getDecl(MemberName); }

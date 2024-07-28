@@ -1,9 +1,6 @@
-//
-// Created by will on 7/17/24.
-//
 #pragma once
 #include "Basic/Basic.hpp"
-#include "Sema/Sema.hpp"
+#include "Basic/IdentifierTable.hpp"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/FoldingSet.h"
 
@@ -86,7 +83,7 @@ protected:
   RecordDecl *Record;
 public:
   explicit RecordType(RecordDecl *Record) : Record(Record), Type(this, TK_RECORD) {}
-  Decl *lookup(llvm::StringRef MemberName);
+  Decl *lookup(IDTableEntry *MemberName);
 
   static bool classof(const Type *T) { return T->getClass() == TK_RECORD; }
 };
