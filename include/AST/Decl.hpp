@@ -1,21 +1,18 @@
 #pragma once
 #include "Basic/Basic.hpp"
-#include "Lex/Lex.hpp"
-#include "Type.hpp"
-#include "Stmt.hpp"
+#include "Basic/IdentifierTable.hpp"
 #include "llvm/ADT/StringMap.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SMLoc.h>
 #include "llvm/ADT/DenseMap.h"
-#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 
 namespace funLang {
 class Type;
+class TypeUse;
 
-class TypeProperties;
 class CompilationUnit;
 class FunctionDecl;
 class Decl;
@@ -23,11 +20,11 @@ class DeclContext;
 class RecordDecl;
 class VarDecl;
 class SemaAnalyzer;
+class ParamDecl;
 
+class Stmt;
 class CompoundStmt;
 class Expr;
-
-typedef llvm::StringMapEntry<std::nullopt_t> IDTableEntry;
 
 class Decl {
 public:
@@ -53,6 +50,12 @@ public:
   llvm::StringRef getName() { return DeclName->first(); }
   const llvm::SMLoc getStart() const { return Start; }
   const llvm::SMLoc getEnd() const { return End; }
+  void setStart(llvm::SMLoc LocStart) { Start = LocStart; }
+  void setEnd(llvm::SMLoc SEnd) { End = SEnd; }
+  void setRange(llvm::SMLoc LocStart, llvm::SMLoc LocEnd) {
+	Start = LocStart;
+	End = LocEnd;
+  }
 };
 
 class DeclContext { // all declarations are thrown into a DeclContext and will be in the same level no matter how they're scoped lexically
@@ -68,13 +71,19 @@ public:
   explicit DeclContext(llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>> Decls)
 	  : ParentContext(nullptr), Decls(std::move(Decls)) {}
 
-  Decl *lookup(llvm::StringMapEntry<std::nullopt_t> *Name);
-
   void setParentContext(DeclContext *Parent) { ParentContext = Parent; }
 
   bool insert(llvm::StringMapEntry<std::nullopt_t> *Name, std::unique_ptr<Decl> Dec) {
 	auto Pair = Decls.insert({Name, std::move(Dec)});
 	return Pair.second;
+  }
+
+  Decl *getDecl(IDTableEntry *Name) {
+	auto Found = Decls.find(Name);
+	if (Found != Decls.end()) {
+	  return nullptr;
+	}
+	return Found->second.get();
   }
 };
 
@@ -85,27 +94,32 @@ public:
 
 };
 
-class FunctionDecl : public Decl, DeclContext {
+class FunctionDecl : public Decl, public DeclContext {
 private:
   std::unique_ptr<TypeUse> ReturnType;
-  std::unique_ptr<CompoundStmt> Compound;
-  llvm::SmallVector<Decl *> Params;
+  std::unique_ptr<CompoundStmt> Stmts;
+  u_ptr<llvm::SmallVector<u_ptr<ParamDecl>>> Params;
 
 public:
   FunctionDecl(std::unique_ptr<TypeUse> retType,
 			   llvm::StringMapEntry<std::nullopt_t> *Name,
-			   std::unique_ptr<CompoundStmt> compound,
+			   std::unique_ptr<CompoundStmt> Stmts,
 			   llvm::SMLoc TypeLoc,
 			   llvm::SMLoc RLoc,
-			   llvm::SmallVector<Decl *> Params,
-			   DeclContext *Parent)
-	  : ReturnType(std::move(retType)),
-		Compound(std::move(compound)), Params(std::move(Params)), Decl(DK_FN, Name, TypeLoc, RLoc),
-		DeclContext(Parent) {}
+			   std::unique_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Params,
+			   DeclContext *Parent);
+
+  FunctionDecl(std::unique_ptr<TypeUse> retType,
+			   IDTableEntry *Name,
+			   llvm::SMLoc TypeLoc,
+			   llvm::SMLoc RLoc,
+			   std::unique_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Parms,
+			   DeclContext *Ctx);
 
   Type *getTypePtr();
-  llvm::SmallVector<Decl *> &getParams() { return Params; }
-  CompoundStmt &getCompound() const { return *Compound; }
+  llvm::SmallVector<std::unique_ptr<ParamDecl>> &getParams() { return *Params; }
+  void setCompound(std::unique_ptr<CompoundStmt> Compound) { Stmts = std::move(Compound); };
+  CompoundStmt &getCompound() const { return *Stmts; }
   static bool classof(const Decl *D) { return D->getKind() == DK_FN; }
 };
 
@@ -114,17 +128,17 @@ public:
   explicit TraitDecl(DeclContext *Parent) : DeclContext(Parent) {}
 };
 
-class RecordDecl : public Decl, DeclContext {
+class RecordDecl : public Decl, public DeclContext {
 private:
   Type *TypePtr;
 
 public:
-  RecordDecl(llvm::StringMapEntry<std::nullopt_t> *name, Type *TypePtr,
-			 llvm::SMLoc TypeLoc, llvm::SMLoc RBraceLoc, DeclContext *Parent)
-	  : Decl(DK_TYPE, name, TypeLoc, RBraceLoc), DeclContext(Parent), TypePtr(TypePtr) {}
+  RecordDecl(llvm::StringMapEntry<std::nullopt_t> *name, Type *TypePtr, DeclContext *Parent)
+	  : Decl(DK_TYPE, name, llvm::SMLoc(), llvm::SMLoc()), DeclContext(Parent), TypePtr(TypePtr) {}
   static bool classof(const Decl *D) {
 	return D->getKind() >= DK_TYPE && D->getKind() <= DK_TYPEPTR;
   }
+  void setTypePtr(Type *T) { TypePtr = T; }
   Type *getTypePtr() { return TypePtr; }
 };
 
@@ -158,13 +172,16 @@ class ParamDecl : public Decl {
 private:
   std::unique_ptr<Expr> Init;
   DeclContext *Container;
+  u_ptr<TypeUse> T;
 public:
-  ParamDecl(IDTableEntry *Name, std::unique_ptr<Expr> Init, DeclContext *Container, llvm::SMLoc Left, llvm::SMLoc Right)
-	  : Decl(DK_PARAM,
-			 Name,
-			 Left,
-			 Right),
-		Init(std::move(Init)), Container(Container) {}
+  ParamDecl(IDTableEntry *Name,
+			std::unique_ptr<Expr> Init,
+			DeclContext *Container,
+			llvm::SMLoc Left,
+			llvm::SMLoc Right,
+			u_ptr<TypeUse> T);
+
+  Type *getTypePtr() { return T->getTypePtr(); }
 };
 
 }
