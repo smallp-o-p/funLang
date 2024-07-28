@@ -1,30 +1,95 @@
 # funLang
+
 A statically typed programming language implemented with the LLVM ecosystem created for fun.
 
-FunLang is implemented in C++17 and heavily depends on LLVM libraries. CodeGen is handled entirely by LLVM and there is heavy use of its ADT and Suport libraries. 
+FunLang is implemented in C++17 and heavily depends on LLVM libraries. Code generation is handled entirely by LLVM and
+there is heavy use of its ADT and Support libraries. This is essentially a front-end for LLVM.
 
-Rest of the stuff to come lol
-# Scope of The Project 
+## Building
 
-To keep this language simple and easy enough to follow, the set of features will be basic, imagine C with some creature-comforts that I really like picked from other languages like Rust and Zig.
+- C++ standard is currently set to C++20, however I don't think I use anything beyond C++17.
+- Supported CMake versions: 3.14 and above.
+- Ensure LLVM and its libraries are installed in your
+  system. <a href="https://llvm.org/docs/GettingStarted.html#getting-the-source-code-and-building-llvm">Consult LLVM's
+  documentation on this.</a>
+- I've only successfully built this on Linux (Ubuntu).
 
-## Features (to implement)❗
+### Build Instructions
+
+~~~
+git clone https://github.com/smallp-o-p/funLang.git <directory of choice>
+cd <directory of choice>/funLang
+mkdir build
+cd build
+cmake ..
+~~~
+
+A main driver has not been implemented yet. This will only build targets and should allow you to run tests.
+
+## Features
 
 - Strong type system
-  - Error return types for error handling
-  - No implicit type promotions
-- Operations
-  - All the basic ones you expect, arithmetic, comparisons
+    - No implicit type promotions; All type conversions must be explicit
+    - Error return types for error handling
+    - Operations (details to come)
+        - Arithmetic
+        - Comparisons
+        - Logical
+        - Bitwise
 - Data Types
-  - Primitives: i32, i64, f32, f64, char, string and arrays
-  - Pointers
-  - Construct your own data types with *structs*
-  - Sum type with enums (Pattern matching with *match* expressions)
-  - A basic trait system
+    - Primitives: i32, i64, f32, f64, char, string and arrays
+    - Pointers
+    - Construct your own data types with *structs*
+    - Sum type with enums (Pattern matching with *match* expressions)
+    - A basic trait system
 - Control Flow
-  - *If-else* statements
-  - *For*, *while*, *infinite* loops
+    - *If-else* statements
+    - *For*, *while*, *infinite* loops
 
 ## Examples
 
-soon (tm)
+### Fibonacci sequence
+
+~~~
+i32 fib(i32 n){
+  if n == 0 {
+    return 0;
+  }
+  elif n == 1 {
+    return 1;
+  }
+  return fib(n-1) + fib(n-2);
+}  
+~~~
+
+### Struct
+
+~~~
+struct foo {
+  i32 a;
+  i32 b;
+}
+
+impl foo { // <-- This is not implemented yet. 
+  i32 sum(){
+    return a + b;
+  }
+}
+
+i32 main() {
+ foo Obj = foo(1,2);
+ i32 ObjSum = foo.sum();
+ return 0;
+}
+~~~
+
+### Pointers
+
+~~~ 
+i32 main() {
+  *i32 PtrToI32 = malloc(32); // <-- malloc will be an external call to C stdlib.
+  @PtrToI32 = 2;
+//^ dereference operator is @
+  return 0;
+}
+~~~
