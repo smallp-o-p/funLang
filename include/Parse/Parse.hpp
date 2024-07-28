@@ -1,5 +1,6 @@
 #pragma once
-#include "AST/AST.hpp"
+#include "AST/Decl.hpp"
+#include "AST/Stmt.hpp"
 #include "Basic/Basic.hpp"
 #include "Basic/Diag.hpp"
 #include "Lex/Lex.hpp"
@@ -17,7 +18,7 @@ class Parser {
 private:
   std::unique_ptr<Lexer> lexer;
   DiagEngine diags;
-  std::unique_ptr<SemaAnalyzer> semantics;
+  std::unique_ptr<SemaAnalyzer> Semantics;
 
   bool error;
 
@@ -25,34 +26,37 @@ public:
   Parser(std::unique_ptr<Lexer> Lex, DiagEngine &Diags,
 		 std::unique_ptr<SemaAnalyzer> Sema)
 	  : lexer(std::move(Lex)), error(false), diags(Diags),
-		semantics(std::move(Sema)) {}
-  bool isOneOf(std::initializer_list<Basic::tok::Tag> Tok, bool Peeking = true);
+		Semantics(std::move(Sema)) {}
   Token peek();
   Token previous();
   Token &advance();
   bool expect(Basic::tok::Tag Tok);
   bool nextTokIs(Basic::tok::Tag Tok);
+  template<typename ...Ts>
+  bool nextIsOneOf(tok::Tag T1, Ts... Tss) {
+	return peek().isOneOf(T1, Tss...);
+
+  }
   Token lookahead(uint32_t HowMuch);
   void reportExpect(Basic::tok::Tag Expected, Token Received);
   void emitWarning(unsigned int DiagId, llvm::SMLoc Loc, llvm::StringRef Name);
 
 public:
   std::unique_ptr<CompilationUnit> program();
-  std::unique_ptr<TopLevelDecls> topLevels();
-  std::unique_ptr<FunctionNode> function();
-  std::unique_ptr<TypeDecl> typeDecl();
-  std::unique_ptr<TypeProperties> typeProperties();
+  std::unique_ptr<FunctionDecl> function();
+  std::unique_ptr<RecordDecl> typeDecl();
   std::unique_ptr<TypeUse> type();
-  std::unique_ptr<ArgsList> arguments();
+  u_ptr<llvm::SmallVector<u_ptr<ParamDecl>>> parameters();
   std::unique_ptr<VarDecl> nameDecl();
   std::unique_ptr<CompoundStmt> compoundStmt();
   std::unique_ptr<Stmt> simpleStmt();
-  std::unique_ptr<VarDeclStmt> declStmt();
+  std::unique_ptr<DeclStmt> declStmt();
   std::unique_ptr<forStmt> forStmt();
   std::unique_ptr<whileStmt> whileStmt();
   std::unique_ptr<loopStmt> loopStmt();
   std::unique_ptr<ReturnStmt> returnStmt();
   std::unique_ptr<ifStmt> ifStmt();
+  std::unique_ptr<Expr> match();
   std::unique_ptr<Expr> expr();
   std::unique_ptr<Expr> assign();
   std::unique_ptr<Expr> eqExpr();
@@ -64,8 +68,7 @@ public:
   std::unique_ptr<Expr> fnCall();
   std::unique_ptr<Expr> postfix();
   std::unique_ptr<Expr> arrayIndex(std::unique_ptr<Expr> Input);
-  std::unique_ptr<Expr> member(std::unique_ptr<Expr> Input);
   std::unique_ptr<Expr> deref();
-  std::unique_ptr<CallArgList> callArgs();
+  u_ptr<llvm::SmallVector<u_ptr<Expr>>> callArgs();
   bool recoverFromError(CurrentNonTerminal WhereWeFailed);
 };
