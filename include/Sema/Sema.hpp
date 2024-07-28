@@ -1,84 +1,116 @@
 #pragma once
-#include "AST/AST.hpp"
+#include "AST/Decl.hpp"
+#include "AST/Stmt.hpp"
+#include "AST/Type.hpp"
 #include "Basic/Basic.hpp"
 #include "Lex/Lex.hpp"
+#include "Basic/Diag.hpp"
+
 #include "llvm/ADT/StringMap.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SMLoc.h>
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/FoldingSet.h"
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 namespace funLang {
-class SemaAnalyzer;
-class Scope;
+
+class CallArgList;
 
 class Scope {
-  llvm::StringMap<Decl *> symTable;
-  std::shared_ptr<Scope> parentScope;
+  friend class SemaAnalyzer;
+  enum ScopeKind {
+	FunctionScope,
+	LoopScope,
+	BlockScope,
+	StructScope,
+	GlobalScope,
+  };
 
+  std::unique_ptr<Scope> Parent;
+  DeclContext *ScopeContext;
+  llvm::DenseMap<IDTableEntry *, Decl *> TheLookupTable;
+  ScopeKind Kind;
 public:
-  Scope() : parentScope(nullptr) { symTable = llvm::StringMap<Decl *>(); }
-  explicit Scope(std::shared_ptr<Scope> parent)
-	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()) {}
-  Scope(std::shared_ptr<Scope> parent, FunctionNode *enclosingFn)
-	  : parentScope(std::move(parent)), symTable(llvm::StringMap<Decl *>()) {}
-  bool insert(Decl *decl) {
-	return symTable.insert({decl->getName(), decl}).second;
-  }
-  std::shared_ptr<Scope> &getParent() { return parentScope; }
-  Decl *find(llvm::StringRef varName) {
-	auto found = symTable.find(varName);
-	if (found == symTable.end()) {
-	  return nullptr;
+  Scope();
+  explicit Scope(std::unique_ptr<Scope> Parent, ScopeKind K);
+  Scope(std::unique_ptr<Scope> Parent, ScopeKind K, DeclContext *Ctx)
+	  : Parent(std::move(Parent)), Kind(K), ScopeContext(Ctx) {}
+  bool insertInContext(std::unique_ptr<Decl> Dec);
+  std::unique_ptr<Scope> moveParentScope();
+  Scope *getParent();
+  DeclContext *getContext();
+  Decl *lookup(IDTableEntry *Name);
+
+  bool isFunctionScope() { return Kind == FunctionScope; }
+  bool isStructScope() { return Kind == StructScope; }
+  bool isLoopScope() { return Kind == LoopScope; }
+  bool isBlockScope() { return Kind == BlockScope; }
+
+  Scope *getClosestLoopScope() {
+	Scope *S = this;
+	while (!S->isLoopScope()) {
+	  S = S->getParent();
+	  if (!S) {
+		return nullptr;
+	  }
 	}
-	return found->second;
+	return S;
   }
+
+  bool insertInLexicalScope(IDTableEntry *ID, Decl *Dec) {
+	return TheLookupTable.insert({ID, Dec}).second;
+  }
+  bool isGlobalScope();
 };
 
 class SemaAnalyzer {
-private:
-  std::shared_ptr<Scope> currentScope;
-  std::shared_ptr<DiagEngine> diags;
-  std::unique_ptr<TypeUse> currentFnRetType;
-  std::unique_ptr<Scope> baseTypeTable;
+  std::shared_ptr<DiagEngine> Diags;
+  std::unique_ptr<Scope> DeclScope;
+  Type *CurrentFunctionReturnType{};
+  llvm::StringMap<Type *> Types;
+  llvm::FoldingSet<PointerType *> PointerTypes;
+
   void init();
 
 protected:
-  bool TypesAreEqual(TypeDecl *LHS, TypeDecl *RHS);
-  bool TypesAreEqualOrCompatible(TypeDecl *LHS, TypeDecl *RHS);
-  Decl *lookup(llvm::StringRef var);
-  Decl *lookupCurrentScope(llvm::StringRef varName);
-  TypeDecl *lookupType(llvm::StringRef Type);
+  Decl *lookup(IDTableEntry *var);
+  Type *getType(llvm::StringRef TypeName);
+  Decl *lookupOne(IDTableEntry *Var);
+
+  bool insert(std::unique_ptr<Decl> ToInsert); // inserts into lexical scope AND DeclContext !!
 
 public:
-  explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag)
-	  : currentScope(std::make_shared<Scope>()), diags(std::move(diag)),
-		baseTypeTable(std::make_unique<Scope>()) {
-	init();
-  }
 
-  void enterScope();
+  explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag);
+
+  void enterScope(Scope::ScopeKind K = Scope::ScopeKind::FunctionScope);
   void exitScope();
+  std::unique_ptr<FunctionDecl> enterFunctionScope(std::unique_ptr<TypeUse> FunctionReturnType,
+												   u_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Params,
+												   Token &FunctionName,
+												   llvm::SMLoc RParenLoc);
+  void exitFunctionScope();
 
-  std::unique_ptr<VarDeclStmt>
+  std::unique_ptr<DeclStmt>
   actOnVarDeclStmt(std::unique_ptr<VarDecl> NameDecl,
 				   std::unique_ptr<Expr> ExprInput, llvm::SMLoc RightLoc);
-  void enterFunction(std::unique_ptr<TypeUse> retType, ArgsList &args);
-  std::unique_ptr<TypeUse> exitFunction();
 
-  std::unique_ptr<NameUsage> actOnNameUsage(Token &Identifier);
-
-  std::unique_ptr<FunctionNode>
-  actOnFnDecl(std::unique_ptr<TypeUse> Type, Token ID,
-			  std::unique_ptr<ArgsList> Args,
-			  std::unique_ptr<CompoundStmt> Compound);
-  std::unique_ptr<Expr> actOnFnCall(Token &ID,
-									std::unique_ptr<CallArgList> PassedArgs);
+  std::unique_ptr<RecordDecl> enterStructScope(Token &StructDetails);
+  std::unique_ptr<Expr> actOnNameUsage(Token &Identifier);
+  void
+  actOnFunctionDecl(FunctionDecl *Function, std::unique_ptr<CompoundStmt> CompoundToAttach);
+  std::unique_ptr<Expr> actOnFunctionCall(Token &ID,
+										  llvm::SMLoc RParenLoc,
+										  u_ptr<llvm::SmallVector<u_ptr<Expr>>> PassedArgs);
   std::unique_ptr<ReturnStmt> actOnReturnStmt(llvm::SMLoc ReturnLoc,
+											  llvm::SMLoc SemicolonLoc,
 											  std::unique_ptr<Expr> ReturnExpr);
   std::unique_ptr<Expr> actOnUnaryOp(Basic::Op::Unary Op,
-									 std::unique_ptr<Expr> ExprInput);
+									 std::unique_ptr<Expr> ExprInput,
+									 llvm::SMLoc OpLoc);
   std::unique_ptr<Expr> actOnDereference(std::unique_ptr<Expr> ExprInput, size_t DerefCount);
   std::unique_ptr<Expr> actOnBinaryOp(std::unique_ptr<Expr> LHS,
 									  Basic::Op::Binary Op,
@@ -86,8 +118,11 @@ public:
   std::unique_ptr<IntegerLiteral> actOnIntegerLiteral(Token &Literal);
   std::unique_ptr<FloatingLiteral> actOnFloatingLiteral(Token &Literal);
   std::unique_ptr<BooleanLiteral> actOnBooleanLiteral(Token &literal);
-  std::unique_ptr<StringLiteral> actOnStrLiteral(Token &Literal);
+  std::unique_ptr<StrLiteral> actOnStrLiteral(Token &Literal);
   std::unique_ptr<TypeUse> actOnTypeUse(Token &TypeName, size_t IndirectionCount);
+  std::unique_ptr<Stmt> actOnBreakStmt(Token &BreakLoc);
+  std::unique_ptr<Stmt> actOnNextStmt(Token &NextLoc);
+
   std::unique_ptr<forStmt> actOnForStmt(std::unique_ptr<Stmt> Init,
 										std::unique_ptr<Expr> Cond,
 										std::unique_ptr<Expr> Inc,
@@ -104,19 +139,20 @@ public:
 											std::unique_ptr<Expr> AccessExpr,
 											llvm::SMLoc Left,
 											llvm::SMLoc Right);
-  std::unique_ptr<Expr> actOnMemberExpr(std::unique_ptr<Expr> Accessed,
-										std::unique_ptr<Expr> Accessee,
-										llvm::SMLoc Left,
-										llvm::SMLoc Right);
-  bool actOnTopLevelDecl(Decl *TopLDecl);
-  std::unique_ptr<TypeDecl>
-  actOnStructDecl(Token &TypeName, std::unique_ptr<TypeProperties> Properties,
-				  llvm::SMLoc RBraceLoc);
-  std::unique_ptr<ifStmt> actOnIfStmt(llvm::SMLoc IfLoc, std::unique_ptr<Expr> IfCondition,
+  std::unique_ptr<Expr> actOnMemberExpr(std::unique_ptr<Expr> Accessed, std::unique_ptr<Expr> Accessor);
+  bool actOnTopLevelDecl(std::unique_ptr<Decl> TopLDecl);
+  std::unique_ptr<ifStmt> actOnIfStmt(llvm::SMLoc IfLoc,
+									  llvm::SMLoc EndOfExprLoc,
+									  std::unique_ptr<Expr> IfCondition,
 									  std::unique_ptr<CompoundStmt> FirstBlock,
 									  std::unique_ptr<elifStmt> ElifChain,
 									  std::unique_ptr<CompoundStmt> ElseBlock);
   std::unique_ptr<VarDecl> actOnNameDecl(std::unique_ptr<TypeUse> Type,
 										 Token &Name);
+  void actOnStructMemberDecl(std::unique_ptr<VarDecl> Var);
+
+  void actOnParamDecl(llvm::SmallVector<std::unique_ptr<VarDecl>> &CurrentParamList,
+					  std::unique_ptr<VarDecl> Param,
+					  llvm::DenseMap<IDTableEntry *, VarDecl *> &CheckAgainst);
 };
 } // namespace funLang
