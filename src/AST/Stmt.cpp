@@ -6,9 +6,9 @@
 using namespace funLang;
 llvm::StringRef funLang::DeclStmt::getName() { return NamedDecl->getName(); }
 
-DeclStmt::DeclStmt(VarDecl *NamedDecl, std::unique_ptr<Expr> Expression, llvm::SMLoc Left, llvm::SMLoc Right)
+DeclStmt::DeclStmt(llvm::SMLoc NameStart, llvm::SMLoc SemiLoc, VarDecl *NamedDecl, std::unique_ptr<Expr> Expression)
 	: NamedDecl(NamedDecl), Init(std::move(Expression)),
-	  Stmt(SK_VARDECL, Left, Right) {}
+	  Stmt(SK_VARDECL, NameStart, SemiLoc) {}
 
 Stmt::Stmt(funLang::Stmt::StmtKind k, llvm::SMLoc loc) : kind(k) {}
 
@@ -21,19 +21,21 @@ elifStmt::elifStmt(llvm::SMLoc Loc,
 
 ifStmt::ifStmt(llvm::SMLoc IfLoc,
 			   std::unique_ptr<Expr> cond,
+			   llvm::SMLoc EndOfCondExpr,
 			   std::unique_ptr<CompoundStmt> block1,
 			   std::unique_ptr<elifStmt> elif,
 			   std::unique_ptr<CompoundStmt> block2)
 	: Condition(std::move(cond)), Block(std::move(block1)),
 	  elif(std::move(elif)), ElseBlock(std::move(block2)), Stmt(SK_IF, IfLoc) {}
 
-forStmt::forStmt(std::unique_ptr<Stmt> var,
-				 std::unique_ptr<Expr> range,
-				 std::unique_ptr<Expr> iter,
-				 std::unique_ptr<CompoundStmt> compound,
-				 llvm::SMLoc loc)
-	: Stmt(SK_FOR, loc), var(std::move(var)), range(std::move(range)),
-	  iterator(std::move(iter)), compound(std::move(compound)) {}
+forStmt::forStmt(llvm::SMLoc EndLoc,
+				 llvm::SMLoc loc,
+				 std::unique_ptr<Stmt> Init,
+				 std::unique_ptr<Expr> Cond,
+				 std::unique_ptr<Expr> Inc,
+				 std::unique_ptr<CompoundStmt> Compound)
+	: Stmt(SK_FOR, loc, EndLoc), Init(std::move(Init)), Cond(std::move(Cond)),
+	  Inc(std::move(Inc)), Compound(std::move(Compound)) {}
 
 whileStmt::whileStmt(std::unique_ptr<Expr> condition,
 					 std::unique_ptr<CompoundStmt> compound,
@@ -41,9 +43,6 @@ whileStmt::whileStmt(std::unique_ptr<Expr> condition,
 					 llvm::SMLoc endLoc)
 	: compound(std::move(compound)), condition(std::move(condition)),
 	  Stmt(SK_WHILE, whileLoc, endLoc) {}
-
-matchArm::matchArm(std::unique_ptr<Expr> lhs, std::unique_ptr<CompoundStmt> rhs, llvm::SMLoc begin)
-	: lhs(std::move(lhs)), rhs(std::move(rhs)), Stmt(SK_MATCHARM, begin) {}
 
 ReturnStmt::ReturnStmt(std::unique_ptr<Expr> exprNode)
 	: ReturnExpr(std::move(exprNode)), Stmt(SK_RETURN) {}

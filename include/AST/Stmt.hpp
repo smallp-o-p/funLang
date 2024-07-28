@@ -1,23 +1,20 @@
-//
-// Created by will on 7/24/24.
-//
-
-#ifndef FUNLANG_INCLUDE_AST_STMT_HPP
-#define FUNLANG_INCLUDE_AST_STMT_HPP
-
+#pragma once
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/Support/SMLoc.h"
-#include "Type.hpp"
+#include "Basic/Basic.hpp"
+#include "Basic/IdentifierTable.hpp"
 
 namespace funLang {
 
 class Stmt;
+class CompoundStmt;
 class forStmt;
 class whileStmt;
 class loopStmt;
 class DeclStmt;
-class CompoundStmt;
+class BreakStmt;
+class NextStmt;
 class Expr;
 class BinaryOp;
 class UnaryOp;
@@ -28,6 +25,7 @@ class FloatingLiteral;
 class FunctionCall;
 class MatchExpr;
 class MatchArm;
+class ErrorStmt;
 
 class Decl;
 class VarDecl;
@@ -45,6 +43,9 @@ public:
 	SK_FOR,
 	SK_WHILE,
 	SK_LOOP,
+	SK_BREAK,
+	SK_NEXT,
+	SK_ERROR,
 	SK_EXPR,
 	SK_UNARYEXPR,
 	SK_BINARYEXPR,
@@ -73,6 +74,13 @@ public:
 
   llvm::SMLoc getStartLoc() { return StartLoc; }
   llvm::SMLoc getEndLoc() { return EndLoc; }
+};
+
+class ErrorStmt : public Stmt {
+private:
+  u_ptr<Stmt> BadStmt;
+public:
+  explicit ErrorStmt(u_ptr<Stmt> Bad) : BadStmt(std::move(Bad)), Stmt(SK_ERROR, Bad->getStartLoc(), Bad->getEndLoc()) {}
 };
 
 class CompoundStmt : public Stmt {
@@ -108,21 +116,24 @@ private:
   std::unique_ptr<CompoundStmt> ElseBlock;
 
 public:
-  ifStmt(llvm::SMLoc IfLoc, std::unique_ptr<Expr> cond, std::unique_ptr<CompoundStmt> block1,
+  ifStmt(llvm::SMLoc IfLoc, std::unique_ptr<Expr> cond, llvm::SMLoc EndOfCondExpr, std::unique_ptr<CompoundStmt> block1,
 		 std::unique_ptr<elifStmt> elif, std::unique_ptr<CompoundStmt> block2);
 };
 
 class forStmt : public Stmt {
 private:
-  std::unique_ptr<Stmt> var;
-  std::unique_ptr<Expr> range;
-  std::unique_ptr<Expr> iterator;
-  std::unique_ptr<CompoundStmt> compound;
+  std::unique_ptr<Stmt> Init;
+  std::unique_ptr<Expr> Cond;
+  std::unique_ptr<Expr> Inc;
+  std::unique_ptr<CompoundStmt> Compound;
 
 public:
-  forStmt(std::unique_ptr<Stmt> var, std::unique_ptr<Expr> range,
-		  std::unique_ptr<Expr> iter, std::unique_ptr<CompoundStmt> compound,
-		  llvm::SMLoc loc);
+  forStmt(llvm::SMLoc EndLoc,
+		  llvm::SMLoc loc,
+		  std::unique_ptr<Stmt> Init,
+		  std::unique_ptr<Expr> Cond,
+		  std::unique_ptr<Expr> Inc,
+		  std::unique_ptr<CompoundStmt> Compound);
 
   static bool classof(const Stmt *S) { return S->getKind() == SK_FOR; }
 };
@@ -154,9 +165,10 @@ private:
   std::unique_ptr<Expr> Init;
 
 public:
-  DeclStmt(VarDecl *NamedDecl,
-		   std::unique_ptr<Expr> Expression, llvm::SMLoc Left,
-		   llvm::SMLoc Right);
+  DeclStmt(llvm::SMLoc NameStart,
+		   llvm::SMLoc SemiLoc,
+		   VarDecl *NamedDecl,
+		   std::unique_ptr<Expr> Expression);
 
   llvm::StringRef getName();
   Expr *getInit() { return Init.get(); };
@@ -174,6 +186,16 @@ public:
 
   Expr *getExprInput() { return ReturnExpr.get(); }
   static bool classof(Stmt *S) { return S->getKind() == SK_RETURN; }
+};
+
+class BreakStmt : public Stmt {
+public:
+  BreakStmt(llvm::SMLoc BreakLoc, llvm::SMLoc EndOfBreakLoc) : Stmt(SK_BREAK, BreakLoc, EndOfBreakLoc) {}
+};
+
+class NextStmt : public Stmt {
+public:
+  NextStmt(llvm::SMLoc BreakLoc, llvm::SMLoc EndOfBreakLoc) : Stmt(SK_NEXT, BreakLoc, EndOfBreakLoc) {}
 };
 
 class Expr : public Stmt {
@@ -206,13 +228,14 @@ public:
 
 class NameUsage : public Expr {
 protected:
-  llvm::StringMapEntry<std::nullopt_t> *IDTableEntry;;
+  IDTableEntry *TableEntry;
 
 public:
   NameUsage(llvm::StringMapEntry<std::nullopt_t> *Entry, llvm::SMLoc SLoc, llvm::SMLoc ELoc, Type *Type)
-	  : IDTableEntry(Entry), Expr(SK_NAMEEXPR, Type, SLoc, ELoc) {}
+	  : TableEntry(Entry), Expr(SK_NAMEEXPR, Type, SLoc, ELoc) {}
 
-  llvm::StringRef getUsedName() { return IDTableEntry->first(); };
+  llvm::StringRef getUsedName() { return TableEntry->first(); };
+  IDTableEntry *getEntry() { return TableEntry; }
 
   static bool classof(const Expr *E) { return E->getKind() == SK_NAMEEXPR; }
 };
@@ -249,14 +272,14 @@ public:
   bool getValue() { return TrueOrFalse; }
 };
 
-class StringLiteral : public Expr {
+class StrLiteral : public Expr {
 private:
   llvm::StringRef Str;
   uint32_t Len;
 
 public:
-  explicit StringLiteral(uint32_t len, llvm::StringRef str,
-						 llvm::SMLoc LeftQuoteLoc, llvm::SMLoc RightQuoteLoc, Type *StringType)
+  explicit StrLiteral(uint32_t len, llvm::StringRef str,
+					  llvm::SMLoc LeftQuoteLoc, llvm::SMLoc RightQuoteLoc, Type *StringType)
 	  : Str(str), Len(len), Expr(SK_STRINGEXPR, StringType, LeftQuoteLoc, RightQuoteLoc) {}
 
   static bool classof(Expr *E) { return E->getKind() == SK_STRINGEXPR; }
@@ -290,17 +313,17 @@ public:
 
 class FunctionCall : public Expr {
 private:
-  llvm::StringMapEntry<std::nullopt_t> *IDTableEntry;
-  llvm::SmallVector<Expr *> PassedParameters;
+  IDTableEntry *TableEntry;
+  u_ptr<llvm::SmallVector<u_ptr<Expr>>> PassedParameters;
 
 public:
-  FunctionCall(llvm::StringMapEntry<std::nullopt_t> *name, llvm::SmallVector<Expr *> arguments,
+  FunctionCall(IDTableEntry *name, u_ptr<llvm::SmallVector<u_ptr<Expr>>> arguments,
 			   llvm::SMLoc NameLoc, llvm::SMLoc RParen, Type *Type = nullptr)
-	  : IDTableEntry(name), PassedParameters(std::move(arguments)),
+	  : TableEntry(name), PassedParameters(std::move(arguments)),
 		Expr(SK_FNCALLEXPR, Type, NameLoc, RParen) {}
 
-  llvm::StringRef getName() const { return IDTableEntry->first(); }
-
+  llvm::StringRef getName() const { return TableEntry->first(); }
+  auto getPassedArgs() const { return PassedParameters.get(); }
   static bool classof(const Expr *E) { return E->getKind() == SK_FNCALLEXPR; }
 };
 
@@ -340,6 +363,9 @@ public:
 
 class MatchArm {
   std::unique_ptr<Expr> Val;
+
+public:
+  MatchArm(std::unique_ptr<Expr> Val) : Val(std::move(Val)) {}
 };
 
 class MatchExpr : public Expr {
@@ -354,4 +380,3 @@ public:
 };
 
 }
-#endif //FUNLANG_INCLUDE_AST_STMT_HPP
