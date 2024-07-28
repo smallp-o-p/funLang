@@ -4,10 +4,12 @@
 
 DIAG(err_unexpected_char, Error, "Unexpected character '{0}'.")
 DIAG(err_unterminated_char_or_string, Error, "Missing a terminating character.")
-DIAG(err_expected, Error, "Expected '{0}', but received '{1}'")\
+DIAG(err_expected, Error, "Expected '{0}', but received '{1}'")
 DIAG(err_var_not_found, Error, "Name <{0}> could not be resolved.")
 DIAG(err_fn_not_found, Error, "Function <{0}> could not be resolved.")
-DIAG(err_var_redefinition, Error, "Redefinition of variable '{0}' in same scope.")
+DIAG(err_name_not_fn, Error, "Name <{0}> is not a function.")
+DIAG(err_var_redefinition, Error, "Redefinition of named variable <{0}>.")
+DIAG(err_param_redifinition, Error, "Redefinition of function parameter <{0}>.")
 DIAG(err_toplevel_redefinition, Error, "Redefinition of top-level declaration <{0}>.")
 DIAG(err_wrong_number_of_parameters, Error, "Function <{0}> takes {1} parameters, but {2} passed.")
 DIAG(err_expr_not_assignable, Error, "Expression is not assignable.")
@@ -16,25 +18,25 @@ DIAG(err_incompatible_type_passed,
 	 "Formal argument <{0}> is of type <{1}>, but expression of type <{2}> was passed.")
 DIAG(err_incompatible_type_var_decl,
 	 Error,
-	 "Type of declared variable <{0}> is <{1}>, however expression results in a type of <{2}>")
+	 "UsedType of declared variable <{0}> is <{1}>, however expression results in a type of <{2}>")
 DIAG(err_incompatible_binary_operands,
 	 Error,
-	 "Type of LHS <{0}> is incompatible with type of RHS <{1}> for operation <{2}>.")
+	 "LHS has type <{0}> which is incompatible with type of RHS <{1}> for operation <{2}>.")
 DIAG(err_unary_op_incompatible, Error, "Operation <{0}> is incompatible with operand of type <{1}>")
 DIAG(err_dereferenced_non_pointer, Error, "Dereference requires a pointer, type <{0}> invalid.")
 DIAG(err_incompatible_ret,
 	 Error,
-	 "Type of return expression <{0}> is not compatible with function type declaration of <{1}>.")
+	 "Expression <{0}> is not compatible with function type declaration of <{1}>.")
 DIAG(err_struct_var_initialization,
 	 Error,
-	 "MemberAccess initialization is disallowed for '{0}' in struct '{1}'.")
+	 "Initialization is disallowed for '{0}' in struct '{1}'.")
 DIAG(err_while_condition_not_bool, Error, "Expression in while statement does not evaluate to <bool>.")
+DIAG(err_invalid_lhs, Error, "Invalid left-hand side expression for operator {0}")
 DIAG(err_stmt_no_members, Error, "Attempting to access member of statement.")
 DIAG(err_called_fn_on_var, Error, "Variable <{0}> is not a function.")
 DIAG(err_return_on_void_fn, Error, "Returning non-void type on function declared <void>.")
 DIAG(err_naked_return_on_non_void_fn, Error, "Non-void function should return a value.")
-DIAG(err_access_member_of_type_without_members, Error, "Type '{0}' has no members.")
-DIAG(err_member_does_not_exist, Error, "Type <{0}> has no member named <{1}>")
+DIAG(err_type_member_does_not_exist, Error, "Type <{0}> has no member named <{1}>")
 DIAG(err_array_index_expr_not_whole_number,
 	 Error,
 	 "Expression used for array indexing does not result in <i32, i64, integer literal> but <{0}>")
@@ -42,8 +44,11 @@ DIAG(err_if_condition_does_not_evaluate_to_bool,
 	 Error,
 	 "Condition used to evaluate <if> does not result in <bool> but <{0}>")
 DIAG(err_indexing_on_non_array, Error, "Attempting to index type <{0}> which is not an array.")
-DIAG(err_struct_var_redefinition, Error, "Redefinition of member '{0}' in struct '{1}'")
+DIAG(err_struct_var_redefinition, Error, "Redefinition of member <{0}> in struct <{1}>")
 DIAG(err_int_literal_too_big, Error, "Integer literal <{0}> is too big to fit into <{1}>.")
+DIAG(err_type_has_no_members, Error, "Attempt to access member <{0}> on type <{1}> which has no members.")
+DIAG(err_break_in_non_loop, Error, "Keyword <break> should only be used in loop contexts.")
+DIAG(err_next_in_non_loop, Error, "Keyword <next> should only be used in loop contexts.")
 DIAG(last_err, Error, "last err")
 DIAG(last_warn, Warning, "last warn")
 

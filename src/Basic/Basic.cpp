@@ -4,7 +4,7 @@
 
 #include "Basic/Basic.hpp"
 #include <cassert>
-
+using namespace funLang;
 using namespace Basic;
 static const char *const tokNames[] = {
 #define TOK(ID) #ID,

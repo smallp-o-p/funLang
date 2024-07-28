@@ -11,6 +11,7 @@
 #include "llvm/Support/Allocator.h"
 
 namespace funLang {
+typedef llvm::StringMapEntry<std::nullopt_t> IDTableEntry;
 class Lexer;
 class IdentifierTable;
 

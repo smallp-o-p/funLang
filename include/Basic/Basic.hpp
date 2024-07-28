@@ -2,11 +2,14 @@
 // Created by will on 5/6/24.
 //
 
-#ifndef FUNLANG_SRC_BASIC_BASIC_HPP
-#define FUNLANG_SRC_BASIC_BASIC_HPP
 #pragma once
 
+#include <memory>
+namespace funLang {
+template<typename T> using u_ptr = std::unique_ptr<T>;
+
 namespace Basic::tok {
+
 enum Tag : unsigned short {
 #define TOK(ID) ID,
 #include "Basic/defs/TokenTags.def"
@@ -47,5 +50,5 @@ const char *getUnaryOpSpelling(Unary unop);
 
 } // namespace Basic
 
+}
 
-#endif //FUNLANG_SRC_BASIC_BASIC_HPP

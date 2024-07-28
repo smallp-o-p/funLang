@@ -72,7 +72,7 @@ elseStmt : 'else' compoundStmt
 
 forStmt : FOR '(' (declStmt|expr) ';' expr ';' expr ')' compoundStmt
 
-whileStmt : WHILE '(' expr ')' compoundStmt
+whileStmt : WHILE expr compoundStmt
 
 loopStmt : LOOP compoundStmt
 
