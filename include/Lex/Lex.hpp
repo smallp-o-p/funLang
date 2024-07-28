@@ -19,6 +19,7 @@
 #include <vector>
 
 namespace funLang {
+using namespace Basic;
 
 class Token {
   friend class Lexer;
@@ -31,7 +32,7 @@ private:
   llvm::SMLoc LocEnd;
 
   // error
-  Token(llvm::SMLoc ErrLoc)
+  explicit Token(llvm::SMLoc ErrLoc)
 	  : TheData(nullptr), LocStart(ErrLoc), LocEnd(llvm::SMLoc()), LexicalTag(Basic::tok::err), DataSize(0) {}
   // literal
   Token(llvm::StringRef Lexeme, size_t Size, Basic::tok::Tag LexicalTag, llvm::SMLoc Start, llvm::SMLoc End)
@@ -64,9 +65,19 @@ public:
 	assert(isIdentifier() && "Not an identifier!");
 	return static_cast<llvm::StringMapEntry<std::nullopt_t> *>(TheData)->first();
   }
+
   llvm::StringMapEntry<std::nullopt_t> *getIdentifierTableEntry() const {
 	assert(isIdentifier() && "Not an identifier!");
 	return static_cast<llvm::StringMapEntry<std::nullopt_t> *>(TheData);
+  }
+
+  bool isOneOf(tok::Tag T1, tok::Tag T2) const {
+	return is(T1) || is(T2);
+  }
+
+  template<typename ...Ts>
+  bool isOneOf(tok::Tag T1, Ts...Tss) const {
+	return is(T1) || isOneOf(Tss...);
   }
 
   inline bool isIdentifier() const {

@@ -216,7 +216,7 @@ Token Lexer::formToken(const char *TokEnd, Basic::tok::Tag Kind) {
 
 Token Lexer::formErr() {
   bufPtr++;
-  return {llvm::SMLoc::getFromPointer(bufPtr - 1)};
+  return Token(llvm::SMLoc::getFromPointer(bufPtr - 1));
 }
 
 Token Lexer::previous() { return tokens.back(); }
