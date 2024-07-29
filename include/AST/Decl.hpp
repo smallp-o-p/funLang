@@ -32,7 +32,6 @@ public:
 	DK_FN,
 	DK_VAR,
 	DK_TYPE,
-	DK_TYPEPTR,
 	DK_TRAIT,
 	DK_PARAM,
   };
@@ -135,9 +134,7 @@ private:
 public:
   RecordDecl(llvm::StringMapEntry<std::nullopt_t> *name, Type *TypePtr, DeclContext *Parent)
 	  : Decl(DK_TYPE, name, llvm::SMLoc(), llvm::SMLoc()), DeclContext(Parent), TypePtr(TypePtr) {}
-  static bool classof(const Decl *D) {
-	return D->getKind() >= DK_TYPE && D->getKind() <= DK_TYPEPTR;
-  }
+  static bool classof(const Decl *D) { return D->getKind() == DK_TYPE; }
   void setTypePtr(Type *T) { TypePtr = T; }
   Type *getTypePtr() { return TypePtr; }
 };

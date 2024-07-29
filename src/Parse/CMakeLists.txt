@@ -1,5 +1,4 @@
-set(PARSE_HEADER_INCLUDES "${funLang_SOURCE_DIR}/include/Parse/Parse.hpp")
-add_library(Parse "" Parse.cpp ParseExpr.cpp ParseStmt.cpp ${PARSE_HEADER_INCLUDES})
+add_library(Parse STATIC Parse.cpp ParseExpr.cpp ParseStmt.cpp)
 
 target_include_directories(Parse
         PUBLIC
