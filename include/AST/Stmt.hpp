@@ -69,7 +69,7 @@ public:
   explicit Stmt(StmtKind k) : kind(k) {}
   Stmt(StmtKind k, llvm::SMLoc loc);
   Stmt(StmtKind K, llvm::SMLoc Left, llvm::SMLoc Right)
-	  : kind(K) {}
+	  : kind(K), StartLoc(Left), EndLoc(Right) {}
   StmtKind getKind() const { return kind; }
 
   llvm::SMLoc getStartLoc() { return StartLoc; }
@@ -85,13 +85,14 @@ public:
 
 class CompoundStmt : public Stmt {
 private:
-  llvm::SmallVector<std::unique_ptr<Stmt>> Statements;
+  llvm::SmallVector<u_ptr<Stmt>> Statements;
 
 public:
   explicit CompoundStmt(llvm::SmallVector<std::unique_ptr<Stmt>> Simples)
 	  : Statements(std::move(Simples)), Stmt(SK_COMPOUND) {}
 
   static bool classof(const Stmt *S) { return S->getKind() == SK_COMPOUND; }
+  llvm::SmallVector<std::unique_ptr<Stmt>> &getStatements() { return Statements; }
 };
 
 class elifStmt : public Stmt {
