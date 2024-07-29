@@ -1,5 +1,4 @@
 #include "Parse/Parse.hpp"
-#include <initializer_list>
 #include <llvm/ADT/APFloat.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/SMLoc.h>
@@ -10,14 +9,6 @@ Token Parser::peek() { return lexer->peek(); }
 bool Parser::nextTokIs(Basic::tok::Tag Tok) { return lexer->peek().is(Tok); }
 Token Parser::previous() { return lexer->previous(); }
 Token &Parser::advance() { return lexer->advance(); }
-bool Parser::isOneOf(std::initializer_list<Basic::tok::Tag> ToExpect,
-					 bool Peeking) {
-  Token Consumed = Peeking ? lexer->peek() : lexer->advance();
-
-  return std::any_of(
-	  ToExpect.begin(), ToExpect.end(),
-	  [Consumed](Basic::tok::Tag Tok) { return Tok == Consumed.getTag(); });
-}
 bool Parser::expect(Basic::tok::Tag Tok) {
   if (lexer->advance().getTag() != Tok) {
 	reportExpect(Tok, previous());
@@ -75,49 +66,33 @@ std::unique_ptr<TypeUse> Parser::type() {
 					  TypeName.getLexeme());
 	return nullptr;
   }
-  return semantics->actOnTypeUse(TypeName, IndirectionCount);
+  return Semantics->actOnTypeUse(TypeName, IndirectionCount);
 }
 
 std::unique_ptr<CompilationUnit> Parser::program() {
-  // TODO: globals
-  std::unique_ptr<TopLevelDecls> Tops = topLevels();
-  if (Parser::error) {
-	return nullptr;
-  }
-  if (!expect(Basic::tok::Tag::eof)) {
-	return nullptr;
-  }
-  return std::make_unique<CompilationUnit>(std::move(Tops));
-}
-
-std::unique_ptr<TopLevelDecls> Parser::topLevels() {
-  std::unordered_map<std::string, std::unique_ptr<Decl>> TopLevelList;
+  llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>> GlobalDecls;
   while (true) {
-	std::unique_ptr<Decl> TopLevel;
-
+	std::unique_ptr<Decl> TopLevel = nullptr;
 	if (nextTokIs(Basic::tok::kw_struct)) {
 	  TopLevel = typeDecl();
-	} else if (isOneOf({Basic::tok::Tag::identifier}) || peek().isBaseType()) {
+	} else if (nextTokIs(Basic::tok::Tag::identifier) || peek().isBaseType()) {
 	  TopLevel = function();
 	}
 	if (!TopLevel) {
 	  return nullptr;
 	}
-	if (semantics->actOnTopLevelDecl(
-		TopLevel
-			.get())) { // nextTokIs if top level name has been defined before
-	  TopLevelList.insert(std::pair<llvm::StringRef, std::unique_ptr<Decl>>(
-		  TopLevel->getName(), std::move(TopLevel)));
-	}
+	Semantics->actOnTopLevelDecl(std::move(TopLevel));
 	if (nextTokIs(Basic::tok::Tag::eof)) {
 	  break;
 	}
   }
-  return std::make_unique<TopLevelDecls>(std::move(TopLevelList));
+  Semantics->exitScope();
+
+  return std::make_unique<CompilationUnit>(std::move(GlobalDecls));
 }
 
-std::unique_ptr<TypeDecl> Parser::typeDecl() {
-  advance();
+std::unique_ptr<RecordDecl> Parser::typeDecl() {
+  llvm::SMLoc StructLoc = advance().getLoc(), RBraceLoc;
   if (!expect(Basic::tok::identifier)) {
 	return nullptr;
   }
@@ -125,42 +100,24 @@ std::unique_ptr<TypeDecl> Parser::typeDecl() {
   if (!expect(Basic::tok::l_brace)) {
 	return nullptr;
   }
-  semantics->enterScope();
-
-  std::unique_ptr<TypeProperties> Members = typeProperties();
-  if (!Members) {
-	return nullptr;
-  }
-  semantics->exitScope();
-  if (!expect(Basic::tok::r_brace)) {
-	return nullptr;
-  }
-
-  llvm::SMLoc RBraceLoc = previous().getLoc();
-  return semantics->actOnStructDecl(Id, std::move(Members), RBraceLoc);
-}
-
-std::unique_ptr<TypeProperties> Parser::typeProperties() {
-  auto Properties =
-	  std::make_unique<llvm::StringMap<std::unique_ptr<VarDecl>>>();
+  std::unique_ptr<RecordDecl> NewDecl = Semantics->enterStructScope(Id);
   while (true) {
-	if (nextTokIs(Basic::tok::Tag::r_brace)) {
+	if (nextTokIs(Basic::tok::r_brace)) {
+	  RBraceLoc = advance().getLoc();
 	  break;
 	}
-
 	std::unique_ptr<VarDecl> Var = nameDecl();
 	if (!Var) {
 	  return nullptr;
 	}
+	Semantics->actOnStructMemberDecl(std::move(Var));
 	if (!expect(Basic::tok::semi)) {
 	  reportExpect(Basic::tok::semi, previous());
 	  return nullptr;
 	}
-	Properties->insert(std::pair<llvm::StringRef, std::unique_ptr<VarDecl>>(
-		Var->getName(), std::move(Var)));
   }
-
-  return std::make_unique<TypeProperties>(std::move(Properties));
+  NewDecl->setRange(StructLoc, RBraceLoc);
+  return std::move(NewDecl);
 }
 
 std::unique_ptr<VarDecl> Parser::nameDecl() {
@@ -173,10 +130,11 @@ std::unique_ptr<VarDecl> Parser::nameDecl() {
 	return nullptr;
   }
   Token ID = previous();
-  return semantics->actOnNameDecl(std::move(T), ID);
+  return Semantics->actOnNameDecl(std::move(T), ID);
 }
 
-std::unique_ptr<FunctionNode> Parser::function() {
+std::unique_ptr<FunctionDecl> Parser::function() {
+  llvm::SMLoc RParenLoc;
   std::unique_ptr<TypeUse> TypeNode = type();
   if (!TypeNode) {
 	return nullptr;
@@ -189,139 +147,51 @@ std::unique_ptr<FunctionNode> Parser::function() {
   if (!expect(Basic::tok::Tag::l_paren)) {
 	return nullptr;
   }
-  std::unique_ptr<ArgsList> Args = arguments();
-
+  u_ptr<llvm::SmallVector<u_ptr<ParamDecl>>> Args = parameters();
   if (!Args) {
 	return nullptr;
   }
+
   if (!expect(Basic::tok::Tag::r_paren)) {
 	return nullptr;
   }
-  semantics->enterFunction(std::move(TypeNode), *Args); // borrow
+
+  RParenLoc = previous().getLoc();
+
+  u_ptr<FunctionDecl>
+	  FnDecl = Semantics->enterFunctionScope(std::move(TypeNode), std::move(Args), Id, RParenLoc);
   std::unique_ptr<CompoundStmt> Compound = compoundStmt();
   if (!Compound) {
 	return nullptr;
   }
-  TypeNode = semantics->exitFunction(); // give back
-  return semantics->actOnFnDecl(std::move(TypeNode), Id, std::move(Args),
-								std::move(Compound));
+  Semantics->actOnFunctionDecl(FnDecl.get(), std::move(Compound));
+  return std::move(FnDecl);
 }
 
-std::unique_ptr<ArgsList> Parser::arguments() {
-  std::vector<std::unique_ptr<VarDecl>> ArgList;
+std::unique_ptr<ParamDecl> Parser::paramDecl() {
+  return nullptr;
+}
+
+u_ptr<llvm::SmallVector<u_ptr<ParamDecl>>> Parser::parameters() {
+  u_ptr<llvm::SmallVector<u_ptr<ParamDecl>>> ParamsVec = std::make_unique<llvm::SmallVector<u_ptr<ParamDecl>>>();
+  auto ParamsMap = llvm::DenseMap<IDTableEntry *, ParamDecl *>();
   while (true) {
 	if (nextTokIs(Basic::tok::Tag::r_paren)) {
 	  break;
 	}
-	if (!ArgList.empty() && !expect(Basic::tok::Tag::comma)) {
+	if (!ParamsVec->empty() && !expect(Basic::tok::Tag::comma)) {
 	  return nullptr;
 	}
-	std::unique_ptr<VarDecl> Argument = nameDecl();
+	std::unique_ptr<ParamDecl> Argument = paramDecl();
 	if (!Argument) {
 	  return nullptr;
 	}
-	ArgList.push_back(std::move(Argument));
-  }
-  return std::make_unique<ArgsList>(ArgList);
-}
-
-std::unique_ptr<CompoundStmt> Parser::compoundStmt() {
-  if (!expect(Basic::tok::Tag::l_brace)) {
-	return nullptr;
-  }
-  std::vector<std::unique_ptr<Stmt>> Stmts;
-  while (true) {
-	if (nextTokIs(Basic::tok::Tag::r_brace)) {
-	  advance();
-	  break;
-	}
-	std::unique_ptr<Stmt> S;
-	if (nextTokIs(Basic::tok::Tag::l_brace)) {
-	  advance();
-	  semantics->enterScope();
-	  S = compoundStmt();
-	} else {
-	  S = simpleStmt();
-	  if (llvm::isa<Expr>(S.get())) {
-		if (!expect(Basic::tok::semi)) {
-		  return nullptr;
-		}
-	  }
-	}
-	if (!S) {
-	  if (!recoverFromError(CurrentNonTerminal::STMT)) {
-		return nullptr;
-	  }
-	} else {
-	  if (S->getKind() == Stmt::SK_COMPOUND) {
-		semantics->exitScope();
-	  }
-	  Stmts.push_back(std::move(S));
-	}
-  }
-  return std::make_unique<CompoundStmt>(std::move(Stmts));
-}
-
-std::unique_ptr<Stmt> Parser::simpleStmt() {
-  using namespace Basic;
-  std::unique_ptr<Stmt> StmtInq;
-  switch (peek().getTag()) {
-  case Basic::tok::Tag::kw_void:
-  case tok::Tag::kw_bool:
-  case tok::Tag::kw_i32:
-  case tok::Tag::kw_i64:
-  case tok::Tag::kw_f32:
-  case tok::Tag::kw_f64:
-  case tok::Tag::kw_string: {
-	StmtInq = declStmt();
-	break;
-  }
-  case tok::Tag::identifier: { // TODO: this seems wrong
-	if (lookahead(2).is(Basic::tok::identifier)) {
-	  StmtInq = declStmt();
-	} else {
-	  StmtInq = expr();
-	}
-	break;
-  }
-  case tok::Tag::kw_return: {
-	StmtInq = returnStmt();
-	break;
-  }
-  case tok::Tag::kw_if: {
-	StmtInq = ifStmt();
-	break;
-  }
-  case tok::Tag::kw_for: {
-	StmtInq = forStmt();
-	break;
-  }
-  case tok::Tag::kw_while:StmtInq = whileStmt();
-	break;
-  case tok::Tag::kw_loop:StmtInq = loopStmt();
-  default:return nullptr;
+	Semantics->actOnParamDecl(*ParamsVec, std::move(Argument), ParamsMap);
   }
 
-  if (!StmtInq) {
-	return nullptr;
-  }
-  return StmtInq;
+  return std::move(ParamsVec);
 }
 
-std::unique_ptr<CallArgList> Parser::callArgs() {
-  std::vector<std::unique_ptr<Expr>> Args;
-  while (true) {
-	if (nextTokIs(Basic::tok::r_paren)) {
-	  break;
-	}
-	if (!Args.empty() && !expect(Basic::tok::Tag::comma)) {
-	  return nullptr;
-	}
-	std::unique_ptr<Expr> ExprPtr = expr();
-	if (!ExprPtr) {
-	  return nullptr;
-	}
-	Args.push_back(std::move(ExprPtr));
-  }
-  return std::make_unique<CallArgList>(std::move(Args));
-}
+
+
+

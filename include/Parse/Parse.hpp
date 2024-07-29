@@ -48,6 +48,7 @@ public:
   std::unique_ptr<TypeUse> type();
   u_ptr<llvm::SmallVector<u_ptr<ParamDecl>>> parameters();
   std::unique_ptr<VarDecl> nameDecl();
+  std::unique_ptr<ParamDecl> paramDecl();
   std::unique_ptr<CompoundStmt> compoundStmt();
   std::unique_ptr<Stmt> simpleStmt();
   std::unique_ptr<DeclStmt> declStmt();
