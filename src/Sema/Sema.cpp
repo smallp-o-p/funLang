@@ -35,8 +35,8 @@ bool SemaAnalyzer::actOnTopLevelDecl(std::unique_ptr<Decl> TopLDecl) {
 void SemaAnalyzer::actOnStructMemberDecl(std::unique_ptr<VarDecl> Var) {
   assert(DeclScope->isStructScope() && "Not in a struct!");
   if (lookupOne(Var->getEntry())) {
-	auto Record = llvm::dyn_cast<RecordDecl>(DeclScope->getContext());
-	Diags->emitDiagMsg(Var->getStart(), diag::err_struct_var_redefinition, Var->getName(), Record->getName());
+//	auto Record = llvm::dyn_cast<RecordDecl>(DeclScope->getContext());
+	Diags->emitDiagMsg(Var->getStart(), diag::err_struct_var_redefinition, Var->getName());
 	return;
   }
   insert(std::move(Var));
@@ -589,9 +589,9 @@ bool SemaAnalyzer::insert(std::unique_ptr<Decl> ToInsert) {
   return DeclScope->insertInContext(std::move(ToInsert));
 }
 
-void SemaAnalyzer::actOnParamDecl(llvm::SmallVector<std::unique_ptr<VarDecl>> &CurrentParamList,
-								  std::unique_ptr<VarDecl> Param,
-								  llvm::DenseMap<IDTableEntry *, VarDecl *> &CheckAgainst) {
+void SemaAnalyzer::actOnParamDecl(llvm::SmallVector<std::unique_ptr<ParamDecl>> &CurrentParamList,
+								  std::unique_ptr<ParamDecl> Param,
+								  llvm::DenseMap<IDTableEntry *, ParamDecl *> &CheckAgainst) {
   auto Found = CheckAgainst.find(Param->getEntry());
 
   if (Found != CheckAgainst.end()) {

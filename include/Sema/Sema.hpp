@@ -151,8 +151,8 @@ public:
 										 Token &Name);
   void actOnStructMemberDecl(std::unique_ptr<VarDecl> Var);
 
-  void actOnParamDecl(llvm::SmallVector<std::unique_ptr<VarDecl>> &CurrentParamList,
-					  std::unique_ptr<VarDecl> Param,
-					  llvm::DenseMap<IDTableEntry *, VarDecl *> &CheckAgainst);
+  void actOnParamDecl(llvm::SmallVector<std::unique_ptr<ParamDecl>> &CurrentParamList,
+					  std::unique_ptr<ParamDecl> Param,
+					  llvm::DenseMap<IDTableEntry *, ParamDecl *> &CheckAgainst);
 };
 } // namespace funLang
