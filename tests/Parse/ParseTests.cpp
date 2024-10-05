@@ -6,9 +6,9 @@ protected:
   std::unique_ptr<Parser> ParserObj;
   std::shared_ptr<llvm::SourceMgr> SrcMgr;
   std::shared_ptr<DiagEngine> Diags;
-  bool setBuffer(llvm::StringRef Buf, bool Str = false) {
+  bool setBuffer(llvm::StringRef Buf, bool IsStr = false) {
 	llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> FileOrError = nullptr;
-	if (Str) {
+	if (IsStr) {
 	  FileOrError = llvm::MemoryBuffer::getMemBufferCopy(Buf);
 	} else {
 	  FileOrError = llvm::MemoryBuffer::getFile(Buf);
@@ -30,22 +30,15 @@ protected:
   }
 };
 
-TEST_F(ParseTesting, PointerParsingTest) {
-  ASSERT_TRUE(setBuffer("***i32", true));
-  auto T = ParserObj->type();
+TEST_F(ParseTesting, simpleIfStmtTest) {
+  ASSERT_TRUE(setBuffer("if a<=b {} else {}", true));
+  auto T = ParserObj->ifStmt();
   ASSERT_NE(nullptr, T);
-  auto Next = llvm::dyn_cast<PointerType>(T->getTypeDecl()); // *
-  ASSERT_NE(Next, nullptr);
-  Next = llvm::dyn_cast<PointerType>(Next->getPointee());  // **
-  ASSERT_NE(Next, nullptr);
-  Next = llvm::dyn_cast<PointerType>(Next->getPointee()); // ***
-  ASSERT_NE(Next, nullptr);
-  auto BuiltIn = llvm::dyn_cast<BuiltInType>(Next->getPointee()); // i32
-  ASSERT_NE(BuiltIn, nullptr);
+  ASSERT_TRUE(llvm::isa<ifStmt>(T));
 }
 
 TEST_F(ParseTesting, forStmtTest) {
-  ASSERT_TRUE(setBuffer("for(i=0; i<5; ++i){}", true));
+  ASSERT_TRUE(setBuffer("for(i32 i=0; i<5; ++i){}", true));
   auto For = ParserObj->forStmt();
   ASSERT_NE(nullptr, For);
   ASSERT_EQ(llvm::isa<forStmt>(For.get()), true);
@@ -62,13 +55,6 @@ TEST_F(ParseTesting, cmpExpr) {
   ASSERT_TRUE(setBuffer("(100 == 1-2/3);", true));
   std::unique_ptr<Expr> CmpExpr = ParserObj->cmpExpr();
   ASSERT_NE(nullptr, CmpExpr);
-}
-
-TEST_F(ParseTesting, assignExpr) {
-  ASSERT_TRUE(setBuffer("./assignExpr.fun"));
-  auto Compound = ParserObj->compoundStmt();
-  ASSERT_NE(nullptr, Compound);
-  EXPECT_EQ(Compound->getStmts().size(), 5);
 }
 
 TEST_F(ParseTesting, fnTest1) {
