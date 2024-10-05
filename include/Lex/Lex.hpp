@@ -1,7 +1,4 @@
 #pragma once
-#include "Basic/Basic.hpp"
-#include "Basic/Diag.hpp"
-#include "Basic/IdentifierTable.hpp"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -17,6 +14,10 @@
 #include <string>
 #include <sys/types.h>
 #include <vector>
+
+import Basic;
+import Basic.IdentifierTable;
+import Basic.Diag;
 
 namespace funLang {
 using namespace Basic;
