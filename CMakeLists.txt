@@ -2,17 +2,15 @@ cmake_minimum_required(VERSION 3.14)
 project(funLang
         VERSION 0.0.1
         DESCRIPTION "A somewhat fun programming language"
-        LANGUAGES CXX
+        LANGUAGES C CXX
 )
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS)
 
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    set(CMAKE_CXX_STANDARD 20)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-    set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-endif ()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     message("Using Clang version:" ${CMAKE_CXX_COMPILER_VERSION})
