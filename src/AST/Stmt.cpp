@@ -3,6 +3,7 @@
 //
 #include "AST/Stmt.hpp"
 #include "AST/Decl.hpp"
+#include "AST/Type.hpp"
 using namespace funLang;
 llvm::StringRef funLang::DeclStmt::getName() { return NamedDecl->getName(); }
 
@@ -46,3 +47,35 @@ whileStmt::whileStmt(std::unique_ptr<Expr> condition,
 
 ReturnStmt::ReturnStmt(std::unique_ptr<Expr> exprNode)
 	: ReturnExpr(std::move(exprNode)), Stmt(SK_RETURN) {}
+
+bool Expr::isAssignable() {
+  return llvm::isa<NameUsage>(this);
+}
+
+bool Expr::isArithAssignable() {
+  if (auto *N = llvm::dyn_cast<NameUsage>(this)) {
+	if (auto *D = llvm::dyn_cast<VarDecl>(N->getDecl())) {
+	  return D->getTypePtr()->isIntType() || D->getTypePtr()->isFloatType();
+	} else if (auto *VD = llvm::dyn_cast<ParamDecl>(N->getDecl())) {
+	  return VD->getTypePtr()->isIntType() || VD->getTypePtr()->isFloatType();
+	}
+	return false;
+  }
+  return false;
+}
+
+bool Expr::isCompatibleWith(Expr *RHS) {
+  if (getType()->isIntType() || getType()->isIntLiteral()) {
+	return RHS->getType()->isIntType() || RHS->getType()->isIntLiteral();
+  }
+  if (getType()->isFloatType() || getType()->isFloatLiteral()) {
+	return RHS->getType()->isFloatType() || RHS->getType()->isFloatLiteral();
+  }
+  return false;
+}
+bool Expr::isIncrementable() {
+  return llvm::isa<NameUsage>(this) && resultType->isIntType();
+}
+bool Expr::isComplementable() {
+  return resultType->isIntType() || resultType->isFloatType();
+}
