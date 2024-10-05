@@ -62,7 +62,7 @@ bool Type::isF32() {
   return false;
 }
 
-bool funLang::Type::ArithmeticCompatibleWithEachOther(Type *Other) {
+bool funLang::Type::LHSTyCompatibleRHSTy(Type *Other) {
   auto *LHS = llvm::dyn_cast<BuiltInType>(OriginalType);
   if (!LHS) {
 	return false;
@@ -71,13 +71,27 @@ bool funLang::Type::ArithmeticCompatibleWithEachOther(Type *Other) {
   if (!RHS) {
 	return false;
   }
-  switch (LHS->getKind()) {
-  case BuiltInType::i32: return Other->isI32();
-  case BuiltInType::i64: return Other->isI64();
-  case BuiltInType::f32: return Other->isF32();
-  case BuiltInType::f64: return Other->isF64();
-  default: return false;
+  if (LHS->isIntType() || LHS->isIntLiteral()) {
+	return LHS->eqTo(RHS) || RHS->isIntLiteral();
+  } else if (LHS->isFloatType() || LHS->isFloatLiteral()) {
+	return LHS->eqTo(RHS) || RHS->isFloatLiteral();
   }
+  return false;
 }
+
+bool Type::isIntLiteral() {
+  if (auto *Ty = llvm::dyn_cast<BuiltInType>(this)) {
+	return Ty->getKind() == BuiltInType::int_literal;
+  }
+  return false;
+}
+
+bool Type::isFloatLiteral() {
+  if (auto *Ty = llvm::dyn_cast<BuiltInType>(this)) {
+	return Ty->getKind() == BuiltInType::float_literal;
+  }
+  return false;
+}
+bool Type::isBuiltIn() { return llvm::isa<BuiltInType>(this); }
 
 Decl *RecordType::lookup(IDTableEntry *MemberName) { return Record->getDecl(MemberName); }
