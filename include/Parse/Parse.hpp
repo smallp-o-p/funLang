@@ -1,18 +1,13 @@
 #pragma once
 #include "AST/Decl.hpp"
 #include "AST/Stmt.hpp"
-#include "Basic/Basic.hpp"
-#include "Basic/Diag.hpp"
+#include "AST/Type.hpp"
 #include "Lex/Lex.hpp"
 #include "Sema/Sema.hpp"
 #include <initializer_list>
 #include <memory>
 #include <utility>
 
-enum CurrentNonTerminal {
-  STMT,
-  FUNCTION
-}; // what non-terminal we failed to parse
 using namespace funLang;
 class Parser {
 private:
@@ -24,18 +19,17 @@ private:
 
 public:
   Parser(std::unique_ptr<Lexer> Lex, DiagEngine &Diags,
-		 std::unique_ptr<SemaAnalyzer> Sema)
-	  : lexer(std::move(Lex)), error(false), diags(Diags),
-		Semantics(std::move(Sema)) {}
+         std::unique_ptr<SemaAnalyzer> Sema)
+      : lexer(std::move(Lex)), error(false), diags(Diags),
+        Semantics(std::move(Sema)) {}
   Token peek();
   Token previous();
   Token &advance();
   bool expect(Basic::tok::Tag Tok);
   bool nextTokIs(Basic::tok::Tag Tok);
-  template<typename ...Ts>
+  template<typename... Ts>
   bool nextIsOneOf(tok::Tag T1, Ts... Tss) {
-	return peek().isOneOf(T1, Tss...);
-
+    return peek().isOneOf(T1, Tss...);
   }
   Token lookahead(uint32_t HowMuch);
   void reportExpect(Basic::tok::Tag Expected, Token Received);
@@ -71,5 +65,4 @@ public:
   std::unique_ptr<Expr> arrayIndex(std::unique_ptr<Expr> Input);
   std::unique_ptr<Expr> deref();
   u_ptr<llvm::SmallVector<u_ptr<Expr>>> callArgs();
-  bool recoverFromError(CurrentNonTerminal WhereWeFailed);
 };
