@@ -9,4 +9,7 @@ DATA(f64, "f64")
 DATA(bool_, "bool")
 DATA(string, "string")
 DATA(void_, "void")
+DATA(char_, "char")
+DATA(int_literal, "integer")
+DATA(float_literal, "float")
 #undef DATA
