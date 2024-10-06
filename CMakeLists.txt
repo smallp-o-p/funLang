@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.28 FATAL_ERROR)
 project(funLang
         VERSION 0.0.1
         DESCRIPTION "A somewhat fun programming language"
@@ -12,12 +12,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_SCAN_FOR_MODULES ON)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+message("Using ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    message("Using Clang version:" ${CMAKE_CXX_COMPILER_VERSION})
-    add_compile_options(-fstandalone-debug)
+    add_compile_options(-fstandalone-debug -fmodules)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-    message("Using GCC")
+    add_compile_options(-fmodules-ts)
 endif ()
 
 enable_testing()
@@ -35,10 +35,11 @@ add_definitions(${NO_RTTI})
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+cmake_policy(SET CMP0135 NEW)
 FetchContent_Declare(
         googletest
-        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
-)
+        URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip)
 FetchContent_MakeAvailable(googletest)
 
 add_subdirectory(src)
