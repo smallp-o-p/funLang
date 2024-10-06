@@ -18,12 +18,12 @@ llvm::SourceMgr::DiagKind diagKind[] = {
 #include "Basic/defs/Diags.def"
 };
 
-namespace Diag {
-using namespace llvm;
-enum {
+export namespace Diag {
+  using namespace llvm;
+  enum {
 #define DIAG(ID, Level, Msg) ID,
 #include "Basic/defs/Diags.def"
-};
+  };
 }// namespace Diag
 
 export class DiagEngine {
