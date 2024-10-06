@@ -9,20 +9,20 @@ module;
 export module Basic.Diag;
 
 static const char *diagFmts[] = {
-#define DIAG(ID, Level, Msg) Msg,
-#include "Basic/defs/Diags.def"
+    #define DIAG(ID, Level, Msg) Msg,
+    #include "Diags.def"
 };
 
 llvm::SourceMgr::DiagKind diagKind[] = {
-#define DIAG(ID, Level, Msg) llvm::SourceMgr::DK_##Level,
-#include "Basic/defs/Diags.def"
+    #define DIAG(ID, Level, Msg) llvm::SourceMgr::DK_##Level,
+    #include "Diags.def"
 };
 
 export namespace Diag {
   using namespace llvm;
   enum {
-#define DIAG(ID, Level, Msg) ID,
-#include "Basic/defs/Diags.def"
+    #define DIAG(ID, Level, Msg) ID,
+    #include "Diags.def"
   };
 }// namespace Diag
 

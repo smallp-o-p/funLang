@@ -14,17 +14,17 @@ static const char *const tokNames[] = {
 
 static const char *const BuiltInTypes[]{
 #define DATA(ID, SP) SP,
-#include "Basic/defs/BuiltInTypes.def"
+#include "BuiltInTypes.def"
     nullptr};
 
-template<typename T>
+export template<typename T>
 using u_ptr = std::unique_ptr<T>;
 
 export namespace Basic::tok {
 
 enum Tag : unsigned short {
 #define TOK(ID) ID,
-#include "Basic/defs/TokenTags.def"
+#include "TokenTags.def"
   NUM_TOKENS
 };
 
@@ -48,7 +48,7 @@ const char *getKwPunctuatorSpelling(Tag tag);
 export namespace Basic::Data {
 enum Type : unsigned short {
 #define DATA(ID, SP) ID,
-#include "Basic/defs/BuiltInTypes.def"
+#include "BuiltInTypes.def"
   NUM_DATA_TYPES
 };
 
@@ -62,7 +62,7 @@ export namespace Basic::Op {
 
 enum Binary : unsigned short {
 #define BINARY_OPERATION(ID, SP) ID,
-#include "Basic/defs/OperationKinds.def"
+#include "OperationKinds.def"
   NUM_BINARY
 };
 
@@ -78,7 +78,7 @@ const char *getBinaryOpSpelling(Basic::Op::Binary binop) {
 
 enum Unary : unsigned short {
 #define UNARY_OPERATION(ID, SP) ID,
-#include "Basic/defs/OperationKinds.def"
+#include "OperationKinds.def"
   NUM_UNARY
 };
 const char *getUnaryOpSpelling(Basic::Op::Unary unop) {
