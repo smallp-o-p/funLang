@@ -1,14 +1,17 @@
 #pragma once
-#include "Basic/Basic.hpp"
-#include "Basic/IdentifierTable.hpp"
+
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SMLoc.h>
-#include "llvm/ADT/DenseMap.h"
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
 
+import Basic;
+import Basic.IdentifierTable;
 namespace funLang {
 class Type;
 class TypeUse;
@@ -29,11 +32,11 @@ class Expr;
 class Decl {
 public:
   enum DeclKind {
-	DK_FN,
-	DK_VAR,
-	DK_TYPE,
-	DK_TRAIT,
-	DK_PARAM,
+    DK_FN,
+    DK_VAR,
+    DK_TYPE,
+    DK_TRAIT,
+    DK_PARAM,
   };
 
 private:
@@ -42,8 +45,8 @@ private:
   llvm::SMLoc Start, End;
 
 public:
-  explicit Decl(DeclKind Kind, llvm::StringMapEntry<std::nullopt_t> *IDTableEntry, llvm::SMLoc Start, llvm::SMLoc End)
-	  : Kind(Kind), DeclName(IDTableEntry), Start(Start), End(End) {}
+  explicit Decl(DeclKind Kind, IDTableEntry *Entry, llvm::SMLoc Start, llvm::SMLoc End)
+      : Kind(Kind), DeclName(Entry), Start(Start), End(End) {}
   DeclKind getKind() const { return Kind; }
   IDTableEntry *getEntry() { return DeclName; }
   llvm::StringRef getName() { return DeclName->first(); }
@@ -52,45 +55,44 @@ public:
   void setStart(llvm::SMLoc LocStart) { Start = LocStart; }
   void setEnd(llvm::SMLoc SEnd) { End = SEnd; }
   void setRange(llvm::SMLoc LocStart, llvm::SMLoc LocEnd) {
-	Start = LocStart;
-	End = LocEnd;
+    Start = LocStart;
+    End = LocEnd;
   }
 };
 
-class DeclContext { // all declarations are thrown into a DeclContext and will be in the same level no matter how they're scoped lexically
-// this implementation will not allow us to have any shadowing
+class DeclContext {// all declarations are thrown into a DeclContext and will be in the same level no matter how they're scoped lexically
+  // this implementation will not allow us to have any shadowing
 private:
   DeclContext *ParentContext;
   llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>> Decls;
 
 public:
   explicit DeclContext(DeclContext *ParentContext)
-	  : ParentContext(ParentContext),
-		Decls(llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>>()) {}
+      : ParentContext(ParentContext),
+        Decls(llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>>()) {}
   explicit DeclContext(llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>> Decls)
-	  : ParentContext(nullptr), Decls(std::move(Decls)) {}
+      : ParentContext(nullptr), Decls(std::move(Decls)) {}
 
   void setParentContext(DeclContext *Parent) { ParentContext = Parent; }
 
-  bool insert(llvm::StringMapEntry<std::nullopt_t> *Name, std::unique_ptr<Decl> Dec) {
-	auto Pair = Decls.insert({Name, std::move(Dec)});
-	return Pair.second;
+  bool insert(IDTableEntry *Name, std::unique_ptr<Decl> Dec) {
+    auto Pair = Decls.insert({Name, std::move(Dec)});
+    return Pair.second;
   }
 
   Decl *getDecl(IDTableEntry *Name) {
-	auto Found = Decls.find(Name);
-	if (Found != Decls.end()) {
-	  return nullptr;
-	}
-	return Found->second.get();
+    auto Found = Decls.find(Name);
+    if (Found != Decls.end()) {
+      return nullptr;
+    }
+    return Found->second.get();
   }
 };
 
 class CompilationUnit : public DeclContext {
 public:
   explicit CompilationUnit(llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>> Globals) : DeclContext(std::move(
-	  Globals)) {}
-
+                                                                                                Globals)) {}
 };
 
 class FunctionDecl : public Decl, public DeclContext {
@@ -101,19 +103,19 @@ private:
 
 public:
   FunctionDecl(std::unique_ptr<TypeUse> retType,
-			   llvm::StringMapEntry<std::nullopt_t> *Name,
-			   std::unique_ptr<CompoundStmt> Stmts,
-			   llvm::SMLoc TypeLoc,
-			   llvm::SMLoc RLoc,
-			   std::unique_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Params,
-			   DeclContext *Parent);
+               llvm::StringMapEntry<std::nullopt_t> *Name,
+               std::unique_ptr<CompoundStmt> Stmts,
+               llvm::SMLoc TypeLoc,
+               llvm::SMLoc RLoc,
+               std::unique_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Params,
+               DeclContext *Parent);
 
   FunctionDecl(std::unique_ptr<TypeUse> retType,
-			   IDTableEntry *Name,
-			   llvm::SMLoc TypeLoc,
-			   llvm::SMLoc RLoc,
-			   std::unique_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Parms,
-			   DeclContext *Ctx);
+               IDTableEntry *Name,
+               llvm::SMLoc TypeLoc,
+               llvm::SMLoc RLoc,
+               std::unique_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Parms,
+               DeclContext *Ctx);
 
   Type *getTypePtr();
   llvm::SmallVector<std::unique_ptr<ParamDecl>> &getParams() { return *Params; }
@@ -130,10 +132,11 @@ public:
 class RecordDecl : public Decl, public DeclContext {
 private:
   Type *TypePtr;
+  Decl *implDecl = nullptr;
 
 public:
-  RecordDecl(llvm::StringMapEntry<std::nullopt_t> *name, Type *TypePtr, DeclContext *Parent)
-	  : Decl(DK_TYPE, name, llvm::SMLoc(), llvm::SMLoc()), DeclContext(Parent), TypePtr(TypePtr) {}
+  RecordDecl(IDTableEntry *name, Type *TypePtr, DeclContext *Parent)
+      : Decl(DK_TYPE, name, llvm::SMLoc(), llvm::SMLoc()), DeclContext(Parent), TypePtr(TypePtr) {}
   static bool classof(const Decl *D) { return D->getKind() == DK_TYPE; }
   void setTypePtr(Type *T) { TypePtr = T; }
   Type *getTypePtr() { return TypePtr; }
@@ -147,7 +150,7 @@ private:
 
 public:
   TypeUse(funLang::Type *type, llvm::SMLoc QualifierLoc, llvm::SMLoc TypeNameLoc)
-	  : TypePtr(type), FirstQualifierLoc(QualifierLoc), TypeNameLoc(TypeNameLoc) {}
+      : TypePtr(type), FirstQualifierLoc(QualifierLoc), TypeNameLoc(TypeNameLoc) {}
   funLang::Type *getTypePtr() { return TypePtr; }
   const llvm::SMLoc &getFirstQualifierLoc() const { return FirstQualifierLoc; }
   const llvm::SMLoc &getTypeNameLoc() const { return TypeNameLoc; }
@@ -159,8 +162,8 @@ private:
   // qualifiers and stuff would go here?
 public:
   VarDecl(std::unique_ptr<TypeUse> Type, IDTableEntry *Name, llvm::SMLoc Left,
-		  llvm::SMLoc Right)
-	  : Decl(DK_VAR, Name, Left, Right), UsedType(std::move(Type)) {}
+          llvm::SMLoc Right)
+      : Decl(DK_VAR, Name, Left, Right), UsedType(std::move(Type)) {}
   Type *getTypePtr() const { return UsedType->getTypePtr(); }
   static bool classof(const Decl *D) { return D->getKind() == DK_VAR; }
 };
@@ -170,15 +173,17 @@ private:
   std::unique_ptr<Expr> Init;
   DeclContext *Container;
   u_ptr<TypeUse> T;
+
 public:
   ParamDecl(IDTableEntry *Name,
-			std::unique_ptr<Expr> Init,
-			DeclContext *Container,
-			llvm::SMLoc Left,
-			llvm::SMLoc Right,
-			u_ptr<TypeUse> T);
+            std::unique_ptr<Expr> Init,
+            DeclContext *Container,
+            llvm::SMLoc Left,
+            llvm::SMLoc Right,
+            u_ptr<TypeUse> T);
 
   Type *getTypePtr() { return T->getTypePtr(); }
+  static bool classof(const Decl *D) { return D->getKind() == DK_PARAM; }
 };
 
-}
+}// namespace funLang
