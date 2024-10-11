@@ -1,4 +1,3 @@
-#include "Lex/Lex.hpp"
 #include "gtest/gtest.h"
 #include <filesystem>
 #include <iostream>
@@ -6,7 +5,7 @@
 #include <llvm/Support/SMLoc.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
-
+import Lex;
 using namespace funLang;
 using namespace Basic;
 
@@ -24,7 +23,7 @@ protected:
       FileOrError = llvm::MemoryBuffer::getFile(Buf);
     }
     if (std::error_code BufferErr = FileOrError.getError()) {
-      std::cout << BufferErr.message() << " " << BufferErr.value();
+      std::cout << BufferErr.message() << " " << BufferErr.value() << std::endl;
       return false;
     }
     SrcMgr->AddNewSourceBuffer(std::move(*FileOrError), llvm::SMLoc());
@@ -44,7 +43,7 @@ protected:
 //==
 //!=
 TEST_F(LexTests, LexBasicTokens) {
-  ASSERT_TRUE(setBuffer("./lex_Basic.txt"));
+  ASSERT_TRUE(setBuffer("lex_Basic.txt"));
   std::vector<Basic::tok::Tag> expected = {
       tok::plus, tok::minus, tok::star, tok::slash,
       tok::greater, tok::less, tok::equal, tok::l_paren,
@@ -55,8 +54,8 @@ TEST_F(LexTests, LexBasicTokens) {
   for (auto tok : expected) {
     Token lexed_token = LexerObj->advance();
     EXPECT_EQ(lexed_token.getTag(), tok)
-        << "Expected: " << tok::getTokenName(tok)
-        << " Received: " << tok::getTokenName(lexed_token.getTag());
+            << "Expected: " << tok::getTokenName(tok)
+            << " Received: " << tok::getTokenName(lexed_token.getTag());
   }
   EXPECT_EQ(LexerObj->advance().getTag(), tok::eof);
 }
@@ -71,8 +70,8 @@ TEST_F(LexTests, LexKeywords) {
   for (auto expected_tok : expected) {
     Token lexed_token = LexerObj->advance();
     EXPECT_EQ(lexed_token.getTag(), expected_tok)
-        << "Expected: " << tok::getTokenName(expected_tok)
-        << " Received: " << tok::getTokenName(lexed_token.getTag());
+            << "Expected: " << tok::getTokenName(expected_tok)
+            << " Received: " << tok::getTokenName(lexed_token.getTag());
   }
 }
 
@@ -81,8 +80,8 @@ TEST_F(LexTests, IntNumLiterals) {
   Token tok = LexerObj->advance();
   while (tok.getTag() != tok::eof) {
     EXPECT_EQ(tok.getTag(), tok::numeric_constant)
-        << "\nExpected: " << tok::getTokenName(tok::numeric_constant)
-        << " Received: " << tok::getTokenName(tok.getTag());
+            << "\nExpected: " << tok::getTokenName(tok::numeric_constant)
+            << " Received: " << tok::getTokenName(tok.getTag());
     tok = LexerObj->advance();
   }
 
@@ -94,8 +93,8 @@ TEST_F(LexTests, RealNumLiterals) {
   Token tok = LexerObj->advance();
   while (tok.getTag() != tok::eof) {
     EXPECT_EQ(tok.getTag(), tok::floating_constant)
-        << "\nExpected: " << tok::getTokenName(tok::floating_constant)
-        << " Received: " << tok::getTokenName(tok.getTag());
+            << "\nExpected: " << tok::getTokenName(tok::floating_constant)
+            << " Received: " << tok::getTokenName(tok.getTag());
     tok = LexerObj->advance();
   }
   EXPECT_EQ(tok.getTag(), tok::eof);
@@ -107,8 +106,8 @@ TEST_F(LexTests, StringLits) {
   Token tok = LexerObj->advance();
   while (tok.getTag() != tok::eof) {
     EXPECT_EQ(tok::string_literal, tok.getTag())
-        << "\nExpected: " << tok::getTokenName(tok::string_literal)
-        << " Received: " << tok::getTokenName(tok.getTag());
+            << "\nExpected: " << tok::getTokenName(tok::string_literal)
+            << " Received: " << tok::getTokenName(tok.getTag());
     tok = LexerObj->advance();
   }
   EXPECT_EQ(tok::eof, LexerObj->previous().getTag());
@@ -126,8 +125,8 @@ TEST_F(LexTests, ExampleFunc) {
       tok::r_brace};
   for (auto expected_tok : expected) {
     EXPECT_EQ(expected_tok, LexerObj->advance().getTag())
-        << "Mismatch; Expected: " << tok::getTokenName(expected_tok)
-        << "\nReceived: " << tok::getTokenName(LexerObj->previous().getTag());
+            << "Mismatch; Expected: " << tok::getTokenName(expected_tok)
+            << "\nReceived: " << tok::getTokenName(LexerObj->previous().getTag());
   }
 }
 
@@ -141,8 +140,8 @@ TEST_F(LexTests, WithErrs) {
 
   for (auto expected_tok : expected) {
     EXPECT_EQ(expected_tok, LexerObj->advance().getTag())
-        << "Mismatch; Expected: " << tok::getTokenName(expected_tok)
-        << "\nReceived: " << tok::getTokenName(LexerObj->previous().getTag());
+            << "Mismatch; Expected: " << tok::getTokenName(expected_tok)
+            << "\nReceived: " << tok::getTokenName(LexerObj->previous().getTag());
   }
 }
 
