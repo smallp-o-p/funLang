@@ -2,11 +2,11 @@
 #include "AST/Decl.hpp"
 #include "AST/Stmt.hpp"
 #include "AST/Type.hpp"
-#include "Lex/Lex.hpp"
 #include "Sema/Sema.hpp"
 #include <initializer_list>
 #include <memory>
 #include <utility>
+import Lex;
 
 using namespace funLang;
 class Parser {
