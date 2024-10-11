@@ -6,7 +6,4 @@ target_sources(Basic PUBLIC
         TYPE CXX_MODULES
         FILES Basic.ixx IdentifierTable.ixx Diag.ixx Result.ixx)
 
-target_include_directories(Basic
-        PUBLIC
-        ../../include/Basic/defs)
 message("Basic current directory is: ${CMAKE_CURRENT_LIST_DIR}")
