@@ -2,12 +2,12 @@
 
 A statically typed programming language implemented with the LLVM ecosystem created for fun.
 
-FunLang is implemented in C++17 and heavily depends on LLVM libraries. Code generation is handled entirely by LLVM and
+FunLang is implemented in C++20 and heavily depends on LLVM libraries. Code generation is handled entirely by LLVM and
 there is heavy use of its ADT and Support libraries. This is essentially a front-end for LLVM.
 
 ## Building
 
-- C++ standard is currently set to C++20, however I don't think I use anything beyond C++17.
+- A C++20 compiler is required.
 - Supported CMake versions: 3.14 and above.
 - Ensure LLVM and its libraries are installed in your
   system. <a href="https://llvm.org/docs/GettingStarted.html#getting-the-source-code-and-building-llvm">Consult LLVM's
