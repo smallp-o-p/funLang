@@ -21,9 +21,9 @@ module;
 #include <unistd.h>
 export module Lex;
 export import :Token;
-import Basic;
-import Basic.Diag;
-import Basic.IdentifierTable;
+export import Basic;
+export import Basic.Diag;
+export import Basic.IdentifierTable;
 
 namespace funLang {
   export class Lexer {
