@@ -14,30 +14,30 @@ export {
     bool Invalid = false;
 
   public:
-    explicit ActionRes(std::unique_ptr<Ty> Val) : Val(std::move(Val)), Invalid(false) {}
-    explicit ActionRes(bool Invalid = false) : Val(nullptr), Invalid(Invalid) {}
-    ActionRes() : Val(nullptr), Invalid(true) {}
+    explicit ActionRes(std::unique_ptr<Ty> Val) : Val(std::move(Val)) {}              // valid and present
+    explicit ActionRes(const bool Invalid = false) : Val(nullptr), Invalid(Invalid) {}// valid and not present or invalid
 
-    [[nodiscard]]
-    bool isInvalid() const {
+    [[nodiscard]] bool isInvalid() const {
       return Invalid;
     }
 
-    [[nodiscard]]
-    bool isUnset() const {
+    [[nodiscard]] bool isUnset() const {
       return !Invalid && !Val;
     }
 
-    [[nodiscard]]
-    bool isUsable() const {
-      return !isInvalid() && !isUnset();
-    }
-
-    std::unique_ptr<Ty> move() {
+    [[nodiscard]] std::unique_ptr<Ty> move() {
       return std::move(Val);
     }
 
-    bool operator!() {
+    [[nodiscard]] static inline ActionRes InvalidRes() {
+      return ActionRes(true);
+    }
+
+    [[nodiscard]] static inline ActionRes ValidEmptyRes() {
+      return ActionRes();
+    }
+
+    bool operator!() const {
       return isInvalid();
     }
   };
