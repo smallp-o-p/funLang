@@ -9,10 +9,10 @@ there is heavy use of its ADT and Support libraries. This is essentially a front
 
 - A C++20 compiler is required.
 - Supported CMake versions: 3.14 and above.
-- Ensure LLVM and its libraries are installed in your
-  system. <a href="https://llvm.org/docs/GettingStarted.html#getting-the-source-code-and-building-llvm">Consult LLVM's
-  documentation on this.</a>
-- I've only successfully built this on Linux (Ubuntu).
+- LLVM will be automatically downloaded and installed for this project if it isn't present on your system already.
+    - By default, it will only build and install LLVM for this project only. You will not be able to use this LLVM
+      installation for your other projects.
+- I've only successfully built this on Ubuntu Linux.
 
 ### Build Instructions
 
