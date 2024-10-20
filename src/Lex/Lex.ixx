@@ -3,22 +3,18 @@
 //
 module;
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringSet.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/FormatVariadicDetails.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/FormatVariadicDetails.h"
 #include <cassert>
 #include <cstdint>
 #include <deque>
-#include <initializer_list>
 #include <iostream>
 #include <llvm/Support/SMLoc.h>
 #include <llvm/Support/SourceMgr.h>
 #include <memory>
 #include <string>
-#include <sys/types.h>
-#include <vector>
 #include <unistd.h>
+#include <vector>
 export module Lex;
 export import :Token;
 export import Basic;
@@ -26,257 +22,229 @@ export import Basic.Diag;
 export import Basic.IdentifierTable;
 
 namespace funLang {
-  export class Lexer {
-    friend class IdentifierTable;
+export class Lexer {
+  friend class IdentifierTable;
+  std::vector<Token> Tokens{};   // keep track of old tokens for error messages
+  std::deque<Token> Unconsumed{};// unconsumed tokens that are stored if we looked ahead.
+  llvm::StringMap<tok::Tag> KeywordTable{};
 
-  private:
-    std::vector<Token> tokens;   // keep track of old tokens for error messages
-    std::deque<Token> unconsumed;// unconsumed tokens that are stored if we looked ahead.
-    llvm::StringMap<Basic::tok::Tag> KeywordTable;
+  std::shared_ptr<llvm::SourceMgr> srcManager;
+  DiagEngine &Diagnostics;
+  llvm::StringRef CurrentBuffer;
+  llvm::StringRef::iterator BufferPtr;
+  IdentifierTable IdentTable{};
+  uint32_t BufferID = 0;
 
-    std::shared_ptr<llvm::SourceMgr> srcManager;
-    DiagEngine diagnostics;
-    llvm::StringRef curBuf;
-    llvm::StringRef::iterator bufPtr;
-    IdentifierTable IdentTable;
-    uint32_t currentBuffer = 0;
+  void addKeywords() {
+#define KEYWORD(NAME, FLAGS) addKeyword(#NAME, Basic::tok::kw_##NAME);
+#include "Basic/defs/TokenTags.def"
+  }
 
-    void addKeywords() {
-      #define KEYWORD(NAME, FLAGS) addKeyword(#NAME, Basic::tok::kw_##NAME);
-      #include "Basic/defs/TokenTags.def"
+  Token formToken(const char *TokEnd, tok::Tag Kind) {
+    const auto Current = BufferPtr;
+    const auto Lexed = llvm::StringRef(Current, static_cast<size_t>(TokEnd - Current));
+    BufferPtr = TokEnd;
+    if (Kind == tok::identifier) {
+      const auto EntryPtr = IdentTable.insert(Lexed);
+      return {Kind,
+              EntryPtr,
+              llvm::SMLoc::getFromPointer(Current),
+              llvm::SMLoc::getFromPointer(TokEnd),
+              Lexed.size()};
     }
-
-    Token formToken(const char *TokEnd, Basic::tok::Tag Kind) {
-      llvm::StringRef Lexed = llvm::StringRef(bufPtr, static_cast<size_t>(TokEnd - bufPtr));
-      if (Kind == Basic::tok::identifier) {
-        auto EntryPtr = IdentTable.insert(Lexed);
-        Token Tok = {Kind,
-                     EntryPtr,
-                     llvm::SMLoc::getFromPointer(bufPtr),
-                     llvm::SMLoc::getFromPointer(TokEnd),
-                     Lexed.size()};
-        bufPtr = TokEnd;
-        return Tok;
-      } else if (Token::isLiteral(Kind)) {
-        Token Tok = {Lexed, static_cast<size_t>(TokEnd - bufPtr),
-                     Kind, llvm::SMLoc::getFromPointer(bufPtr), llvm::SMLoc::getFromPointer(TokEnd)};
-        bufPtr = TokEnd;
-        return Tok;
-      }
-      Token Tok = {Kind, llvm::SMLoc::getFromPointer(bufPtr), llvm::SMLoc::getFromPointer(TokEnd),
-                   static_cast<size_t>(TokEnd - bufPtr)};
-      bufPtr = TokEnd;
-      return Tok;
+    if (Token::isLiteral(Kind)) {
+      return {Lexed, static_cast<size_t>(TokEnd - Current),
+              Kind, llvm::SMLoc::getFromPointer(Current), llvm::SMLoc::getFromPointer(TokEnd)};
     }
-    Token formErr() {
-      bufPtr++;
-      return Token(llvm::SMLoc::getFromPointer(bufPtr - 1));
+    return {Kind, llvm::SMLoc::getFromPointer(Current), llvm::SMLoc::getFromPointer(TokEnd),
+            static_cast<size_t>(TokEnd - Current)};
+  }
+  Token formErr() {
+    BufferPtr++;
+    return Token(llvm::SMLoc::getFromPointer(BufferPtr - 1));
+  }
+
+  void addKeyword(const std::string &Kw, tok::Tag Tag) { KeywordTable.insert(std::make_pair(Kw, Tag)); }
+
+  tok::Tag findKeyword(const llvm::StringRef Name) {
+    if (const auto Result = KeywordTable.find(Name); Result != KeywordTable.end()) {
+      return Result->second;
     }
+    return tok::Tag::identifier;
+  }
 
-    void addKeyword(const std::string &Kw, Basic::tok::Tag Tag) { KeywordTable.insert(std::make_pair(Kw, Tag)); }
-
-    Basic::tok::Tag findKeyword(llvm::StringRef Name) {
-      auto Result = KeywordTable.find(Name);
-      if (Result != KeywordTable.end()) {
-        return Result->second;
-      }
-      return Basic::tok::Tag::identifier;
+  Token lexString() {
+    auto End = BufferPtr + 1;
+    while (*End && *End++ != '\"') {
     }
+    if (!*End) {
+      Diagnostics.emitDiagMsg(getLocFrom(BufferPtr),
+                              Diag::err_unterminated_char_or_string);
+      return formErr();
+    }
+    return formToken(End, tok::string_literal);
+  }
 
-    Token lexString() {
-      auto End = bufPtr + 1;
-      while (*End && *End++ != '\"') {
-      }
-      if (!*End) {
-        diagnostics.emitDiagMsg(getLocFrom(bufPtr),
-                                Diag::err_unterminated_char_or_string);
+  Token lexNum() {
+    auto End = BufferPtr;// handle negative case
+    bool SeenDot = false;
+    while (*End && (isdigit(*End) || *End == '.')) {
+      if (SeenDot && *End == '.') {
+        Diagnostics.emitDiagMsg(getLocFrom(End + 1), Diag::err_unexpected_char,
+                                *End);
         return formErr();
       }
-      return formToken(End, Basic::tok::string_literal);
+      if (*End == '.' && !SeenDot) {
+        SeenDot = true;
+      }
+      End++;
     }
-
-    Token lexNum() {
-      auto End = bufPtr;// handle negative case
-      bool SeenDot = false;
-      while (*End && (isdigit(*End) || *End == '.')) {
-        if (SeenDot && *End == '.') {
-          diagnostics.emitDiagMsg(getLocFrom(End + 1), Diag::err_unexpected_char,
-                                  *End);
-          return formErr();
-        }
-        if (*End == '.' && !SeenDot) {
-          SeenDot = true;
-        }
-        End++;
-      }
-      if (!*End) {
-        return formErr();
-      }
-      if (SeenDot) {
-        return formToken(End, Basic::tok::Tag::floating_constant);
-      }
-      return formToken(End, Basic::tok::Tag::numeric_constant);
+    if (!*End) {
+      return formErr();
     }
-
-    Token lexIdentifier() {
-      auto End = bufPtr;
-
-      while (isalnum(*End) || *End == '_') {
-        End++;
-      }
-      return formToken(End, findKeyword(std::string(bufPtr, End)));
+    if (SeenDot) {
+      return formToken(End, tok::Tag::floating_constant);
     }
+    return formToken(End, tok::Tag::numeric_constant);
+  }
 
-    Token getNext() {
-      while (*bufPtr && iswspace(*bufPtr)) {
-        ++bufPtr;
-      }
-      switch (*bufPtr) {
-      case ',': return formToken(bufPtr + 1, Basic::tok::Tag::comma);
-      case '{': return formToken(bufPtr + 1, Basic::tok::l_brace);
-      case '}': return formToken(bufPtr + 1, Basic::tok::r_brace);
-      case '(': return formToken(bufPtr + 1, Basic::tok::Tag::l_paren);
-      case ')': return formToken(bufPtr + 1, Basic::tok::Tag::r_paren);
-      case '=':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::equalequal);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::equal);
-        }
-      case '.':
-        if (nextIs('.')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::dotdot);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::dot);
-        }
-      case ':':
-        if (nextIs(':')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::coloncolon);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::colon);
-        }
-      case ';': return formToken(bufPtr + 1, Basic::tok::Tag::semi);
-      case '!':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::exclaimequal);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::exclaim);
-        }
-      case '<':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::lessequal);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::less);
-        }
-      case '>':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::greaterequal);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::greater);
-        }
-      case '+':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::plusequal);
-        } else if (nextIs('+')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::plusplus);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::plus);
-        }
-      case '-':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::minusequal);
-        } else if (nextIs('-')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::minusminus);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::minus);
-        }
-      case '*':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::starequal);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::star);
-        }
-      case '/':
-        if (nextIs('=')) {
-          return formToken(bufPtr + 2, Basic::tok::Tag::slashequal);
-        } else {
-          return formToken(bufPtr + 1, Basic::tok::Tag::slash);
-        }
-      case '\"': return lexString();
-      default: {
-        if (isdigit(*bufPtr)) {
-          return lexNum();
-        }
-        if (isalpha(*bufPtr)) {
-          return lexIdentifier();
-        }
-        if (!*bufPtr) {
-          return formToken(bufPtr, Basic::tok::Tag::eof);
-        } else {
-          diagnostics.emitDiagMsg(getCurLoc(), Diag::err_unexpected_char, *bufPtr);
-          return formErr();
-        }
-      }
-      }
+  Token lexIdentifier() {
+    auto End = BufferPtr;
+
+    while (isalnum(*End) || *End == '_') {
+      End++;
     }
+    return formToken(End, findKeyword(std::string(BufferPtr, End)));
+  }
 
-    bool nextIs(char C) {
-      if (*(bufPtr + 1) == C) {
-        return true;
+  Token getNext() {
+    while (*BufferPtr && iswspace(*BufferPtr)) {
+      ++BufferPtr;
+    }
+    switch (*BufferPtr) {
+    case ',': return formToken(BufferPtr + 1, tok::Tag::comma);
+    case '{': return formToken(BufferPtr + 1, tok::l_brace);
+    case '}': return formToken(BufferPtr + 1, tok::r_brace);
+    case '(': return formToken(BufferPtr + 1, tok::Tag::l_paren);
+    case ')': return formToken(BufferPtr + 1, tok::Tag::r_paren);
+    case '=':
+      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::equalequal) : formToken(BufferPtr + 1, tok::Tag::equal);
+    case '.':
+      return nextIs('.') ? formToken(BufferPtr + 2, tok::Tag::dotdot) : formToken(BufferPtr + 1, tok::Tag::dot);
+    case ':':
+      return nextIs(':') ? formToken(BufferPtr + 2, tok::Tag::coloncolon) : formToken(BufferPtr + 1, tok::Tag::colon);
+    case ';': return formToken(BufferPtr + 1, tok::Tag::semi);
+    case '!': {
+      if (nextIs('=')) {
+        return formToken(BufferPtr + 2, tok::Tag::exclaimequal);
       }
-      return false;
+      return formToken(BufferPtr + 1, tok::Tag::exclaim);
     }
-
-  public:
-    Lexer(const std::shared_ptr<llvm::SourceMgr> &SrcMgr, DiagEngine &Diags)
-        : srcManager(SrcMgr), diagnostics(Diags), IdentTable(IdentifierTable()) {
-      currentBuffer = SrcMgr->getMainFileID();
-      curBuf = SrcMgr->getMemoryBuffer(currentBuffer)->getBuffer();
-      bufPtr = curBuf.begin();
-      addKeywords();
+    case '<': {
+      if (nextIs('=')) {
+        return formToken(BufferPtr + 2, tok::Tag::lessequal);
+      }
+      return formToken(BufferPtr + 1, tok::Tag::less);
     }
-
-    llvm::SMLoc getCurLoc() { return llvm::SMLoc::getFromPointer(bufPtr); }
-
-    static llvm::SMLoc getLocFrom(const char *Ptr) {
-      return llvm::SMLoc::getFromPointer(Ptr - 1);
+    case '>': {
+      if (nextIs('=')) {
+        return formToken(BufferPtr + 2, tok::Tag::greaterequal);
+      }
+      return formToken(BufferPtr + 1, tok::Tag::greater);
     }
+    case '+':
+      if (nextIs('=')) {
+        return formToken(BufferPtr + 2, tok::Tag::plusequal);
+      }
+      return nextIs('+') ? formToken(BufferPtr + 2, tok::Tag::plusplus) : formToken(BufferPtr + 1, tok::Tag::plus);
+    case '-': {
+      if (nextIs('=')) {
+        return formToken(BufferPtr + 2, tok::Tag::minusequal);
+      }
+      if (nextIs('-')) {
+        return formToken(BufferPtr + 2, tok::Tag::minusminus);
+      }
+      return formToken(BufferPtr + 1, tok::Tag::minus);
+    }
+    case '*': {
+      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::starequal) : formToken(BufferPtr + 1, tok::Tag::star);
+    }
+    case '/': {
+      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::slashequal) : formToken(BufferPtr + 1, tok::Tag::slash);
+    }
+    case '\"': return lexString();
+    default: {
+      if (isdigit(*BufferPtr)) {
+        return lexNum();
+      }
+      if (isalpha(*BufferPtr)) {
+        return lexIdentifier();
+      }
+      if (!*BufferPtr) {
+        return formToken(BufferPtr, tok::Tag::eof);
+      }
+      Diagnostics.emitDiagMsg(getCurLoc(), Diag::err_unexpected_char, *BufferPtr);
+      return formErr();
+    }
+    }
+  }
 
-    /**
+  [[nodiscard]] bool nextIs(const char C) const {
+    if (*(BufferPtr + 1) == C) {
+      return true;
+    }
+    return false;
+  }
+
+public:
+  Lexer(const std::shared_ptr<llvm::SourceMgr> &SrcMgr, DiagEngine &Diags)
+      : Tokens(std::vector<Token>()), Unconsumed(std::deque<Token>()), KeywordTable(llvm::StringMap<tok::Tag>()),
+        srcManager(SrcMgr), Diagnostics(Diags), IdentTable(IdentifierTable()) {
+    BufferID = SrcMgr->getMainFileID();
+    CurrentBuffer = SrcMgr->getMemoryBuffer(BufferID)->getBuffer();
+    BufferPtr = CurrentBuffer.begin();
+    addKeywords();
+  }
+
+  [[nodiscard]] llvm::SMLoc getCurLoc() const { return llvm::SMLoc::getFromPointer(BufferPtr); }
+
+  static llvm::SMLoc getLocFrom(const char *Ptr) {
+    return llvm::SMLoc::getFromPointer(Ptr - 1);
+  }
+
+  /**
       Consume the next token and return it. Check for any retrieved but unconsumed
       tokens.
     */
-    Token &advance() {
-      Token Tok = unconsumed.empty() ? getNext() : unconsumed.front();
-      if (!unconsumed.empty()) {
-        unconsumed.pop_front();
-      }
-      tokens.push_back(Tok);
-      return tokens.back();
+  Token &advance() {
+    const Token Tok = Unconsumed.empty() ? getNext() : Unconsumed.front();
+    if (!Unconsumed.empty()) {
+      Unconsumed.pop_front();
     }
+    Tokens.push_back(Tok);
+    return Tokens.back();
+  }
 
-    /**
+  /**
     Lookahead of 1 token.
     */
-    Token &peek() {
-      if (!unconsumed.empty()) {
-        return unconsumed.front();
-      } else {
-        unconsumed.push_back(getNext());
-      }
-      return unconsumed.front();
+  Token &peek() {
+    if (Unconsumed.empty()) {
+      Unconsumed.push_back(getNext());
     }
+    return Unconsumed.front();
+  }
 
-    /**
+  /**
     Lookahead of n tokens.
     */
-    Token lookahead(size_t HowMuch) {
-      while (HowMuch > unconsumed.size()) {
-        unconsumed.push_back(getNext());
-      }
-      return unconsumed.at(HowMuch - 1);
+  Token lookahead(size_t HowMuch) {
+    while (HowMuch > Unconsumed.size()) {
+      Unconsumed.push_back(getNext());
     }
-    Token previous() { return tokens.back(); }
-    bool atEnd() { return !*bufPtr; }
-  };
-}
+    return Unconsumed.at(HowMuch - 1);
+  }
+  [[nodiscard]] Token previous() const { return Tokens.back(); }
+  [[nodiscard]] bool atEnd() const { return !*BufferPtr; }
+};
+}// namespace funLang
