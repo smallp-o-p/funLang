@@ -30,9 +30,9 @@ enum Tag : unsigned short {
   NUM_TOKENS
 };
 
-const char *getTokenName(Tag tag) { return tokNames[tag]; }
+const char *getTokenName(const Tag tag) { return tokNames[tag]; }
 
-const char *getPunctuatorSpelling(Tag tag) {
+const char *getPunctuatorSpelling(const Tag tag) {
   switch (tag) {
 #define PUNCTUATOR(ID, SP) \
   case ID:                 \
@@ -53,7 +53,7 @@ enum Type : unsigned short {
   NUM_DATA_TYPES
 };
 
-const char *getBasicTypeSpelling(Data::Type T) {
+const char *getBasicTypeSpelling(const Type T) {
   return BuiltInTypes[T];
 }
 };// namespace Basic::Data
@@ -66,12 +66,11 @@ enum Binary : unsigned short {
   NUM_BINARY
 };
 
-[[maybe_unused]] const char *getBinaryOpSpelling(Basic::Op::Binary binop) {
-  switch (binop) {
+[[maybe_unused]] const char *getBinaryOpSpelling(const Binary BinOp) {
+  switch (BinOp) {
 #define BINARY_OPERATION(ID, SP) \
-  case##ID: return #SP;
+  case ID: return SP;
 #include "OperationKinds.def"
-
   default: break;
   }
   return nullptr;
@@ -83,10 +82,10 @@ enum Unary : unsigned short {
 
   NUM_UNARY
 };
-[[maybe_unused]] const char *getUnaryOpSpelling(Basic::Op::Unary unop) {
-  switch (unop) {
+[[maybe_unused]] const char *getUnaryOpSpelling(const Unary UnaryOp) {
+  switch (UnaryOp) {
 #define UNARY_OPERATION(ID, SP) \
-  case##ID: return #SP;
+  case ID: return SP;
 #include "OperationKinds.def"
 
   default: break;
