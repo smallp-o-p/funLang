@@ -11,7 +11,6 @@ module;
 #include <iostream>
 #include <llvm/Support/SMLoc.h>
 #include <llvm/Support/SourceMgr.h>
-#include <memory>
 #include <string>
 #include <unistd.h>
 #include <vector>
@@ -28,7 +27,7 @@ export class Lexer {
   std::deque<Token> Unconsumed{};// unconsumed tokens that are stored if we looked ahead.
   llvm::StringMap<tok::Tag> KeywordTable{};
 
-  std::shared_ptr<llvm::SourceMgr> srcManager;
+  llvm::SourceMgr& SourceFileManager;
   DiagEngine &Diagnostics;
   llvm::StringRef CurrentBuffer;
   llvm::StringRef::iterator BufferPtr;
@@ -197,11 +196,10 @@ export class Lexer {
   }
 
 public:
-  Lexer(const std::shared_ptr<llvm::SourceMgr> &SrcMgr, DiagEngine &Diags)
-      : Tokens(std::vector<Token>()), Unconsumed(std::deque<Token>()), KeywordTable(llvm::StringMap<tok::Tag>()),
-        srcManager(SrcMgr), Diagnostics(Diags), IdentTable(IdentifierTable()) {
-    BufferID = SrcMgr->getMainFileID();
-    CurrentBuffer = SrcMgr->getMemoryBuffer(BufferID)->getBuffer();
+  Lexer(llvm::SourceMgr &SrcMgr, DiagEngine &Diags)
+      : SourceFileManager(SrcMgr), Diagnostics(Diags), IdentTable(IdentifierTable()) {
+    BufferID = SrcMgr.getMainFileID();
+    CurrentBuffer = SrcMgr.getMemoryBuffer(BufferID)->getBuffer();
     BufferPtr = CurrentBuffer.begin();
     addKeywords();
   }

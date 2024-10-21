@@ -31,27 +31,22 @@ using namespace Basic;
 
 class LexTests : public testing::Test {
 protected:
-  Lexer *LexerObj;
-  std::shared_ptr<DiagEngine> Diags;
-  std::shared_ptr<llvm::SourceMgr> SrcMgr;
-  bool setBuffer(const llvm::StringRef Buf, const bool Str = false) {
+  Lexer *LexerObj{};
+  DiagEngine Diags{SrcMgr};
+  llvm::SourceMgr SrcMgr;
+  bool setBuffer(const llvm::StringRef Buf, const bool UsingString = false) {
     llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> FileOrError = nullptr;
-    if (Str) {
-      FileOrError = llvm::MemoryBuffer::getMemBufferCopy(Buf);
-    } else {
-      FileOrError = llvm::MemoryBuffer::getFile(Buf);
-    }
+    FileOrError = UsingString ? llvm::MemoryBuffer::getMemBufferCopy(Buf) : llvm::MemoryBuffer::getFile(Buf);
     if (const std::error_code BufferErr = FileOrError.getError()) {
       std::cout << BufferErr.message() << " " << BufferErr.value() << std::endl;
       return false;
     }
-    SrcMgr->AddNewSourceBuffer(std::move(*FileOrError), llvm::SMLoc());
-    Diags = std::make_shared<DiagEngine>(SrcMgr);
-    LexerObj = new Lexer(SrcMgr, *Diags);
+    SrcMgr.AddNewSourceBuffer(std::move(*FileOrError), llvm::SMLoc());
+    LexerObj = new Lexer(SrcMgr, Diags);
     return true;
   }
   LexTests()
-      : LexerObj(nullptr), Diags(nullptr), SrcMgr(std::make_shared<llvm::SourceMgr>()) {}
+      : SrcMgr(llvm::SourceMgr()) {}
 };
 
 // file should get copied over to executable directory
@@ -102,7 +97,6 @@ TEST_F(LexTests, IntNumLiterals) {
         << " Received: " << getTokenName(tok.getTag());
     tok = LexerObj->advance();
   }
-
   EXPECT_EQ(tok.getTag(), tok::eof);
 }
 
