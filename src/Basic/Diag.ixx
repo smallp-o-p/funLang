@@ -8,12 +8,12 @@ module;
 #include <utility>
 export module Basic.Diag;
 
-static const char *diagFmts[] = {
+static constexpr const char *diagFmts[] = {
     #define DIAG(ID, Level, Msg) Msg,
     #include "Diags.def"
 };
 
-llvm::SourceMgr::DiagKind diagKind[] = {
+static constexpr llvm::SourceMgr::DiagKind diagKind[] = {
     #define DIAG(ID, Level, Msg) llvm::SourceMgr::DK_##Level,
     #include "Diags.def"
 };
@@ -27,44 +27,44 @@ export namespace Diag {
 }// namespace Diag
 
 export class DiagEngine {
-  static const char *getDiagText(unsigned int diagID) {
-    return diagFmts[diagID];
+  static const char *getDiagText(const unsigned DiagID) {
+    return diagFmts[DiagID];
   }
-  static llvm::SourceMgr::DiagKind getDiagKind(unsigned int diagID) {
-    return diagKind[diagID];
+  static llvm::SourceMgr::DiagKind getDiagKind(const unsigned DiagID) {
+    return diagKind[DiagID];
   }
 
-  std::shared_ptr<llvm::SourceMgr> srcMgr;
-  uint32_t numErrors;
+  llvm::SourceMgr& srcMgr;
+  size_t numErrors;
 
 public:
-  explicit DiagEngine(std::shared_ptr<llvm::SourceMgr> srcMgr)
-      : srcMgr(std::move(srcMgr)), numErrors(0) {}
+  explicit DiagEngine(llvm::SourceMgr& srcMgr)
+      : srcMgr(srcMgr), numErrors(0) {}
 
-  uint32_t getNumErrors() const { return numErrors; }
+  [[nodiscard]] size_t getNumErrors() const { return numErrors; }
 
   template<typename... args>
-  void emitDiagMsg(llvm::SMLoc loc, uint32_t diagID, args &&...arguments) {
-    assert(loc.isValid() && "SMLoc returned invalid.");
-    std::string msg =
-        llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
+  void emitDiagMsg(const llvm::SMLoc Loc, const unsigned DiagID, args &&...arguments) {
+    assert(Loc.isValid() && "SMLoc returned invalid.");
+    const std::string Msg =
+        llvm::formatv(getDiagText(DiagID), std::forward<args>(arguments)...)
             .str();
-    llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
-    srcMgr->PrintMessage(loc, kind, msg);
+    const llvm::SourceMgr::DiagKind Kind = getDiagKind(DiagID);
+    srcMgr.PrintMessage(Loc, Kind, Msg);
 
-    numErrors += (kind == llvm::SourceMgr::DK_Error);
+    numErrors += (Kind == llvm::SourceMgr::DK_Error);
   }
 
   template<typename... args>
-  void emitDiagMsgRange(llvm::SMLoc left, llvm::SMLoc right, uint32_t diagID,
+  void emitDiagMsgRange(const llvm::SMLoc Left, const llvm::SMLoc Right, const unsigned DiagID,
                         args &&...arguments) {
-    assert(left.isValid() && right.isValid() && "SMLoc left or right returned invalid.");
-    std::string msg =
-        llvm::formatv(getDiagText(diagID), std::forward<args>(arguments)...)
+    assert(Left.isValid() && Right.isValid() && "SMLoc left or right returned invalid.");
+    const std::string Msg =
+        llvm::formatv(getDiagText(DiagID), std::forward<args>(arguments)...)
             .str();
-    llvm::SourceMgr::DiagKind kind = getDiagKind(diagID);
-    srcMgr->PrintMessage(left, kind, msg, {llvm::SMRange(left, right)});
+    const llvm::SourceMgr::DiagKind Kind = getDiagKind(DiagID);
+    srcMgr.PrintMessage(Left, Kind, Msg, {llvm::SMRange(Left, Right)});
 
-    numErrors += (kind == llvm::SourceMgr::DK_Error);
+    numErrors += (Kind == llvm::SourceMgr::DK_Error);
   }
 };
