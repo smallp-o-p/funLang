@@ -4,7 +4,7 @@
 module;
 #include <memory>
 
-export module Basic.Result;
+export module Basic:Result;
 
 namespace funLang {
 export {

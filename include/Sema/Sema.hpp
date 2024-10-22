@@ -1,162 +1,162 @@
 #pragma once
-#include "AST/Decl.hpp"
-#include "AST/Stmt.hpp"
-#include "AST/Type.hpp"
 #include "llvm/ADT/StringMap.h"
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 #include <llvm/Support/SMLoc.h>
+#include "llvm/ADT/DenseMap.h"
 #include <memory>
 #include <utility>
+#include <llvm/ADT/FoldingSet.h>
 import Lex;
-import Basic.Diag;
+import Basic;
+import funLangAST;
 
 namespace funLang {
+  class CallArgList;
 
-class CallArgList;
+  class Scope {
+    friend class SemaAnalyzer;
+    enum ScopeKind {
+      FunctionScope,
+      LoopScope,
+      BlockScope,
+      StructScope,
+      GlobalScope,
+    };
 
-class Scope {
-  friend class SemaAnalyzer;
-  enum ScopeKind {
-    FunctionScope,
-    LoopScope,
-    BlockScope,
-    StructScope,
-    GlobalScope,
+    u_ptr<Scope> Parent{};
+    DeclContext *ScopeContext{};
+    llvm::DenseMap<IDTableEntry *, Decl *> LookupTable{};
+    ScopeKind Kind;
+
+  public:
+    Scope();
+    explicit Scope(u_ptr<Scope> Parent, ScopeKind K);
+    Scope(u_ptr<Scope> Parent, const ScopeKind K, DeclContext *Ctx)
+      : Parent(std::move(Parent)), ScopeContext(Ctx), Kind(K) {
+    }
+    bool insertInContext(u_ptr<Decl> Dec);
+    u_ptr<Scope> moveParentScope();
+    Scope *getParent();
+    DeclContext *getContext();
+    Decl *lookup(const IDTableEntry *Name);
+
+    [[nodiscard]] bool isFunctionScope() const { return Kind == FunctionScope; }
+    [[nodiscard]] bool isStructScope() const { return Kind == StructScope; }
+    [[nodiscard]] bool isLoopScope() const { return Kind == LoopScope; }
+    [[nodiscard]] bool isBlockScope() const { return Kind == BlockScope; }
+
+    Scope *getClosestLoopScope() {
+      auto S = this;
+      while (!S->isLoopScope()) {
+        S = S->getParent();
+        if (!S) {
+          return nullptr;
+        }
+      }
+      return S;
+    }
+
+    bool insertInLexicalScope(IDTableEntry *ID, Decl *Dec) {
+      return LookupTable.insert({ID, Dec}).second;
+    }
+    bool isGlobalScope();
   };
 
-  std::unique_ptr<Scope> Parent;
-  DeclContext *ScopeContext;
-  llvm::DenseMap<IDTableEntry *, Decl *> TheLookupTable;
-  ScopeKind Kind;
+  class SemaAnalyzer {
+    std::shared_ptr<DiagEngine> Diags;
+    u_ptr<Scope> DeclScope;
+    Type *CurrentFunctionReturnType{};
+    llvm::SmallVector<BuiltInType *> BuiltinTypes;
+    llvm::DenseMap<IDTableEntry *, Type *> Types;
+    llvm::FoldingSet<PointerType *> PointerTypes;
 
-public:
-  Scope();
-  explicit Scope(std::unique_ptr<Scope> Parent, ScopeKind K);
-  Scope(std::unique_ptr<Scope> Parent, ScopeKind K, DeclContext *Ctx)
-      : Parent(std::move(Parent)), Kind(K), ScopeContext(Ctx) {}
-  bool insertInContext(std::unique_ptr<Decl> Dec);
-  std::unique_ptr<Scope> moveParentScope();
-  Scope *getParent();
-  DeclContext *getContext();
-  Decl *lookup(IDTableEntry *Name);
+    void init();
 
-  bool isFunctionScope() { return Kind == FunctionScope; }
-  bool isStructScope() { return Kind == StructScope; }
-  bool isLoopScope() { return Kind == LoopScope; }
-  bool isBlockScope() { return Kind == BlockScope; }
+  protected:
+    Decl *lookup(IDTableEntry *var);
+    Type *getType(IDTableEntry *Ty);
+    Decl *lookupOne(IDTableEntry *Var);
+    BuiltInType *getBool() { return BuiltinTypes[Basic::Data::bool_]; };
+    BuiltInType *getVoid() { return BuiltinTypes[Basic::Data::void_]; }
+    Type *getResultTyForBinOp(Expr *LHS, Expr *RHS);
+    bool insert(u_ptr<Decl> ToInsert); // inserts into lexical scope AND DeclContext !!
 
-  Scope *getClosestLoopScope() {
-    Scope *S = this;
-    while (!S->isLoopScope()) {
-      S = S->getParent();
-      if (!S) {
-        return nullptr;
-      }
-    }
-    return S;
-  }
+  public:
+    explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag);
 
-  bool insertInLexicalScope(IDTableEntry *ID, Decl *Dec) {
-    return TheLookupTable.insert({ID, Dec}).second;
-  }
-  bool isGlobalScope();
-};
+    void enterScope(Scope::ScopeKind K = Scope::ScopeKind::FunctionScope);
+    void exitScope();
+    u_ptr<FunctionDecl> enterFunctionScope(u_ptr<TypeUse> FunctionReturnType,
+                                           u_ptr<llvm::SmallVector<u_ptr<ParamDecl> > > Params,
+                                           Token &FunctionName,
+                                           llvm::SMLoc RParenLoc);
 
-class SemaAnalyzer {
-  std::shared_ptr<DiagEngine> Diags;
-  std::unique_ptr<Scope> DeclScope;
-  Type *CurrentFunctionReturnType{};
-  llvm::SmallVector<BuiltInType *> BuiltinTypes;
-  llvm::DenseMap<IDTableEntry *, Type *> Types;
-  llvm::FoldingSet<PointerType *> PointerTypes;
+    void enterLoopScope();
+    void exitFunctionScope();
 
-  void init();
+    u_ptr<DeclStmt>
+    actOnVarDeclStmt(u_ptr<VarDecl> NameDecl,
+                     u_ptr<Expr> ExprInput,
+                     llvm::SMLoc RightLoc);
 
-protected:
-  Decl *lookup(IDTableEntry *var);
-  Type *getType(IDTableEntry *Ty);
-  Decl *lookupOne(IDTableEntry *Var);
-  BuiltInType *getBool() { return BuiltinTypes[Basic::Data::bool_]; };
-  BuiltInType *getVoid() { return BuiltinTypes[Basic::Data::void_]; }
+    u_ptr<RecordDecl> enterStructScope(Token &StructDetails);
+    u_ptr<Expr> actOnNameUsage(Token &Identifier);
+    void
+    actOnFunctionDecl(FunctionDecl *Function, u_ptr<CompoundStmt> CompoundToAttach);
+    u_ptr<Expr> actOnFunctionCall(Token &ID,
+                                  llvm::SMLoc RParenLoc,
+                                  u_ptr<llvm::SmallVector<u_ptr<Expr> > > PassedArgs);
+    u_ptr<ReturnStmt> actOnReturnStmt(llvm::SMLoc ReturnLoc,
+                                      llvm::SMLoc SemicolonLoc,
+                                      u_ptr<Expr> ReturnExpr);
+    u_ptr<Expr> actOnUnaryOp(Basic::Op::Unary Op,
+                             u_ptr<Expr> ExprInput,
+                             llvm::SMLoc OpLoc);
+    u_ptr<Expr> actOnDereference(u_ptr<Expr> ExprInput, size_t DerefCount);
+    u_ptr<Expr> actOnBinaryOp(u_ptr<Expr> LHS,
+                              Basic::Op::Binary Op,
+                              u_ptr<Expr> RHS);
+    u_ptr<IntegerLiteral> actOnIntegerLiteral(Token &Literal);
+    u_ptr<FloatingLiteral> actOnFloatingLiteral(Token &Literal);
+    u_ptr<BooleanLiteral> actOnBooleanLiteral(Token &literal);
+    u_ptr<StrLiteral> actOnStrLiteral(Token &Literal);
+    u_ptr<TypeUse> actOnTypeUse(Token &TypeName, size_t IndirectionCount);
+    u_ptr<Stmt> actOnBreakStmt(Token &BreakLoc);
+    u_ptr<Stmt> actOnNextStmt(Token &NextLoc);
 
-  Type *getResultTyForBinOp(Expr *LHS, Expr *RHS);
+    u_ptr<forStmt> actOnForStmt(u_ptr<Stmt> Init,
+                                u_ptr<Expr> Cond,
+                                u_ptr<Expr> Inc,
+                                u_ptr<CompoundStmt> Body,
+                                llvm::SMLoc Left,
+                                llvm::SMLoc Right);
+    u_ptr<whileStmt>
+    actOnWhileStmt(u_ptr<Expr> Condition,
+                   u_ptr<CompoundStmt> Compound,
+                   llvm::SMLoc Left,
+                   llvm::SMLoc Right);
 
-  bool insert(std::unique_ptr<Decl> ToInsert);// inserts into lexical scope AND DeclContext !!
-  Type *getBuiltInType(BuiltInType::BTKind Ty);
+    u_ptr<loopStmt> actOnLoopStmt(u_ptr<CompoundStmt> Compound, llvm::SMLoc LoopLoc);
 
-public:
-  explicit SemaAnalyzer(std::shared_ptr<DiagEngine> diag);
+    u_ptr<Expr> actOnIndexOperation(u_ptr<Expr> Accessed,
+                                    u_ptr<Expr> AccessExpr,
+                                    llvm::SMLoc Left,
+                                    llvm::SMLoc Right);
+    u_ptr<Expr> actOnMemberExpr(u_ptr<Expr> Accessed, u_ptr<Expr> Accessor);
+    bool actOnTopLevelDecl(u_ptr<Decl> TopLDecl);
+    u_ptr<ifStmt> actOnIfStmt(llvm::SMLoc IfLoc,
+                              llvm::SMLoc EndOfExprLoc,
+                              u_ptr<Expr> IfCondition,
+                              u_ptr<CompoundStmt> FirstBlock,
+                              u_ptr<elifStmt> ElifChain,
+                              u_ptr<CompoundStmt> ElseBlock);
+    u_ptr<VarDecl> actOnNameDecl(u_ptr<TypeUse> Type,
+                                 Token &Name);
+    void actOnStructMemberDecl(u_ptr<Decl> Var);
 
-  void enterScope(Scope::ScopeKind K = Scope::ScopeKind::FunctionScope);
-  void exitScope();
-  std::unique_ptr<FunctionDecl> enterFunctionScope(std::unique_ptr<TypeUse> FunctionReturnType,
-                                                   u_ptr<llvm::SmallVector<std::unique_ptr<ParamDecl>>> Params,
-                                                   Token &FunctionName,
-                                                   llvm::SMLoc RParenLoc);
-
-  void enterLoopScope();
-  void exitFunctionScope();
-
-  std::unique_ptr<DeclStmt>
-  actOnVarDeclStmt(std::unique_ptr<VarDecl> NameDecl,
-                   std::unique_ptr<Expr> ExprInput, llvm::SMLoc RightLoc);
-
-  std::unique_ptr<RecordDecl> enterStructScope(Token &StructDetails);
-  std::unique_ptr<Expr> actOnNameUsage(Token &Identifier);
-  void
-  actOnFunctionDecl(FunctionDecl *Function, std::unique_ptr<CompoundStmt> CompoundToAttach);
-  std::unique_ptr<Expr> actOnFunctionCall(Token &ID,
-                                          llvm::SMLoc RParenLoc,
-                                          u_ptr<llvm::SmallVector<u_ptr<Expr>>> PassedArgs);
-  std::unique_ptr<ReturnStmt> actOnReturnStmt(llvm::SMLoc ReturnLoc,
-                                              llvm::SMLoc SemicolonLoc,
-                                              std::unique_ptr<Expr> ReturnExpr);
-  std::unique_ptr<Expr> actOnUnaryOp(Basic::Op::Unary Op,
-                                     std::unique_ptr<Expr> ExprInput,
-                                     llvm::SMLoc OpLoc);
-  std::unique_ptr<Expr> actOnDereference(std::unique_ptr<Expr> ExprInput, size_t DerefCount);
-  std::unique_ptr<Expr> actOnBinaryOp(std::unique_ptr<Expr> LHS,
-                                      Basic::Op::Binary Op,
-                                      std::unique_ptr<Expr> RHS);
-  std::unique_ptr<IntegerLiteral> actOnIntegerLiteral(Token &Literal);
-  std::unique_ptr<FloatingLiteral> actOnFloatingLiteral(Token &Literal);
-  std::unique_ptr<BooleanLiteral> actOnBooleanLiteral(Token &literal);
-  std::unique_ptr<StrLiteral> actOnStrLiteral(Token &Literal);
-  std::unique_ptr<TypeUse> actOnTypeUse(Token &TypeName, size_t IndirectionCount);
-  std::unique_ptr<Stmt> actOnBreakStmt(Token &BreakLoc);
-  std::unique_ptr<Stmt> actOnNextStmt(Token &NextLoc);
-
-  std::unique_ptr<forStmt> actOnForStmt(std::unique_ptr<Stmt> Init,
-                                        std::unique_ptr<Expr> Cond,
-                                        std::unique_ptr<Expr> Inc,
-                                        std::unique_ptr<CompoundStmt> Body,
-                                        llvm::SMLoc Left, llvm::SMLoc Right);
-  std::unique_ptr<whileStmt>
-  actOnWhileStmt(std::unique_ptr<Expr> Condition,
-                 std::unique_ptr<CompoundStmt> Compound, llvm::SMLoc Left,
-                 llvm::SMLoc Right);
-
-  std::unique_ptr<loopStmt> actOnLoopStmt(std::unique_ptr<CompoundStmt> Compound, llvm::SMLoc LoopLoc);
-
-  std::unique_ptr<Expr> actOnIndexOperation(std::unique_ptr<Expr> Accessed,
-                                            std::unique_ptr<Expr> AccessExpr,
-                                            llvm::SMLoc Left,
-                                            llvm::SMLoc Right);
-  std::unique_ptr<Expr> actOnMemberExpr(std::unique_ptr<Expr> Accessed, std::unique_ptr<Expr> Accessor);
-  bool actOnTopLevelDecl(std::unique_ptr<Decl> TopLDecl);
-  std::unique_ptr<ifStmt> actOnIfStmt(llvm::SMLoc IfLoc,
-                                      llvm::SMLoc EndOfExprLoc,
-                                      std::unique_ptr<Expr> IfCondition,
-                                      std::unique_ptr<CompoundStmt> FirstBlock,
-                                      std::unique_ptr<elifStmt> ElifChain,
-                                      std::unique_ptr<CompoundStmt> ElseBlock);
-  std::unique_ptr<VarDecl> actOnNameDecl(std::unique_ptr<TypeUse> Type,
-                                         Token &Name);
-  void actOnStructMemberDecl(std::unique_ptr<Decl> Var);
-
-  void actOnParamDecl(llvm::SmallVector<std::unique_ptr<ParamDecl>> &CurrentParamList,
-                      std::unique_ptr<ParamDecl> Param,
-                      llvm::DenseMap<IDTableEntry *, ParamDecl *> &CheckAgainst);
-};
-}// namespace funLang
+    void actOnParamDecl(llvm::SmallVector<u_ptr<ParamDecl> > &CurrentParamList,
+                        u_ptr<ParamDecl> Param,
+                        llvm::DenseMap<IDTableEntry *, ParamDecl *> &CheckAgainst);
+  };
+} // namespace funLang

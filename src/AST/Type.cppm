@@ -1,24 +1,17 @@
-#pragma once
-#include "llvm/ADT/FoldingSet.h"
-#include "llvm/ADT/StringRef.h"
+//
+// Created by will on 10/21/24.
+//
+module;
+#include <cassert>
+#include <llvm/ADT/FoldingSet.h>
+export module funLangAST:Type;
 import Basic;
-import Basic.IdentifierTable;
 
 namespace funLang {
-  using namespace Basic;
   class Decl;
   class RecordDecl;
-
-  class TypeTestFixture;
-  class Type;
-  class BuiltInType;
-  class TagType;
-  class RecordType;
-  class EnumType;
-  class PointerType;
-  class ArrayType;
-
-  class Type {
+  class SemaAnalyzer;
+  export class Type {
     friend class SemaAnalyzer;
     friend class TypeTestFixture;
 
@@ -32,29 +25,27 @@ namespace funLang {
     };
     TypeClass Class;
     Type *OriginalType;
-
-  protected:
-    Type(Type *OriginalType, TypeClass Kind) : OriginalType(OriginalType), Class(Kind) {}
+    Type(Type *OriginalType, const TypeClass Kind) : Class(Kind), OriginalType(OriginalType) {
+    }
 
   public:
     [[nodiscard]] TypeClass getClass() const { return Class; }
     bool isBuiltIn();
-    bool isIntType();
-    bool isVoidType();
-    bool isI32();
-    bool isI64();
-    bool isF32();
-    bool isF64();
-    bool isFloatType();
-    bool isBoolType();
-    bool LHSTyCompatibleRHSTy(Type *Other);
-    bool eqTo(Type *Other) { return this == Other; }
+    [[nodiscard]] bool isIntType() const;
+    [[nodiscard]] bool isVoidType() const;
+    [[nodiscard]] bool isI32() const;
+    [[nodiscard]] bool isI64() const;
+    [[nodiscard]] bool isF32() const;
+    [[nodiscard]] bool isF64() const;
+    [[nodiscard]] bool isFloatType() const;
+    [[nodiscard]] bool isBoolType() const;
+    bool LHSTyCompatibleRHSTy(Type *Other) const;
+    bool eqTo(const Type *Other) const { return this == Other; }
     bool isIntLiteral();
     bool isFloatLiteral();
-    llvm::StringRef getName() { return "placeholder name for types"; }
   };
 
-  class BuiltInType : public Type {
+  export class BuiltInType : public Type {
     friend class Type;
     friend class SemaAnalyzer;
     friend class TypeTestFixture;
@@ -62,17 +53,20 @@ namespace funLang {
   protected:
     enum BTKind : size_t {
 #define DATA(ID, SP) ID,
-#include "../Basic/defs/BuiltInTypes.def"
+#include "Basic/defs/BuiltInTypes.def"
       NUM_DATA_TYPES
     };
+
   private:
     BTKind BuiltInKind;
 
   public:
-    explicit BuiltInType(BTKind BuiltIn) : BuiltInKind(BuiltIn), Type(this, TK_BUILTIN) {}
+    explicit BuiltInType(const BTKind BuiltIn) : Type(this, TK_BUILTIN), BuiltInKind(BuiltIn) {
+    }
     static bool classof(const Type *T) { return T->getClass() == TK_BUILTIN; }
-    BTKind getKind() { return BuiltInKind; }
-    static BTKind mapTokenToType(Basic::tok::Tag Tag) {
+    [[nodiscard]] BTKind getKind() const { return BuiltInKind; }
+    static BTKind mapTokenToType(const Basic::tok::Tag Tag) {
+      using namespace Basic;
       assert(Tag >= tok::kw_i32 && Tag < Basic::tok::kw_last_type);
       switch (Tag) {
       case tok::kw_i32: return i32;
@@ -83,18 +77,19 @@ namespace funLang {
       case tok::kw_char: return char_;
       case tok::kw_void: return void_;
       case tok::kw_bool: return bool_;
-      default:;
+      default: ;
       }
       llvm_unreachable("can't get here");
     }
   };
-  class PointerType : public Type, llvm::FoldingSetNodeID {
-  private:
+
+  export class PointerType : public Type, llvm::FoldingSetNodeID {
     Type *PointeeType;
 
   public:
-    explicit PointerType(Type *PointeeType) : PointeeType(PointeeType), Type(this, TK_POINTER) {}
-    Type *getPointeeType() { return PointeeType; }
+    explicit PointerType(Type *PointeeType) : Type(this, TK_POINTER), PointeeType(PointeeType) {
+    }
+    [[nodiscard]] Type *getPointeeType() const { return PointeeType; }
 
     static bool classof(const Type *T) { return T->getClass() == TK_POINTER; }
   };
@@ -106,8 +101,9 @@ namespace funLang {
     RecordDecl *Record;
 
   public:
-    explicit RecordType(RecordDecl *Record) : Record(Record), Type(this, TK_RECORD) {}
-    Decl *lookup(IDTableEntry *MemberName);
+    explicit RecordType(RecordDecl *Record) : Type(this, TK_RECORD), Record(Record) {
+    }
+    Decl *lookup(const IDTableEntry *MemberName) const;
 
     static bool classof(const Type *T) { return T->getClass() == TK_RECORD; }
   };
@@ -118,4 +114,4 @@ namespace funLang {
   public:
     static bool classof(const Type *T) { return T->getClass() == TK_ENUM; }
   };
-}// namespace funLang
+}

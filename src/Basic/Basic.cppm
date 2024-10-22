@@ -4,6 +4,9 @@
 module;
 #include <memory>
 export module Basic;
+export import :IdentifierTable;
+export import :Result;
+export import :Diag;
 
 namespace funLang {
 static constexpr char const *BuiltInTypes[] = {

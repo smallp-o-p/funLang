@@ -9,7 +9,6 @@ module;
 #include <unistd.h>
 export module Lex:Token;
 import Basic;
-import Basic.IdentifierTable;
 
 namespace funLang {
 using namespace Basic;

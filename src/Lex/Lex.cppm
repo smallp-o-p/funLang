@@ -17,8 +17,6 @@ module;
 export module Lex;
 export import :Token;
 export import Basic;
-export import Basic.Diag;
-export import Basic.IdentifierTable;
 
 namespace funLang {
 export class Lexer {

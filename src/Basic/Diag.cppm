@@ -6,7 +6,7 @@ module;
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/SourceMgr.h"
 #include <utility>
-export module Basic.Diag;
+export module Basic:Diag;
 
 static constexpr const char *diagFmts[] = {
     #define DIAG(ID, Level, Msg) Msg,
