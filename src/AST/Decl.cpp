@@ -2,15 +2,13 @@
 // Created by will on 10/27/24.
 //
 module;
-#include <llvm/Support/SMLoc.h>
-#include <memory>
-module funLangAST;
+#include "llvm/Support/SMLoc.h"
+module AST;
 import Basic;
-import :Expr;
 
 namespace funLang {
   ParamDecl::ParamDecl(IDTableEntry *Name,
-                       u_ptr<Expr> Init,
+                       u_ptr<Stmt> Init,
                        DeclContext *Container,
                        u_ptr<ParamDecl> Next,
                        const llvm::SMLoc Left,
@@ -26,8 +24,8 @@ namespace funLang {
                              const llvm::SMLoc RLoc,
                              u_ptr<ParamDecl> Params,
                              DeclContext *ParentCtx) : Decl(DK_FN, Name, TypeLoc, RLoc), DeclContext(ParentCtx),
-                                                       ReturnType(std::move(retType)),
-                                                       Statements(std::move(Statements)), Params(std::move(Params)) {
+                                                       Statements(std::move(Statements)),
+                                                       ReturnType(std::move(retType)), Params(std::move(Params)) {
   }
 
   FunctionDecl::~FunctionDecl() = default;

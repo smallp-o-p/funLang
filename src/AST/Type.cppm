@@ -4,15 +4,15 @@
 module;
 #include <cassert>
 #include <llvm/ADT/FoldingSet.h>
-export module funLangAST:Type;
+export module AST:Type;
 import Basic;
 
 namespace funLang {
   class Decl;
   class RecordDecl;
-  class SemaAnalyzer;
+  class VarDecl;
+
   export class Type {
-    friend class SemaAnalyzer;
     friend class TypeTestFixture;
 
   protected:
@@ -39,7 +39,6 @@ namespace funLang {
     [[nodiscard]] bool isF64() const;
     [[nodiscard]] bool isFloatType() const;
     [[nodiscard]] bool isBoolType() const;
-    bool LHSTyCompatibleRHSTy(Type *Other) const;
     bool eqTo(const Type *Other) const { return this == Other; }
     bool isIntLiteral();
     bool isFloatLiteral();
@@ -47,20 +46,13 @@ namespace funLang {
 
   export class BuiltInType : public Type {
     friend class Type;
-    friend class SemaAnalyzer;
-    friend class TypeTestFixture;
 
-  protected:
+  public:
     enum BTKind : size_t {
 #define DATA(ID, SP) ID,
 #include "Basic/defs/BuiltInTypes.def"
       NUM_DATA_TYPES
     };
-
-  private:
-    BTKind BuiltInKind;
-
-  public:
     explicit BuiltInType(const BTKind BuiltIn) : Type(this, TK_BUILTIN), BuiltInKind(BuiltIn) {
     }
     static bool classof(const Type *T) { return T->getClass() == TK_BUILTIN; }
@@ -81,6 +73,9 @@ namespace funLang {
       }
       llvm_unreachable("can't get here");
     }
+
+  private:
+    BTKind BuiltInKind;
   };
 
   export class PointerType : public Type, llvm::FoldingSetNodeID {

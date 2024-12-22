@@ -2,11 +2,10 @@
 // Created by will on 10/27/24.
 //
 module;
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/StringRef.h>
-#include <llvm/Support/SMLoc.h>
-
-export module funLangAST:Stmt;
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/Support/SMLoc.h"
+#include "llvm/ADT/StringRef.h"
+export module AST:Stmt;
 import Basic;
 
 namespace funLang {
@@ -14,11 +13,8 @@ namespace funLang {
 
   export
   {
-    class Expr;
     class elifStmt;
     class Stmt {
-      friend class Expr;
-
     public:
       enum StmtKind {
         SK_VARDECL,
@@ -55,7 +51,8 @@ namespace funLang {
     public:
       explicit Stmt(const StmtKind K) : Kind(K) {
       }
-      Stmt(StmtKind k, llvm::SMLoc loc);
+      Stmt(const StmtKind K, const llvm::SMLoc Loc): Kind(K), StartLoc(Loc), EndLoc(Loc) {
+      }
       Stmt(const StmtKind K, const llvm::SMLoc Left, const llvm::SMLoc Right)
         : Kind(K), StartLoc(Left), EndLoc(Right) {
       }
@@ -88,27 +85,27 @@ namespace funLang {
     };
 
     class ifStmt : public Stmt {
-      u_ptr<Expr> Condition{};
+      u_ptr<Stmt> Condition{};
       u_ptr<CompoundStmt> Block{};
       u_ptr<elifStmt> elif{};
       u_ptr<CompoundStmt> ElseBlock{};
 
     public:
       ifStmt(llvm::SMLoc IfLoc,
-             u_ptr<Expr> cond,
+             u_ptr<Stmt> cond,
              u_ptr<CompoundStmt> block1,
              u_ptr<elifStmt> elif,
              u_ptr<CompoundStmt> block2);
     };
 
     class elifStmt : public Stmt {
-      u_ptr<Expr> Cond{};
+      u_ptr<Stmt> Cond{};
       u_ptr<elifStmt> NextElif{};
       u_ptr<CompoundStmt> Block{};
 
     public:
       elifStmt(llvm::SMLoc Loc,
-               u_ptr<Expr> cond,
+               u_ptr<Stmt> cond,
                u_ptr<CompoundStmt> block,
                u_ptr<elifStmt> elif);
       ~elifStmt();
@@ -130,25 +127,25 @@ namespace funLang {
 
     class forStmt : public loopStmt {
       u_ptr<Stmt> Init{};
-      u_ptr<Expr> Cond{};
-      u_ptr<Expr> Inc{};
+      u_ptr<Stmt> Cond{};
+      u_ptr<Stmt> Inc{};
 
     public:
       forStmt(llvm::SMLoc EndLoc,
               llvm::SMLoc loc,
               u_ptr<Stmt> Init,
-              u_ptr<Expr> Cond,
-              u_ptr<Expr> Inc,
+              u_ptr<Stmt> Cond,
+              u_ptr<Stmt> Inc,
               u_ptr<CompoundStmt> Compound);
 
       static bool classof(const Stmt *S) { return S->getKind() == SK_FOR; }
     };
 
     class whileStmt : public loopStmt {
-      u_ptr<Expr> Condition{};
+      u_ptr<Stmt> Condition{};
 
     public:
-      whileStmt(u_ptr<Expr> Condition,
+      whileStmt(u_ptr<Stmt> Condition,
                 u_ptr<CompoundStmt> Compound,
                 llvm::SMLoc whileLoc,
                 llvm::SMLoc endLoc);
@@ -158,28 +155,28 @@ namespace funLang {
 
     class DeclStmt : public Stmt {
       VarDecl *NamedDecl;
-      u_ptr<Expr> Init;
+      u_ptr<Stmt> Init;
 
     public:
       DeclStmt(llvm::SMLoc NameStart,
                llvm::SMLoc SemiLoc,
                VarDecl *NamedDecl,
-               std::unique_ptr<Expr> Expression);
+               std::unique_ptr<Stmt> Expression);
 
       [[nodiscard]] llvm::StringRef getName() const;
       [[nodiscard]] VarDecl *getDecl() const { return NamedDecl; }
-      [[nodiscard]] Expr *getInit() const { return Init.get(); }
+      [[nodiscard]] Stmt *getInit() const { return Init.get(); }
       [[nodiscard]] bool isUnitialized() const { return Init == nullptr; }
       static bool classof(const Stmt *S) { return S->getKind() == SK_VARDECL; }
     };
 
     class ReturnStmt : public Stmt {
-      std::unique_ptr<Expr> ReturnExpr;
+      std::unique_ptr<Stmt> ReturnExpr;
 
     public:
-      explicit ReturnStmt(std::unique_ptr<Expr> exprNode);
+      explicit ReturnStmt(std::unique_ptr<Stmt> exprNode);
 
-      [[nodiscard]] Expr *getExpr() const { return ReturnExpr.get(); }
+      [[nodiscard]] Stmt *getExpr() const { return ReturnExpr.get(); }
       [[nodiscard]] bool isNaked() const { return ReturnExpr == nullptr; }
       static bool classof(const Stmt *S) { return S->getKind() == SK_RETURN; }
     };

@@ -2,21 +2,16 @@
 // Created by will on 10/21/24.
 //
 module;
-#include <llvm/ADT/StringMap.h>
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/SMLoc.h>
-#include <memory>
-#include <utility>
-
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/SmallVector.h"
+export module AST:Decl;
 import Basic;
-export module funLangAST:Decl;
 
 namespace funLang {
   class Type;
-  class SemaAnalyzer;
-  class Expr;
-  export class CompoundStmt;
+  class Stmt;
+  class CompoundStmt;
 
   export
   {
@@ -112,6 +107,18 @@ namespace funLang {
         LastDecl->setNext(std::move(D));
         LastDecl = LastDecl->getNext();
       }
+
+      static bool classof(const Decl *D) {
+        switch (D->getKind()) {
+        case Decl::DK_FN:
+          return true;
+        default:
+          return false;
+        }
+      }
+      static bool classof([[maybe_unused]] const DeclContext *DC) {
+        return true;
+      }
     };
 
     class CompilationUnit : public DeclContext {
@@ -121,13 +128,13 @@ namespace funLang {
     };
 
     class ParamDecl : public Decl {
-      u_ptr<Expr> Init;
+      u_ptr<Stmt> Init;
       DeclContext *Container;
       const u_ptr<TypeUse> T{};
 
     public:
       ParamDecl(IDTableEntry *Name,
-                u_ptr<Expr> Init,
+                u_ptr<Stmt> Init,
                 DeclContext *Container,
                 u_ptr<ParamDecl> Next,
                 llvm::SMLoc Left,
@@ -155,6 +162,9 @@ namespace funLang {
       [[nodiscard]] Type *getTypePtr() const { return ReturnType->getTypePtr(); }
       [[nodiscard]] ParamDecl &getParams() const { return *Params; }
       [[nodiscard]] CompoundStmt *getCompound() const { return Statements.get(); }
+      static FunctionDecl *castFromDeclContext(const DeclContext *DC) {
+        return static_cast<FunctionDecl *>(const_cast<DeclContext *>(DC));
+      }
       static bool classof(const Decl *D) { return D->getKind() == DK_FN; }
     };
 

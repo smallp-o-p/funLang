@@ -3,9 +3,8 @@
 //
 module;
 #include "llvm/Support/Casting.h"
-module funLangAST;
-import :Decl;
-import :Stmt;
+module AST;
+import Basic;
 
 namespace funLang {
   bool Type::isIntType() const {
@@ -60,23 +59,6 @@ namespace funLang {
   bool Type::isF32() const {
     if (const auto *Ty = llvm::dyn_cast<BuiltInType>(OriginalType)) {
       return Ty->getKind() == BuiltInType::f32;
-    }
-    return false;
-  }
-
-  bool Type::LHSTyCompatibleRHSTy(Type *Other) const {
-    auto *LHS = llvm::dyn_cast<BuiltInType>(OriginalType);
-    if (!LHS) {
-      return false;
-    }
-    auto *RHS = llvm::dyn_cast<BuiltInType>(Other);
-    if (!RHS) {
-      return false;
-    }
-    if (LHS->isIntType() || LHS->isIntLiteral()) {
-      return LHS->eqTo(RHS) || RHS->isIntLiteral();
-    } else if (LHS->isFloatType() || LHS->isFloatLiteral()) {
-      return LHS->eqTo(RHS) || RHS->isFloatLiteral();
     }
     return false;
   }
