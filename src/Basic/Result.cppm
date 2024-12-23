@@ -1,20 +1,18 @@
 //
 // Created by will on 10/5/24.
 //
-module;
-#include <memory>
-
 export module Basic:Result;
+import :Constants;
 
 namespace funLang {
 export {
   template<class Ty>
   class ActionRes {
-    std::unique_ptr<Ty> Val;
+    u_ptr<Ty> Val;
     bool Invalid = false;
 
   public:
-    explicit ActionRes(std::unique_ptr<Ty> Val) : Val(std::move(Val)) {}              // valid and present
+    explicit ActionRes(u_ptr<Ty> Val) : Val(std::move(Val)) {}              // valid and present
     explicit ActionRes(const bool Invalid = false) : Val(nullptr), Invalid(Invalid) {}// valid and not present or invalid
 
     [[nodiscard]] bool isInvalid() const {

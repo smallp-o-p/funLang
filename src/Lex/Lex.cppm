@@ -16,7 +16,8 @@ module;
 #include <vector>
 export module Lex;
 export import :Token;
-export import Basic;
+import Basic;
+import Diag;
 
 namespace funLang {
 export class Lexer {
@@ -83,7 +84,7 @@ export class Lexer {
   }
 
   Token lexNum() {
-    auto End = BufferPtr;// handle negative case
+    auto End = BufferPtr;
     bool SeenDot = false;
     while (*End && (isdigit(*End) || *End == '.')) {
       if (SeenDot && *End == '.') {

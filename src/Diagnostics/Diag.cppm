@@ -6,8 +6,9 @@ module;
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/SourceMgr.h"
 #include <utility>
-export module Basic:Diag;
+export module Diag;
 
+namespace funLang {
 static constexpr const char *diagFmts[] = {
     #define DIAG(ID, Level, Msg) Msg,
     #include "Diags.def"
@@ -65,6 +66,7 @@ public:
     const llvm::SourceMgr::DiagKind Kind = getDiagKind(DiagID);
     srcMgr.PrintMessage(Left, Kind, Msg, {llvm::SMRange(Left, Right)});
 
-    numErrors += (Kind == llvm::SourceMgr::DK_Error);
+    numErrors += Kind == llvm::SourceMgr::DK_Error;
   }
 };
+}
