@@ -4,6 +4,7 @@ add_definitions(${LLVM_DEFINITIONS})
 
 add_library(Sema)
 
+target_sources(Sema PRIVATE Sema.cpp)
 target_sources(Sema PUBLIC
         FILE_SET sema_modules
         TYPE CXX_MODULES

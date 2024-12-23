@@ -42,6 +42,9 @@ namespace funLang {
     bool eqTo(const Type *Other) const { return this == Other; }
     bool isIntLiteral();
     bool isFloatLiteral();
+    bool isNumeric() { return isIntType() || isFloatType(); }
+    bool isPointer();
+    bool isArithmetic() { return isNumeric() || isPointer(); }
   };
 
   export class BuiltInType : public Type {

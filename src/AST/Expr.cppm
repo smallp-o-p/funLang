@@ -34,7 +34,6 @@ namespace funLang {
       bool isArithAssignable();
       bool isComplementable();
       bool isIncrementable();
-
       bool isCompatibleWith(Expr *RHS);
       static bool classof(const Stmt *S) { return S->getKind() >= SK_EXPR && S->getKind() <= SK_ERROREXPR; }
     };

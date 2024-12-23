@@ -23,19 +23,56 @@ namespace funLang {
     llvm::SmallVector<BuiltInType *> BuiltinTypes{};
     llvm::DenseMap<IDTableEntry *, Type *> Types;
     llvm::FoldingSet<PointerType *> PointerTypes;
-
-    void init() {
-      BuiltinTypes[BuiltInType::i32] = new BuiltInType(BuiltInType::i32);
-      BuiltinTypes[BuiltInType::i64] = new BuiltInType(BuiltInType::i64);
-      BuiltinTypes[BuiltInType::f32] = new BuiltInType(BuiltInType::f32);
-      BuiltinTypes[BuiltInType::f64] = new BuiltInType(BuiltInType::f64);
-      BuiltinTypes[BuiltInType::bool_] = new BuiltInType(BuiltInType::bool_);
-      BuiltinTypes[BuiltInType::string] = new BuiltInType(BuiltInType::string);
-      BuiltinTypes[BuiltInType::int_literal] = new BuiltInType(BuiltInType::int_literal);
-      BuiltinTypes[BuiltInType::float_literal] = new BuiltInType(BuiltInType::float_literal);
-    }
+    void init();
 
   protected:
+    Type *doArithmeticConversions(Expr &LHS, Expr &RHS) {
+      // literals get turned into a concrete type
+      // todo: i don't like this
+      Type *LTy = LHS.getType();
+      Type *RTy = RHS.getType();
+
+      if (!LTy->isArithmetic() || !RTy->isArithmetic()) {
+        // some types are not allowed to be added together
+        return nullptr;
+      }
+
+      // we are not allowing pointers to be added to each other
+      if (LTy == RTy && (LTy->isNumeric() && RTy->isNumeric())) {
+        // they're both the same, good
+        return LTy;
+      }
+
+      // they're both int-ish
+      if (LTy->isIntType() && RTy->isIntType()) {
+        // LHS is literal and RHS is not? return RHS; RHS is literal and LHS is not? return LHS
+        if (LTy->isIntLiteral() && !RTy->isIntLiteral()) {
+          return RTy;
+        }
+        if (RTy->isIntLiteral() && !LTy->isIntLiteral()) {
+          return LTy;
+        }
+      }
+      // they're both float-ish
+      if (LTy->isFloatType() && RTy->isFloatType()) {
+        if (LTy->isFloatLiteral() && !RTy->isFloatLiteral()) {
+          return LTy;
+        }
+        if (RTy->isFloatLiteral() && !LTy->isFloatType()) {
+          return RTy;
+        }
+      }
+
+      if (LTy->isPointer() && RTy->isIntType()) {
+        return LTy;
+      }
+      if (RTy->isPointer() && RTy->isIntType()) {
+        // disallow floats to be added to pointers
+        return RTy;
+      }
+
+      return nullptr;
+    }
     Decl *lookup(const IDTableEntry *VariableName) const {
       auto CurrentScopeLookup = DeclScope.get();
       auto Found = CurrentScopeLookup->lookup(VariableName);

@@ -162,8 +162,8 @@ namespace funLang {
       [[nodiscard]] Type *getTypePtr() const { return ReturnType->getTypePtr(); }
       [[nodiscard]] ParamDecl &getParams() const { return *Params; }
       [[nodiscard]] CompoundStmt *getCompound() const { return Statements.get(); }
-      static FunctionDecl *castFromDeclContext(const DeclContext *DC) {
-        return static_cast<FunctionDecl *>(const_cast<DeclContext *>(DC));
+      static FunctionDecl *castFromDeclContext(DeclContext *DC) {
+        return static_cast<FunctionDecl *>(DC);
       }
       static bool classof(const Decl *D) { return D->getKind() == DK_FN; }
     };
