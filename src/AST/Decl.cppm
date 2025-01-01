@@ -89,7 +89,8 @@ export {
   public:
     explicit DeclContext(DeclContext *ParentContext)
         : ParentContext(ParentContext) {}
-    explicit DeclContext(u_ptr<Decl> Dec) : FirstDecl(std::move(Dec)) {}
+    explicit DeclContext(u_ptr<Decl> Dec)
+        : FirstDecl(std::move(Dec)), LastDecl(Dec.get()) {}
 
     void setParentContext(DeclContext *Parent) { ParentContext = Parent; }
 
@@ -130,8 +131,13 @@ export {
   };
 
   class CompilationUnit : public DeclContext {
-  public:
     explicit CompilationUnit(u_ptr<Decl> D) : DeclContext(std::move(D)) {}
+    CompilationUnit() : DeclContext(nullptr) {}
+
+  public:
+    static u_ptr<CompilationUnit> Init() {
+      return std::unique_ptr<CompilationUnit>(new CompilationUnit());
+    }
   };
 
   class ParamDecl : public Decl {

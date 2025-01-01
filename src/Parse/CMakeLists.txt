@@ -1,5 +1,5 @@
 add_library(Parse STATIC Parse.cpp ParseExpr.cpp ParseStmt.cpp
-        Parse.ixx
+        Parse.cppm
 )
 
 target_include_directories(Parse
@@ -10,7 +10,7 @@ target_include_directories(Parse
 target_sources(Parse PRIVATE
         FILE_SET parse_modules
         TYPE CXX_MODULES
-        FILES Parse.ixx)
+        FILES Parse.cppm)
 
 target_link_libraries(Parse PUBLIC Lex Basic AST Sema)
 

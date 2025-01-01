@@ -2,15 +2,14 @@
 // Created by will on 10/6/24.
 //
 module;
-#include "AST/Decl.hpp"
-#include "AST/Stmt.hpp"
-#include "AST/Type.hpp"
-#include "Sema/Sema.hpp"
+#include <llvm/ADT/SmallVector.h>
 #include <memory>
 #include <utility>
 export module Parse;
-import Basic.Result;
+import Basic;
+import Diag;
 import Lex;
+import Sema;
 
 namespace funLang {
 export {
@@ -22,12 +21,12 @@ export {
     SemaAnalyzer &Semantics;
     mutable bool Err;
 
-    Parser(Lexer &LexerObj, DiagEngine &Diags, SemaAnalyzer &Sema) : Lexer_(LexerObj), Diags(Diags),
-                                                                     Semantics(Sema), Err(false) {}
+    Parser(Lexer &LexerObj, DiagEngine &Diags, SemaAnalyzer &Sema)
+        : Lexer_(LexerObj), Diags(Diags), Semantics(Sema), Err(false) {}
     Token peek() const { return Lexer_.peek(); }
     Token previous() const { return Lexer_.previous(); }
     Token advance() const { return Lexer_.advance(); }
-    void reportExpect(const tok::Tag Expected, Token Received) const {
+    void reportExpect(const tok::Tag Expected, const Token &Received) const {
       Diags.emitDiagMsg(Received.getLoc(), Diag::err_expected,
                         getTokenName(Expected), Received.getLexeme());
     }
@@ -39,16 +38,14 @@ export {
       }
       return true;
     }
-    bool nextTokIs(const tok::Tag T) const {
-      return peek().is(T);
-    }
-    template<typename... Ts>
-    bool nextIsOneOf(tok::Tag T1, Ts... Tss) {
+    bool nextTokIs(const tok::Tag T) const { return peek().is(T); }
+    template<typename... Ts> bool nextIsOneOf(tok::Tag T1, Ts... Tss) {
       return peek().isOneOf(T1, Tss...);
     }
-    Token lookahead(const uint_fast8_t HowMuch) const { return Lexer_.lookahead(HowMuch); }
-    template<typename... Ts>
-    void skipUntil(const tok::Tag T, Ts... Tss) const {
+    Token lookahead(const uint_fast8_t HowMuch) const {
+      return Lexer_.lookahead(HowMuch);
+    }
+    template<typename... Ts> void skipUntil(const tok::Tag T, Ts... Tss) const {
       while (!advance().isOneOf(T, Tss...)) {}
     }
 
@@ -60,12 +57,13 @@ export {
     using ExprVector = ActionRes<llvm::SmallVector<Expr>>;
 
     CompileResult program() {
-      llvm::DenseMap<IDTableEntry *, std::unique_ptr<Decl>> GlobalDecls;
+      auto Compilation = CompilationUnit::Init();
+      Semantics.initCompilation(Compilation.get());
       while (true) {
         DeclResult Toplevel;
-        if (nextTokIs(tok::kw_struct)) {
+        if (nextTokIs(tok::kw_struct))
           Toplevel = typeDecl();
-        } else if (nextTokIs(tok::identifier) || peek().isBaseType()) {
+        else if (nextTokIs(tok::identifier) || peek().isBaseType()) {
           Toplevel = function();
         }
         if (!Toplevel) {
@@ -77,7 +75,8 @@ export {
           break;
         }
       }
-      return CompileResult(std::make_unique<CompilationUnit>(std::move(GlobalDecls)));
+
+      return CompileResult(std::move(Compilation));
     }
 
     DeclResult typeDecl() {
