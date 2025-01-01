@@ -5,27 +5,29 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
 #ifndef BASIC
-  #error "Basic file not defined!"
+#error "Basic file not defined!"
 #endif
 #ifndef INTNUMLITS
-  #error
+#error
 #endif
 #ifndef KEYWORDS
-  #error
+#error
 #endif
 #ifndef REALNUMLITS
-  #error
+#error
 #endif
 #ifndef STRINGLITS
-  #error
+#error
 #endif
 #ifndef ERRORS
-  #error
+#error
 #endif
 #ifndef FUNC
-  #error
+#error
 #endif
+import Basic;
 import Lex;
+import Diag;
 using namespace funLang;
 using namespace Basic;
 
@@ -36,7 +38,8 @@ protected:
   llvm::SourceMgr SrcMgr;
   bool setBuffer(const llvm::StringRef Buf, const bool UsingString = false) {
     llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> FileOrError = nullptr;
-    FileOrError = UsingString ? llvm::MemoryBuffer::getMemBufferCopy(Buf) : llvm::MemoryBuffer::getFile(Buf);
+    FileOrError = UsingString ? llvm::MemoryBuffer::getMemBufferCopy(Buf)
+                              : llvm::MemoryBuffer::getFile(Buf);
     if (const std::error_code BufferErr = FileOrError.getError()) {
       std::cout << BufferErr.message() << " " << BufferErr.value() << std::endl;
       return false;
@@ -45,8 +48,7 @@ protected:
     LexerObj = new Lexer(SrcMgr, Diags);
     return true;
   }
-  LexTests()
-      : SrcMgr(llvm::SourceMgr()) {}
+  LexTests() : SrcMgr(llvm::SourceMgr()) {}
 };
 
 // file should get copied over to executable directory
@@ -58,12 +60,12 @@ protected:
 TEST_F(LexTests, LexBasicTokens) {
   ASSERT_TRUE(setBuffer(BASIC));
   std::vector expected = {
-      tok::plus, tok::minus, tok::star, tok::slash,
-      tok::greater, tok::less, tok::equal, tok::l_paren,
-      tok::r_paren, tok::l_brace, tok::r_brace, tok::exclaim,
-      tok::comma, tok::colon, tok::semi, tok::lessequal,
+      tok::plus,         tok::minus,      tok::star,         tok::slash,
+      tok::greater,      tok::less,       tok::equal,        tok::l_paren,
+      tok::r_paren,      tok::l_brace,    tok::r_brace,      tok::exclaim,
+      tok::comma,        tok::colon,      tok::semi,         tok::lessequal,
       tok::greaterequal, tok::equalequal, tok::exclaimequal, tok::plusequal,
-      tok::minusequal, tok::starequal, tok::slashequal};
+      tok::minusequal,   tok::starequal,  tok::slashequal};
   for (auto tok : expected) {
     Token lexed_token = LexerObj->advance();
     EXPECT_EQ(lexed_token.getTag(), tok)
@@ -75,10 +77,10 @@ TEST_F(LexTests, LexBasicTokens) {
 
 TEST_F(LexTests, LexKeywords) {
   std::vector expected = {
-      tok::kw_void, tok::kw_bool, tok::kw_char, tok::kw_string,
-      tok::kw_i32, tok::kw_i64, tok::kw_f32, tok::kw_f64,
-      tok::kw_return, tok::kw_true, tok::kw_false, tok::kw_for,
-      tok::kw_while, tok::kw_loop, tok::kw_struct, tok::kw_enum};
+      tok::kw_void,   tok::kw_bool, tok::kw_char,   tok::kw_string,
+      tok::kw_i32,    tok::kw_i64,  tok::kw_f32,    tok::kw_f64,
+      tok::kw_return, tok::kw_true, tok::kw_false,  tok::kw_for,
+      tok::kw_while,  tok::kw_loop, tok::kw_struct, tok::kw_enum};
   ASSERT_TRUE(setBuffer(KEYWORDS));
   for (auto expected_tok : expected) {
     Token lexed_token = LexerObj->advance();
@@ -128,11 +130,11 @@ TEST_F(LexTests, StringLits) {
 TEST_F(LexTests, ExampleFunc) {
   ASSERT_TRUE(setBuffer(FUNC));
   std::vector expected = {
-      tok::kw_i32, tok::identifier, tok::l_paren,
-      tok::kw_i32, tok::identifier, tok::comma,
-      tok::kw_i32, tok::identifier, tok::r_paren,
-      tok::l_brace, tok::kw_string, tok::identifier,
-      tok::equal, tok::string_literal, tok::semi,
+      tok::kw_i32,    tok::identifier,       tok::l_paren,
+      tok::kw_i32,    tok::identifier,       tok::comma,
+      tok::kw_i32,    tok::identifier,       tok::r_paren,
+      tok::l_brace,   tok::kw_string,        tok::identifier,
+      tok::equal,     tok::string_literal,   tok::semi,
       tok::kw_return, tok::numeric_constant, tok::semi,
       tok::r_brace};
   for (auto expected_tok : expected) {
@@ -144,11 +146,10 @@ TEST_F(LexTests, ExampleFunc) {
 
 TEST_F(LexTests, WithErrs) {
   ASSERT_TRUE(setBuffer(ERRORS));
-  std::vector expected = {
-      tok::err, tok::err, tok::err,
-      tok::err, tok::err, tok::kw_void,
-      tok::kw_bool, tok::kw_i32, tok::kw_i64,
-      tok::err, tok::err, tok::err, tok::err};
+  std::vector expected = {tok::err,    tok::err,     tok::err,     tok::err,
+                          tok::err,    tok::kw_void, tok::kw_bool, tok::kw_i32,
+                          tok::kw_i64, tok::err,     tok::err,     tok::err,
+                          tok::err};
 
   for (auto expected_tok : expected) {
     EXPECT_EQ(expected_tok, LexerObj->advance().getTag())

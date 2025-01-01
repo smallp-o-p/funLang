@@ -20,13 +20,15 @@ import Basic;
 import Diag;
 
 namespace funLang {
+using namespace Basic;
 export class Lexer {
   friend class IdentifierTable;
-  std::vector<Token> Tokens{};   // keep track of old tokens for error messages
-  std::deque<Token> Unconsumed{};// unconsumed tokens that are stored if we looked ahead.
+  std::vector<Token> Tokens{};// keep track of old tokens for error messages
+  std::deque<Token>
+      Unconsumed{};// unconsumed tokens that are stored if we looked ahead.
   llvm::StringMap<tok::Tag> KeywordTable{};
 
-  llvm::SourceMgr& SourceFileManager;
+  llvm::SourceMgr &SourceFileManager;
   DiagEngine &Diagnostics;
   llvm::StringRef CurrentBuffer;
   llvm::StringRef::iterator BufferPtr;
@@ -40,21 +42,21 @@ export class Lexer {
 
   Token formToken(const char *TokEnd, tok::Tag Kind) {
     const auto Current = BufferPtr;
-    const auto Lexed = llvm::StringRef(Current, static_cast<size_t>(TokEnd - Current));
+    const auto Lexed =
+        llvm::StringRef(Current, static_cast<size_t>(TokEnd - Current));
     BufferPtr = TokEnd;
     if (Kind == tok::identifier) {
       const auto EntryPtr = IdentTable.insert(Lexed);
-      return {Kind,
-              EntryPtr,
-              llvm::SMLoc::getFromPointer(Current),
-              llvm::SMLoc::getFromPointer(TokEnd),
-              Lexed.size()};
+      return {Kind, EntryPtr, llvm::SMLoc::getFromPointer(Current),
+              llvm::SMLoc::getFromPointer(TokEnd), Lexed.size()};
     }
     if (Token::isLiteral(Kind)) {
-      return {Lexed, static_cast<size_t>(TokEnd - Current),
-              Kind, llvm::SMLoc::getFromPointer(Current), llvm::SMLoc::getFromPointer(TokEnd)};
+      return {Lexed, static_cast<size_t>(TokEnd - Current), Kind,
+              llvm::SMLoc::getFromPointer(Current),
+              llvm::SMLoc::getFromPointer(TokEnd)};
     }
-    return {Kind, llvm::SMLoc::getFromPointer(Current), llvm::SMLoc::getFromPointer(TokEnd),
+    return {Kind, llvm::SMLoc::getFromPointer(Current),
+            llvm::SMLoc::getFromPointer(TokEnd),
             static_cast<size_t>(TokEnd - Current)};
   }
   Token formErr() {
@@ -62,10 +64,13 @@ export class Lexer {
     return Token(llvm::SMLoc::getFromPointer(BufferPtr - 1));
   }
 
-  void addKeyword(const std::string &Kw, tok::Tag Tag) { KeywordTable.insert(std::make_pair(Kw, Tag)); }
+  void addKeyword(const std::string &Kw, tok::Tag Tag) {
+    KeywordTable.insert(std::make_pair(Kw, Tag));
+  }
 
   tok::Tag findKeyword(const llvm::StringRef Name) {
-    if (const auto Result = KeywordTable.find(Name); Result != KeywordTable.end()) {
+    if (const auto Result = KeywordTable.find(Name);
+        Result != KeywordTable.end()) {
       return Result->second;
     }
     return tok::Tag::identifier;
@@ -73,8 +78,7 @@ export class Lexer {
 
   Token lexString() {
     auto End = BufferPtr + 1;
-    while (*End && *End++ != '\"') {
-    }
+    while (*End && *End++ != '\"') {}
     if (!*End) {
       Diagnostics.emitDiagMsg(getLocFrom(BufferPtr),
                               Diag::err_unterminated_char_or_string);
@@ -126,11 +130,14 @@ export class Lexer {
     case '(': return formToken(BufferPtr + 1, tok::Tag::l_paren);
     case ')': return formToken(BufferPtr + 1, tok::Tag::r_paren);
     case '=':
-      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::equalequal) : formToken(BufferPtr + 1, tok::Tag::equal);
+      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::equalequal)
+                         : formToken(BufferPtr + 1, tok::Tag::equal);
     case '.':
-      return nextIs('.') ? formToken(BufferPtr + 2, tok::Tag::dotdot) : formToken(BufferPtr + 1, tok::Tag::dot);
+      return nextIs('.') ? formToken(BufferPtr + 2, tok::Tag::dotdot)
+                         : formToken(BufferPtr + 1, tok::Tag::dot);
     case ':':
-      return nextIs(':') ? formToken(BufferPtr + 2, tok::Tag::coloncolon) : formToken(BufferPtr + 1, tok::Tag::colon);
+      return nextIs(':') ? formToken(BufferPtr + 2, tok::Tag::coloncolon)
+                         : formToken(BufferPtr + 1, tok::Tag::colon);
     case ';': return formToken(BufferPtr + 1, tok::Tag::semi);
     case '!': {
       if (nextIs('=')) {
@@ -154,7 +161,8 @@ export class Lexer {
       if (nextIs('=')) {
         return formToken(BufferPtr + 2, tok::Tag::plusequal);
       }
-      return nextIs('+') ? formToken(BufferPtr + 2, tok::Tag::plusplus) : formToken(BufferPtr + 1, tok::Tag::plus);
+      return nextIs('+') ? formToken(BufferPtr + 2, tok::Tag::plusplus)
+                         : formToken(BufferPtr + 1, tok::Tag::plus);
     case '-': {
       if (nextIs('=')) {
         return formToken(BufferPtr + 2, tok::Tag::minusequal);
@@ -165,10 +173,12 @@ export class Lexer {
       return formToken(BufferPtr + 1, tok::Tag::minus);
     }
     case '*': {
-      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::starequal) : formToken(BufferPtr + 1, tok::Tag::star);
+      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::starequal)
+                         : formToken(BufferPtr + 1, tok::Tag::star);
     }
     case '/': {
-      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::slashequal) : formToken(BufferPtr + 1, tok::Tag::slash);
+      return nextIs('=') ? formToken(BufferPtr + 2, tok::Tag::slashequal)
+                         : formToken(BufferPtr + 1, tok::Tag::slash);
     }
     case '\"': return lexString();
     default: {
@@ -181,7 +191,8 @@ export class Lexer {
       if (!*BufferPtr) {
         return formToken(BufferPtr, tok::Tag::eof);
       }
-      Diagnostics.emitDiagMsg(getCurLoc(), Diag::err_unexpected_char, *BufferPtr);
+      Diagnostics.emitDiagMsg(getCurLoc(), Diag::err_unexpected_char,
+                              *BufferPtr);
       return formErr();
     }
     }
@@ -196,14 +207,17 @@ export class Lexer {
 
 public:
   Lexer(llvm::SourceMgr &SrcMgr, DiagEngine &Diags)
-      : SourceFileManager(SrcMgr), Diagnostics(Diags), IdentTable(IdentifierTable()) {
+      : SourceFileManager(SrcMgr), Diagnostics(Diags),
+        IdentTable(IdentifierTable()) {
     BufferID = SrcMgr.getMainFileID();
     CurrentBuffer = SrcMgr.getMemoryBuffer(BufferID)->getBuffer();
     BufferPtr = CurrentBuffer.begin();
     addKeywords();
   }
 
-  [[nodiscard]] llvm::SMLoc getCurLoc() const { return llvm::SMLoc::getFromPointer(BufferPtr); }
+  [[nodiscard]] llvm::SMLoc getCurLoc() const {
+    return llvm::SMLoc::getFromPointer(BufferPtr);
+  }
 
   static llvm::SMLoc getLocFrom(const char *Ptr) {
     return llvm::SMLoc::getFromPointer(Ptr - 1);
