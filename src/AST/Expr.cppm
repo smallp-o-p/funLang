@@ -4,228 +4,274 @@
 module;
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/SMLoc.h"
+#include <utility>
+
 export module AST:Expr;
 import Basic;
 import :Stmt;
 import :Type;
 
 namespace funLang {
-  class Decl;
+class Decl;
+export {
+  class ErrorExpr;
+  class Expr : public Stmt {
+  public:
+    enum ExprKind { Location, Value };
 
-  export
-  {
-    class Expr : public Stmt {
-    protected:
-      Type *resultType{}; // nullptr as a poison value to indicate a bad type to suppress error messages
-    public:
-      ~Expr() = default;
-      explicit Expr(const StmtKind Kind, const llvm::SMLoc StartLoc, const llvm::SMLoc EndLoc)
-        : Stmt(Kind, StartLoc, EndLoc) {
-      }
+  protected:
+    Type *
+        resultType{};// nullptr as a poison value to indicate a bad type to suppress error messages
+    ExprKind ExpressionType;
 
-      Expr(const StmtKind Kind, Type *resultType, const llvm::SMLoc StartLoc, const llvm::SMLoc EndLoc)
-        : Stmt(Kind, StartLoc, EndLoc), resultType(resultType) {
-      }
+    Expr(const StmtKind Kind, const llvm::SMLoc StartLoc,
+         const llvm::SMLoc EndLoc, const ExprKind ExprK = Value)
+        : Stmt(Kind, StartLoc, EndLoc), ExpressionType(ExprK) {}
 
-      void setType(Type *ToSet) { resultType = ToSet; }
-      [[nodiscard]] Type *getType() const { return resultType; }
-      bool isAssignable();
-      bool isArithAssignable();
-      bool isComplementable();
-      bool isIncrementable();
-      bool isCompatibleWith(Expr *RHS);
-      static bool classof(const Stmt *S) { return S->getKind() >= SK_EXPR && S->getKind() <= SK_ERROREXPR; }
+    Expr(const StmtKind Kind, Type *resultType, const llvm::SMLoc StartLoc,
+         const llvm::SMLoc EndLoc, const ExprKind ExprValue)
+        : Stmt(Kind, StartLoc, EndLoc), resultType(resultType),
+          ExpressionType(ExprValue) {}
+
+  public:
+    using ExprPtr = u_ptr<Expr>;
+    ~Expr() = default;
+    void setType(Type *ToSet) { resultType = ToSet; }
+    [[nodiscard]] Type *getType() const { return resultType; }
+    bool isValueExpr() { return ExpressionType == Value; }
+    bool isLocationExpr() { return ExpressionType == Location; }
+    bool isComplementable() { return resultType->isIntType(); }
+    bool isIncrementable() {
+      return isLocationExpr() and (resultType->isI32() or resultType->isI64());
+    }
+    bool isCompatibleWith(Expr *RHS);
+    [[nodiscard]] bool isError() const { return llvm::isa<ErrorExpr>(this); }
+    static bool classof(const Stmt *S) {
+      return S->getKind() >= SK_EXPR && S->getKind() <= SK_ERROREXPR;
+    }
+  };
+
+  class ErrorExpr : public Expr {
+    using ErrExprPtr = std::unique_ptr<ErrorExpr>;
+    u_ptr<Expr> Expression{};
+    explicit ErrorExpr(u_ptr<Expr> ExprInput)
+        : Expr(SK_ERROREXPR, ExprInput->getStartLoc(), ExprInput->getEndLoc()),
+          Expression(std::move(ExprInput)) {}
+
+  public:
+    static ErrExprPtr Create(ExprPtr E) {
+      return std::unique_ptr<ErrorExpr>(new ErrorExpr(std::move(E)));
+    }
+    static bool classof(const Expr *E) { return E->getKind() == SK_ERROREXPR; }
+  };
+
+  class NameUsage : public Expr {
+  protected:
+    IDTableEntry *TableEntry{};
+    Decl *UsedName{};
+
+  public:
+    NameUsage(IDTableEntry *Entry, Decl *UsedName, const llvm::SMLoc SLoc,
+              const llvm::SMLoc ELoc, Type *Type)
+        : Expr(SK_NAMEEXPR, Type, SLoc, ELoc, Location), TableEntry(Entry),
+          UsedName(UsedName) {}
+
+    [[nodiscard]] llvm::StringRef getUsedName() const {
+      return TableEntry->first();
     };
+    [[nodiscard]] IDTableEntry *getEntry() const { return TableEntry; }
+    [[nodiscard]] Decl *getDecl() const { return UsedName; }
 
-    class ErrorExpr : public Expr {
-    protected:
-      u_ptr<Expr> Expression{};
+    static bool classof(const Expr *E) { return E->getKind() == SK_NAMEEXPR; }
+  };
 
-    public:
-      explicit ErrorExpr(u_ptr<Expr> ExprInput)
-        : Expr(SK_ERROREXPR, ExprInput->getStartLoc(), ExprInput->getEndLoc()), Expression(std::move(ExprInput)) {
-      }
-      ErrorExpr() : Expr(SK_ERROREXPR, llvm::SMLoc(), llvm::SMLoc()), Expression(nullptr) {
-      }
-      static bool classof(const Expr *E) { return E->getKind() == SK_ERROREXPR; }
-    };
+  class IntegerLiteral : public Expr {
+    llvm::APInt Value{};
 
-    class NameUsage : public Expr {
-    protected:
-      IDTableEntry *TableEntry{};
-      Decl *UsedName{};
+  public:
+    explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc SLoc,
+                            llvm::SMLoc ELoc)
+        : Expr(SK_INTEXPR, SLoc, ELoc), Value(std::move(value)) {}
+    static bool classof(const Expr *E) { return E->getKind() == SK_INTEXPR; }
+  };
 
-    public:
-      NameUsage(IDTableEntry *Entry,
-                Decl *UsedName,
-                const llvm::SMLoc SLoc,
-                const llvm::SMLoc ELoc,
-                Type *Type)
-        : Expr(SK_NAMEEXPR, Type, SLoc, ELoc), TableEntry(Entry), UsedName(UsedName) {
-      }
+  class FloatingLiteral : public Expr {
+    llvm::APFloat Value;
 
-      [[nodiscard]] llvm::StringRef getUsedName() const { return TableEntry->first(); };
-      [[nodiscard]] IDTableEntry *getEntry() const { return TableEntry; }
-      [[nodiscard]] Decl *getDecl() const { return UsedName; }
+  public:
+    explicit FloatingLiteral(llvm::APFloat Val, llvm::SMLoc SLoc,
+                             llvm::SMLoc RLoc)
+        : Expr(SK_FLOATEXPR, SLoc, RLoc), Value(std::move(Val)) {}
 
-      static bool classof(const Expr *E) { return E->getKind() == SK_NAMEEXPR; }
-    };
+    static bool classof(const Expr *E) { return E->getKind() == SK_FLOATEXPR; }
+  };
 
-    class IntegerLiteral : public Expr {
-      llvm::APInt Value{};
+  class BooleanLiteral : public Expr {
+    bool TrueOrFalse;
 
-    public:
-      explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc SLoc, llvm::SMLoc ELoc)
-        : Expr(SK_INTEXPR, SLoc, ELoc), Value(std::move(value)) {
-      }
-      static bool classof(const Expr *E) { return E->getKind() == SK_INTEXPR; }
-    };
+  public:
+    explicit BooleanLiteral(bool Value, llvm::SMLoc SLoc, llvm::SMLoc RLoc)
+        : Expr(SK_BOOLEXPR, SLoc, RLoc), TrueOrFalse(Value) {}
 
-    class FloatingLiteral : public Expr {
-      llvm::APFloat Value;
+    static bool classof(const Expr *E) { return E->getKind() == SK_BOOLEXPR; }
+    [[nodiscard]] bool getValue() const { return TrueOrFalse; }
+  };
 
-    public:
-      explicit FloatingLiteral(llvm::APFloat Val, llvm::SMLoc SLoc, llvm::SMLoc RLoc)
-        : Expr(SK_FLOATEXPR, SLoc, RLoc), Value(std::move(Val)) {
-      }
+  class StrLiteral : public Expr {
+    llvm::StringRef Str;
+    uint32_t Len;
 
-      static bool classof(const Expr *E) { return E->getKind() == SK_FLOATEXPR; }
-    };
+  public:
+    explicit StrLiteral(uint32_t len, llvm::StringRef str,
+                        llvm::SMLoc LeftQuoteLoc, llvm::SMLoc RightQuoteLoc,
+                        Type *StringType)
+        : Expr(SK_STRINGEXPR, StringType, LeftQuoteLoc, RightQuoteLoc, Value),
+          Str(str), Len(len) {}
 
-    class BooleanLiteral : public Expr {
-      bool TrueOrFalse;
+    static bool classof(const Expr *E) { return E->getKind() == SK_STRINGEXPR; }
+  };
 
-    public:
-      explicit BooleanLiteral(bool Value, llvm::SMLoc SLoc, llvm::SMLoc RLoc)
-        : Expr(SK_BOOLEXPR, SLoc, RLoc), TrueOrFalse(Value) {
-      }
+  class MemberAccess : public Expr {
+    Decl *MemberDecl{};
+    u_ptr<Expr> Accessed;
 
-      static bool classof(const Expr *E) { return E->getKind() == SK_BOOLEXPR; }
-      [[nodiscard]] bool getValue() const { return TrueOrFalse; }
-    };
+  public:
+    MemberAccess(u_ptr<Expr> Accessed, Decl *MemberDecl, Type *ResultTy,
+                 llvm::SMLoc SLoc, llvm::SMLoc ELoc)
+        : Expr(SK_MEMBEREXPR, ResultTy, SLoc, ELoc, Location),
+          MemberDecl(MemberDecl), Accessed(std::move(Accessed)) {}
+    static bool classof(const Expr *E) { return E->getKind() == SK_MEMBEREXPR; }
+  };
 
-    class StrLiteral : public Expr {
-      llvm::StringRef Str;
-      uint32_t Len;
+  class ArrayIndex : public Expr {
+    u_ptr<Expr> Accessed;
+    u_ptr<Expr> AccessExpr;
 
-    public:
-      explicit StrLiteral(uint32_t len,
-                          llvm::StringRef str,
-                          llvm::SMLoc LeftQuoteLoc,
-                          llvm::SMLoc RightQuoteLoc,
-                          Type *StringType)
-        : Expr(SK_STRINGEXPR, StringType, LeftQuoteLoc, RightQuoteLoc), Str(str), Len(len) {
-      }
+  public:
+    ArrayIndex(u_ptr<Expr> Accessed, u_ptr<Expr> AccessExpr, Type *ResultTy,
+               llvm::SMLoc LSquare, llvm::SMLoc RSquare)
+        : Expr(SK_INDEXEXPR, ResultTy, LSquare, RSquare, Location),
+          Accessed(std::move(Accessed)), AccessExpr(std::move(AccessExpr)) {}
 
-      static bool classof(const Expr *E) { return E->getKind() == SK_STRINGEXPR; }
-    };
+    static bool classof(const Expr *E) { return E->getKind() == SK_INDEXEXPR; }
+  };
 
-    class MemberAccess : public Expr {
-      Decl *MemberDecl{};
-      u_ptr<Expr> Accessed;
+  class FunctionCall : public Expr {
+    IDTableEntry *TableEntry{};
+    llvm::SmallVector<u_ptr<Expr>> PassedParameters{};
 
-    public:
-      MemberAccess(u_ptr<Expr> Accessed, Decl *MemberDecl, Type *ResultTy, llvm::SMLoc SLoc, llvm::SMLoc ELoc)
-        : Expr(SK_MEMBEREXPR, ResultTy, SLoc, ELoc), MemberDecl(MemberDecl), Accessed(std::move(Accessed)) {
-      }
-      static bool classof(const Expr *E) { return E->getKind() == SK_MEMBEREXPR; }
-    };
+    FunctionCall(IDTableEntry *Name, llvm::SmallVector<u_ptr<Expr>> arguments,
+                 const llvm::SMLoc NameLoc, const llvm::SMLoc RParen,
+                 Type *Type = nullptr)
+        : Expr(SK_FNCALLEXPR, Type, NameLoc, RParen, Value), TableEntry(Name),
+          PassedParameters(std::move(arguments)) {}
 
-    class ArrayIndex : public Expr {
-      u_ptr<Expr> Accessed;
-      u_ptr<Expr> AccessExpr;
+    FunctionCall(IDTableEntry *Name, const llvm::SMLoc NameLoc,
+                 const llvm::SMLoc RParen, Type *T = nullptr)
+        : Expr(SK_FNCALLEXPR, T, NameLoc, RParen, Value) {}
 
-    public:
-      ArrayIndex(u_ptr<Expr> Accessed,
-                 u_ptr<Expr> AccessExpr,
-                 Type *ResultTy,
-                 llvm::SMLoc LSquare,
-                 llvm::SMLoc RSquare)
-        : Expr(SK_INDEXEXPR, ResultTy, LSquare, RSquare), Accessed(std::move(Accessed)),
-          AccessExpr(std::move(AccessExpr)) {
-      }
+  public:
+    static u_ptr<FunctionCall> Create(IDTableEntry *Name,
+                                      llvm::SmallVector<u_ptr<Expr>> arguments,
+                                      const llvm::SMLoc NameLoc,
+                                      const llvm::SMLoc RParen,
+                                      Type *Type = nullptr) {
+      return std::unique_ptr<FunctionCall>(
+          new FunctionCall(Name, std::move(arguments), NameLoc, RParen, Type));
+    }
 
-      static bool classof(const Expr *E) { return E->getKind() == SK_INDEXEXPR; }
-    };
+    static u_ptr<FunctionCall> CreateNoArgs(IDTableEntry *Name,
+                                            const llvm::SMLoc NameLoc,
+                                            const llvm::SMLoc RParen,
+                                            Type *Type = nullptr) {
+      return std::unique_ptr<FunctionCall>(
+          new FunctionCall(Name, NameLoc, RParen, Type));
+    }
 
-    class FunctionCall : public Expr {
-      IDTableEntry *TableEntry{};
-      u_ptr<llvm::SmallVector<u_ptr<Expr> > > PassedParameters{};
+    [[nodiscard]] llvm::StringRef getName() const {
+      return TableEntry->first();
+    }
 
-    public:
-      FunctionCall(IDTableEntry *name,
-                   u_ptr<llvm::SmallVector<u_ptr<Expr> > > arguments,
-                   llvm::SMLoc NameLoc,
-                   llvm::SMLoc RParen,
-                   Type *Type = nullptr)
-        : Expr(SK_FNCALLEXPR, Type, NameLoc, RParen), TableEntry(name),
-          PassedParameters(std::move(arguments)) {
-      }
+    [[nodiscard]] auto getPassedArgs() const
+        -> const llvm::SmallVector<std::unique_ptr<Expr>> * {
+      return &PassedParameters;
+    }
 
-      [[nodiscard]] llvm::StringRef getName() const { return TableEntry->first(); }
-      auto getPassedArgs() const { return PassedParameters.get(); }
-      static bool classof(const Expr *E) { return E->getKind() == SK_FNCALLEXPR; }
-    };
+    [[nodiscard]] auto getNumArgs() const -> size_t {
+      return PassedParameters.size();
+    }
 
-    class UnaryOp : public Expr {
-      Basic::Op::Unary Operator;
-      u_ptr<Expr> Input;
+    static bool classof(const Expr *E) { return E->getKind() == SK_FNCALLEXPR; }
+  };
 
-    public:
-      UnaryOp(u_ptr<Expr> Input,
-              Basic::Op::Unary OpCode,
-              Type *ResultType,
-              llvm::SMLoc OpLoc,
-              llvm::SMLoc RLoc)
-        : Expr(SK_UNARYEXPR, ResultType, OpLoc, RLoc), Operator(OpCode),
-          Input(std::move(Input)) {
-      }
-      Basic::Op::Unary getOp() const { return Operator; }
-      Expr &getExprInput() const { return *Input; }
-      static bool classof(const Expr *E) { return E->getKind() == SK_UNARYEXPR; }
-    };
+  class UnaryOp : public Expr {
+    Basic::Op::Unary Operator;
+    u_ptr<Expr> Input;
 
-    class BinaryOp : public Expr {
-      Basic::Op::Binary Operator;
-      u_ptr<Expr> LHS;
-      u_ptr<Expr> RHS;
+    UnaryOp(u_ptr<Expr> Input, Basic::Op::Unary OpCode, Type *ResultType,
+            llvm::SMLoc OpLoc, llvm::SMLoc RLoc, ExprKind Kind)
+        : Expr(SK_UNARYEXPR, ResultType, OpLoc, RLoc, Kind), Operator(OpCode),
+          Input(std::move(Input)) {}
 
-    public:
-      BinaryOp(u_ptr<Expr> left,
-               u_ptr<Expr> right,
-               Basic::Op::Binary opcode,
-               Type *Result)
-        : Expr(SK_BINARYEXPR, Result, left->getStartLoc(), right->getEndLoc()), Operator(opcode), LHS(std::move(left)),
-          RHS(std::move(right)) {
-      }
-      Expr &getLhs() const { return *LHS; }
-      Expr &getRhs() const { return *RHS; }
-      Basic::Op::Binary getOp() const { return Operator; }
-      Type *getLHSType() const { return LHS->getType(); }
-      Type *getRHSType() const { return RHS->getType(); }
-      static bool classof(const Expr *E) { return E->getKind() == SK_BINARYEXPR; }
-    };
+  public:
+    static u_ptr<UnaryOp> Create(u_ptr<Expr> Input, Basic::Op::Unary OpCode,
+                                 Type *ResultType, llvm::SMLoc OpLoc,
+                                 llvm::SMLoc RLoc, ExprKind Kind) {
+      return std::unique_ptr<UnaryOp>(
+          new UnaryOp(std::move(Input), OpCode, ResultType, OpLoc, RLoc, Kind));
+    }
 
-    class MatchArm {
-      u_ptr<Expr> Val{};
+    [[nodiscard]] Basic::Op::Unary getOp() const { return Operator; }
+    [[nodiscard]] Expr &getExprInput() const { return *Input; }
+    static bool classof(const Expr *E) { return E->getKind() == SK_UNARYEXPR; }
+  };
 
-    public:
-      explicit MatchArm(u_ptr<Expr> Val) : Val(std::move(Val)) {
-      }
-    };
+  class BinaryOp : public Expr {
+    using BinOpPtr = u_ptr<BinaryOp>;
+    Basic::Op::Binary Operator;
+    u_ptr<Expr> LHS;
+    u_ptr<Expr> RHS;
 
-    class MatchExpr : public Expr {
-      llvm::SmallVector<u_ptr<MatchArm> > Arms{};
-      u_ptr<Expr> MatchingOn{};
+    BinaryOp(u_ptr<Expr> left, u_ptr<Expr> right, Basic::Op::Binary opcode,
+             Type *Result)
+        : Expr(SK_BINARYEXPR, Result, left->getStartLoc(), right->getEndLoc(),
+               Value),
+          Operator(opcode), LHS(std::move(left)), RHS(std::move(right)) {}
 
-    public:
-      MatchExpr(llvm::SmallVector<u_ptr<MatchArm> > Arms,
-                u_ptr<Expr> MatchingOn,
-                const llvm::SMLoc MatchLoc,
-                const llvm::SMLoc RBraceLoc) : Expr(SK_MATCHEXPR, MatchLoc, RBraceLoc), Arms(std::move(Arms)),
-                                               MatchingOn(std::move(MatchingOn)) {
-      }
-    };
-  }
-} // namespace funLang
+  public:
+    static BinOpPtr Create(ExprPtr LHS, ExprPtr RHS, Basic::Op::Binary OpCode,
+                           Type *ResultTy) {
+      return std::unique_ptr<BinaryOp>(
+          new BinaryOp(std::move(LHS), std::move(RHS), OpCode, ResultTy));
+    }
+    Expr &getLhs() const { return *LHS; }
+    Expr &getRhs() const { return *RHS; }
+    Basic::Op::Binary getOp() const { return Operator; }
+    Type *getLHSType() const { return LHS->getType(); }
+    Type *getRHSType() const { return RHS->getType(); }
+    static bool classof(const Expr *E) { return E->getKind() == SK_BINARYEXPR; }
+  };
+
+  class MatchArm {
+    u_ptr<Expr> Val{};
+    u_ptr<MatchArm> Next{};
+
+  public:
+    explicit MatchArm(u_ptr<Expr> Val, u_ptr<MatchArm> Next)
+        : Val(std::move(Val)), Next(std::move(Next)) {}
+  };
+
+  class MatchExpr : public Expr {
+    u_ptr<MatchArm> Arms{};
+    u_ptr<Expr> MatchingOn{};
+
+  public:
+    MatchExpr(u_ptr<MatchArm> Arms, u_ptr<Expr> MatchingOn,
+              const llvm::SMLoc MatchLoc, const llvm::SMLoc RBraceLoc)
+        : Expr(SK_MATCHEXPR, MatchLoc, RBraceLoc, Value), Arms(std::move(Arms)),
+          MatchingOn(std::move(MatchingOn)) {}
+  };
+}
+}// namespace funLang
