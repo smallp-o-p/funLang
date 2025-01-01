@@ -1,10 +1,10 @@
-add_library(Diags)
+add_library(Diag)
 
-target_sources(Diags PUBLIC
+target_sources(Diag PUBLIC
         FILE_SET diag_modules
         TYPE CXX_MODULES
         FILES Diag.cppm
 )
 
-target_include_directories(Diags ../../include/Basic/defs)
-target_link_libraries(Diags PRIVATE Basic Lex)
+target_include_directories(Diag PRIVATE ../../include/Basic/defs)
+target_link_libraries(Diag PRIVATE Basic)

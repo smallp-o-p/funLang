@@ -51,7 +51,7 @@ message(STATUS "Using ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
     add_compile_options(-fstandalone-debug)
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-    message("GCC compilation known to fail. Aborting." FATAL_ERROR)
+    #    message("GCC compilation known to fail. Aborting." FATAL_ERROR)
 endif ()
 
 add_compile_options(${LLVM_CXX_FLAGS})

@@ -1,5 +1,3 @@
-set(LEX_HEADER_LIST "${funLang_SOURCE_DIR}/include/Lex/Lex.hpp")
-
 add_library(Lex)
 target_sources(Lex PUBLIC
         FILE_SET lex_modules
@@ -7,8 +5,8 @@ target_sources(Lex PUBLIC
         FILES Lex.cppm Lex.Token.cppm)
 target_include_directories(Lex
         PUBLIC
-        ${LLVM_INCLUDE_DIRS}
-        ../../include)
+        ../../include
+        ${LLVM_INCLUDE_DIRS})
 
-target_link_libraries(Lex PUBLIC Basic Diags ${LLVM_LIBS})
+target_link_libraries(Lex PUBLIC Basic Diag ${LLVM_LIBS})
 message("Lexer current directory is: ${CMAKE_CURRENT_LIST_DIR}")

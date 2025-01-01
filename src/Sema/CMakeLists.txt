@@ -14,5 +14,5 @@ target_include_directories(Sema
         PUBLIC
         ${LLVM_INCLUDE_DIRS}
 )
-target_link_libraries(Sema PUBLIC AST Lex Basic)
+target_link_libraries(Sema PUBLIC AST Lex Basic Diag)
 message("Sema current directory is: ${CMAKE_CURRENT_LIST_DIR}")
