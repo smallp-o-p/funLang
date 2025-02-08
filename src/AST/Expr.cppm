@@ -2,10 +2,12 @@
 // Created by will on 10/27/24.
 //
 module;
+
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/SMLoc.h"
+#include <llvm/ADT/StringMapEntry.h>
 #include <utility>
 
 export module AST:Expr;
@@ -40,10 +42,14 @@ export {
     ~Expr() = default;
     void setType(Type *ToSet) { resultType = ToSet; }
     [[nodiscard]] Type *getType() const { return resultType; }
-    bool isValueExpr() { return ExpressionType == Value; }
-    bool isLocationExpr() { return ExpressionType == Location; }
-    bool isComplementable() { return resultType->isIntType(); }
-    bool isIncrementable() {
+    [[nodiscard]] bool isValueExpr() const { return ExpressionType == Value; }
+    [[nodiscard]] bool isLocationExpr() const {
+      return ExpressionType == Location;
+    }
+    [[nodiscard]] bool isComplementable() const {
+      return resultType->isIntType();
+    }
+    [[nodiscard]] bool isIncrementable() const {
       return isLocationExpr() and (resultType->isI32() or resultType->isI64());
     }
     bool isCompatibleWith(Expr *RHS);
@@ -68,52 +74,73 @@ export {
   };
 
   class NameUsage : public Expr {
-  protected:
-    IDTableEntry *TableEntry{};
-    Decl *UsedName{};
+    mutable Decl *UsedName;
 
   public:
-    NameUsage(IDTableEntry *Entry, Decl *UsedName, const llvm::SMLoc SLoc,
-              const llvm::SMLoc ELoc, Type *Type)
-        : Expr(SK_NAMEEXPR, Type, SLoc, ELoc, Location), TableEntry(Entry),
-          UsedName(UsedName) {}
+    NameUsage(Decl *UsedName, const llvm::SMLoc SLoc, const llvm::SMLoc ELoc,
+              Type *Type)
+        : Expr(SK_NAMEEXPR, Type, SLoc, ELoc, Location), UsedName(UsedName) {}
 
-    [[nodiscard]] llvm::StringRef getUsedName() const {
-      return TableEntry->first();
-    };
-    [[nodiscard]] IDTableEntry *getEntry() const { return TableEntry; }
     [[nodiscard]] Decl *getDecl() const { return UsedName; }
-
+    [[nodiscard]] bool isUseBeforeDeclare() const {
+      return UsedName != nullptr;
+    }
     static bool classof(const Expr *E) { return E->getKind() == SK_NAMEEXPR; }
   };
 
   class IntegerLiteral : public Expr {
-    llvm::APInt Value{};
+    llvm::APInt IntNumber;
+
+    IntegerLiteral(llvm::APInt value, const llvm::SMLoc SLoc,
+                   const llvm::SMLoc ELoc, Type *IntegerType)
+        : Expr(SK_INTEXPR, IntegerType, SLoc, ELoc, Value),
+          IntNumber(std::move(value)) {}
 
   public:
-    explicit IntegerLiteral(llvm::APInt value, llvm::SMLoc SLoc,
-                            llvm::SMLoc ELoc)
-        : Expr(SK_INTEXPR, SLoc, ELoc), Value(std::move(value)) {}
+    static u_ptr<IntegerLiteral> Create(const llvm::APInt &IntNumber,
+                                        const llvm::SMLoc SLoc,
+                                        const llvm::SMLoc ELoc,
+                                        Type *IntegerType) {
+      return std::unique_ptr<IntegerLiteral>(
+          new IntegerLiteral(IntNumber, SLoc, ELoc, IntegerType));
+    }
+
     static bool classof(const Expr *E) { return E->getKind() == SK_INTEXPR; }
   };
 
   class FloatingLiteral : public Expr {
-    llvm::APFloat Value;
+    llvm::APFloat FloatNumber;
+    explicit FloatingLiteral(llvm::APFloat FloatNumber, const llvm::SMLoc SLoc,
+                             const llvm::SMLoc RLoc, Type *FloatType)
+        : Expr(SK_FLOATEXPR, FloatType, SLoc, RLoc, Value),
+          FloatNumber(std::move(FloatNumber)) {}
 
   public:
-    explicit FloatingLiteral(llvm::APFloat Val, llvm::SMLoc SLoc,
-                             llvm::SMLoc RLoc)
-        : Expr(SK_FLOATEXPR, SLoc, RLoc), Value(std::move(Val)) {}
-
+    static u_ptr<FloatingLiteral> Create(llvm::APFloat FloatNumber,
+                                         const llvm::SMLoc SLoc,
+                                         const llvm::SMLoc RLoc,
+                                         Type *FloatType) {
+      return std::unique_ptr<FloatingLiteral>(
+          new FloatingLiteral(std::move(FloatNumber), SLoc, RLoc, FloatType));
+    }
     static bool classof(const Expr *E) { return E->getKind() == SK_FLOATEXPR; }
   };
 
   class BooleanLiteral : public Expr {
     bool TrueOrFalse;
+    explicit BooleanLiteral(const bool TrueOrFalse, const llvm::SMLoc SLoc,
+                            const llvm::SMLoc RLoc, Type *BoolType)
+        : Expr(SK_BOOLEXPR, BoolType, SLoc, RLoc, Value),
+          TrueOrFalse(TrueOrFalse) {}
 
   public:
-    explicit BooleanLiteral(bool Value, llvm::SMLoc SLoc, llvm::SMLoc RLoc)
-        : Expr(SK_BOOLEXPR, SLoc, RLoc), TrueOrFalse(Value) {}
+    static u_ptr<BooleanLiteral> Create(const bool TrueOrFalse,
+                                        const llvm::SMLoc SLoc,
+                                        const llvm::SMLoc RLoc,
+                                        Type *BoolType) {
+      return std::unique_ptr<BooleanLiteral>(
+          new BooleanLiteral(TrueOrFalse, SLoc, RLoc, BoolType));
+    }
 
     static bool classof(const Expr *E) { return E->getKind() == SK_BOOLEXPR; }
     [[nodiscard]] bool getValue() const { return TrueOrFalse; }
@@ -121,12 +148,12 @@ export {
 
   class StrLiteral : public Expr {
     llvm::StringRef Str;
-    uint32_t Len;
+    size_t Len;
 
   public:
-    explicit StrLiteral(uint32_t len, llvm::StringRef str,
-                        llvm::SMLoc LeftQuoteLoc, llvm::SMLoc RightQuoteLoc,
-                        Type *StringType)
+    explicit StrLiteral(const uint32_t len, const llvm::StringRef str,
+                        const llvm::SMLoc LeftQuoteLoc,
+                        const llvm::SMLoc RightQuoteLoc, Type *StringType)
         : Expr(SK_STRINGEXPR, StringType, LeftQuoteLoc, RightQuoteLoc, Value),
           Str(str), Len(len) {}
 
@@ -159,21 +186,25 @@ export {
   };
 
   class FunctionCall : public Expr {
-    IDTableEntry *TableEntry{};
+    union {
+      Decl *CalledFunction;
+      const IDTableEntry *TableEntry{};
+    };
     llvm::SmallVector<u_ptr<Expr>> PassedParameters{};
 
-    FunctionCall(IDTableEntry *Name, llvm::SmallVector<u_ptr<Expr>> arguments,
+    FunctionCall(const IDTableEntry *Name,
+                 llvm::SmallVector<u_ptr<Expr>> arguments,
                  const llvm::SMLoc NameLoc, const llvm::SMLoc RParen,
                  Type *Type = nullptr)
         : Expr(SK_FNCALLEXPR, Type, NameLoc, RParen, Value), TableEntry(Name),
           PassedParameters(std::move(arguments)) {}
 
-    FunctionCall(IDTableEntry *Name, const llvm::SMLoc NameLoc,
+    FunctionCall(const IDTableEntry *Name, const llvm::SMLoc NameLoc,
                  const llvm::SMLoc RParen, Type *T = nullptr)
         : Expr(SK_FNCALLEXPR, T, NameLoc, RParen, Value) {}
 
   public:
-    static u_ptr<FunctionCall> Create(IDTableEntry *Name,
+    static u_ptr<FunctionCall> Create(const IDTableEntry *Name,
                                       llvm::SmallVector<u_ptr<Expr>> arguments,
                                       const llvm::SMLoc NameLoc,
                                       const llvm::SMLoc RParen,
@@ -210,17 +241,27 @@ export {
     Basic::Op::Unary Operator;
     u_ptr<Expr> Input;
 
-    UnaryOp(u_ptr<Expr> Input, Basic::Op::Unary OpCode, Type *ResultType,
-            llvm::SMLoc OpLoc, llvm::SMLoc RLoc, ExprKind Kind)
+    UnaryOp(u_ptr<Expr> Input, const Basic::Op::Unary OpCode, Type *ResultType,
+            const llvm::SMLoc OpLoc, const llvm::SMLoc RLoc,
+            const ExprKind Kind)
         : Expr(SK_UNARYEXPR, ResultType, OpLoc, RLoc, Kind), Operator(OpCode),
           Input(std::move(Input)) {}
 
   public:
-    static u_ptr<UnaryOp> Create(u_ptr<Expr> Input, Basic::Op::Unary OpCode,
-                                 Type *ResultType, llvm::SMLoc OpLoc,
-                                 llvm::SMLoc RLoc, ExprKind Kind) {
+    static u_ptr<UnaryOp> Create(u_ptr<Expr> Input,
+                                 const Basic::Op::Unary OpCode,
+                                 Type *ResultType, const llvm::SMLoc OpLoc,
+                                 const llvm::SMLoc RLoc, const ExprKind Kind) {
       return std::unique_ptr<UnaryOp>(
           new UnaryOp(std::move(Input), OpCode, ResultType, OpLoc, RLoc, Kind));
+    }
+
+    static u_ptr<ErrorExpr> Error(u_ptr<Expr> Input,
+                                  const Basic::Op::Unary OpCode,
+                                  Type *ResultType, const llvm::SMLoc OpLoc,
+                                  llvm::SMLoc RLoc, ExprKind Kind) {
+      return ErrorExpr::Create(Create(std::move(Input), OpCode, nullptr, OpLoc,
+                                      Input->getStartLoc(), Value));
     }
 
     [[nodiscard]] Basic::Op::Unary getOp() const { return Operator; }
@@ -234,8 +275,8 @@ export {
     u_ptr<Expr> LHS;
     u_ptr<Expr> RHS;
 
-    BinaryOp(u_ptr<Expr> left, u_ptr<Expr> right, Basic::Op::Binary opcode,
-             Type *Result)
+    BinaryOp(u_ptr<Expr> left, u_ptr<Expr> right,
+             const Basic::Op::Binary opcode, Type *Result)
         : Expr(SK_BINARYEXPR, Result, left->getStartLoc(), right->getEndLoc(),
                Value),
           Operator(opcode), LHS(std::move(left)), RHS(std::move(right)) {}
@@ -245,6 +286,11 @@ export {
                            Type *ResultTy) {
       return std::unique_ptr<BinaryOp>(
           new BinaryOp(std::move(LHS), std::move(RHS), OpCode, ResultTy));
+    }
+    static u_ptr<ErrorExpr> Error(ExprPtr LHS, ExprPtr RHS,
+                                  Basic::Op::Binary OpCode, Type *ResultTy) {
+      return ErrorExpr::Create(
+          Create(std::move(LHS), std::move(RHS), OpCode, nullptr));
     }
     Expr &getLhs() const { return *LHS; }
     Expr &getRhs() const { return *RHS; }

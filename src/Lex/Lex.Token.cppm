@@ -2,11 +2,7 @@
 // Created by will on 10/5/24.
 //
 module;
-#include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/SMLoc.h"
-#include <iostream>
-#include <unistd.h>
+#include <cassert>
 export module Lex:Token;
 import Basic;
 
@@ -17,15 +13,15 @@ export class Token {
 
   tok::Tag LexicalTag{};
   const void *TheData{};
-  size_t DataSize;
-  llvm::SMLoc LocStart, LocEnd;
+  std::size_t DataSize;
+  llvm::SMLoc LocStart{}, LocEnd{};
 
   // error
   explicit Token(const llvm::SMLoc ErrLoc)
       : LexicalTag(tok::err), DataSize(0), LocStart(ErrLoc),
         LocEnd(llvm::SMLoc()) {}
   // literal
-  Token(const llvm::StringRef Lexeme, const size_t Size,
+  Token(const llvm::StringRef Lexeme, const std::size_t Size,
         const tok::Tag LexicalTag, const llvm::SMLoc Start,
         const llvm::SMLoc End)
       : LexicalTag(LexicalTag),
@@ -33,12 +29,13 @@ export class Token {
         LocStart(Start), LocEnd(End) {}
   // punctuator or keyword
   Token(const tok::Tag Kind, const llvm::SMLoc LocStart,
-        const llvm::SMLoc LocEnd, const size_t Size = 1)
+        const llvm::SMLoc LocEnd, const std::size_t Size = 1)
       : LexicalTag(Kind), DataSize(Size), LocStart(LocStart), LocEnd(LocEnd) {}
   // identifier
   Token(const tok::Tag LexicalTag,
         const llvm::StringMapEntry<std::nullopt_t> *IdentifierTableEntry,
-        const llvm::SMLoc LocStart, const llvm::SMLoc LocEnd, const size_t Size)
+        const llvm::SMLoc LocStart, const llvm::SMLoc LocEnd,
+        const std::size_t Size)
       : LexicalTag(LexicalTag),
         TheData(static_cast<const void *>(IdentifierTableEntry)),
         DataSize(Size), LocStart(LocStart), LocEnd(LocEnd) {}
@@ -110,22 +107,27 @@ public:
         && LexicalTag > tok::Tag::last_punc;
   }
 
-  void prettyPrint() const {
-    std::cout << getTokenName(LexicalTag) << ": ";
+  std::string_view prettyPrint() const {
+    std::string_view str = "unknown";
     if (isIdentifier()) {
-      std::cout << getIdentifier().str();
+      str = getIdentifier();
     } else if (isLiteral()) {
-      std::cout << getLiteral().str();
+      str = getLiteral().str();
     } else if (isKeyword() || isPunctuator()) {
-      std::cout << getTokenName(LexicalTag);
+      str = getTokenName(LexicalTag);
     }
+    return llvm::formatv("<{}>: {}", getTokenName(LexicalTag), str).str();
   }
 
   [[nodiscard]] llvm::SMLoc getLoc() const { return LocStart; }
 
-  [[nodiscard]] llvm::SMLoc getRightmostLoc() const { return LocEnd; }
+  [[nodiscard]] llvm::SMLoc getRightmostLoc() const {
+    return llvm::SMLoc::getFromPointer(LocStart.getPointer() + (DataSize - 1));
+  }
 
-  [[nodiscard]] llvm::SMRange getLocRange() const { return {LocStart, LocEnd}; }
+  [[nodiscard]] llvm::SMRange getLocRange() const {
+    return {LocStart, getRightmostLoc()};
+  }
 
   [[nodiscard]] bool is(const tok::Tag K) const { return K == LexicalTag; }
 };

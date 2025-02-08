@@ -5,3 +5,6 @@ export module Basic;
 export import :Constants;
 export import :IdentifierTable;
 export import :Result;
+export import :Concepts;
+export import llvm;
+export import std_modules;

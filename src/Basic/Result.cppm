@@ -1,16 +1,14 @@
 //
 // Created by will on 10/5/24.
 //
-module;
-#include <memory>
-#include <utility>
 export module Basic:Result;
 import :Constants;
+import std_modules;
 
 namespace funLang {
 export {
   template<class Ty> class ActionRes {
-    u_ptr<Ty> Val;
+    u_ptr<Ty> Val{};
     bool Invalid = false;
 
   public:

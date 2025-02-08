@@ -21,9 +21,9 @@ export {
       SK_COMPOUND,
       SK_IF,
       SK_ELIF,
+      SK_LOOP,
       SK_FOR,
       SK_WHILE,
-      SK_LOOP,
       SK_BREAK,
       SK_NEXT,
       SK_ERROR,
@@ -88,10 +88,17 @@ export {
     u_ptr<CompoundStmt> Block{};
     u_ptr<elifStmt> elif{};
     u_ptr<CompoundStmt> ElseBlock{};
-
-  public:
     ifStmt(llvm::SMLoc IfLoc, u_ptr<Stmt> cond, u_ptr<CompoundStmt> block1,
            u_ptr<elifStmt> elif, u_ptr<CompoundStmt> block2);
+
+  public:
+    static auto Create(llvm::SMLoc IfLoc, u_ptr<Stmt> cond,
+                       u_ptr<CompoundStmt> block1, u_ptr<elifStmt> elif,
+                       u_ptr<CompoundStmt> block2) {
+      return std::unique_ptr<ifStmt>(
+          new ifStmt(IfLoc, std::move(cond), std::move(block1), std::move(elif),
+                     std::move(block2)));
+    }
   };
 
   class elifStmt : public Stmt {
@@ -109,30 +116,44 @@ export {
   class loopStmt : public Stmt {
     u_ptr<CompoundStmt> Compound{};
 
-  public:
-    loopStmt(const StmtKind LoopType, u_ptr<CompoundStmt> compound,
+    loopStmt(u_ptr<CompoundStmt> Compound, const llvm::SMLoc Left,
+             const llvm::SMLoc Right)
+        : Stmt(SK_LOOP, Left, Right), Compound(std::move(Compound)) {}
+
+  protected:
+    loopStmt(const StmtKind LoopKind, u_ptr<CompoundStmt> Compound,
              const llvm::SMLoc Left, const llvm::SMLoc Right)
-        : Stmt(LoopType, Left, Right), Compound(std::move(compound)) {}
-    loopStmt(u_ptr<CompoundStmt> Compound, const llvm::SMLoc Loc)
-        : Stmt(SK_LOOP, Loc), Compound(std::move(Compound)) {}
-    static bool classof(const Stmt *S) { return S->getKind() == SK_FOR; }
+        : Stmt(LoopKind, Left, Right), Compound(std::move(Compound)) {}
+
+  public:
+    static auto Create(u_ptr<CompoundStmt> Compound, const llvm::SMLoc Left,
+                       const llvm::SMLoc Right) {
+      return std::unique_ptr<loopStmt>(
+          new loopStmt(std::move(Compound), Left, Right));
+    }
+
+    static bool classof(const Stmt *S) { return S->getKind() == SK_LOOP; }
   };
 
   class forStmt : public loopStmt {
+    using ForPtr = u_ptr<forStmt>;
     u_ptr<Stmt> Init{};
     u_ptr<Stmt> Cond{};
     u_ptr<Stmt> Inc{};
 
-    forStmt(llvm::SMLoc EndLoc, llvm::SMLoc loc, u_ptr<Stmt> Init,
-            u_ptr<Stmt> Cond, u_ptr<Stmt> Inc, u_ptr<CompoundStmt> Compound);
+    forStmt(const llvm::SMLoc SLoc, const llvm::SMLoc EndLoc, u_ptr<Stmt> Init,
+            u_ptr<Stmt> Cond, u_ptr<Stmt> Inc, u_ptr<CompoundStmt> Compound)
+        : loopStmt(SK_FOR, std::move(Compound), SLoc, EndLoc),
+          Init(std::move(Init)), Cond(std::move(Cond)), Inc(std::move(Inc)) {}
 
   public:
-    static u_ptr<forStmt> Create(llvm::SMLoc L, llvm::SMLoc R, u_ptr<Stmt> Init,
-                                 u_ptr<Stmt> Cond, u_ptr<Stmt> Inc,
-                                 u_ptr<CompoundStmt> Compound) {
-      return std::make_unique<forStmt>(L, R, std::move(Init), std::move(Cond),
-                                       Inc, Compound);
+    static auto Create(llvm::SMLoc L, llvm::SMLoc R, u_ptr<Stmt> Init,
+                       u_ptr<Stmt> Cond, u_ptr<Stmt> Inc,
+                       u_ptr<CompoundStmt> Compound) {
+      return ForPtr(new forStmt(L, R, std::move(Init), std::move(Cond),
+                                std::move(Inc), std::move(Compound)));
     }
+
     static bool classof(const Stmt *S) { return S->getKind() == SK_FOR; }
   };
 
@@ -143,11 +164,10 @@ export {
               u_ptr<CompoundStmt> Compound);
 
   public:
-    static u_ptr<whileStmt> Create(llvm::SMLoc While, llvm::SMLoc End,
-                                   u_ptr<Stmt> Condition,
-                                   u_ptr<CompoundStmt> Compound) {
-      return std::make_unique<whileStmt>(While, End, std::move(Condition),
-                                         std::move(Compound));
+    static auto Create(const llvm::SMLoc While, const llvm::SMLoc End,
+                       u_ptr<Stmt> Condition, u_ptr<CompoundStmt> Compound) {
+      return std::unique_ptr<whileStmt>(
+          new whileStmt(While, End, std::move(Condition), std::move(Compound)));
     }
     static bool classof(const Stmt *S) { return S->getKind() == SK_WHILE; }
   };
@@ -169,17 +189,18 @@ export {
 
   class ReturnStmt : public Stmt {
     using ReturnStmtPtr = std::unique_ptr<ReturnStmt>;
-    std::unique_ptr<Stmt> ReturnExpr;
+    u_ptr<Stmt> ReturnExpr;
     explicit ReturnStmt(std::unique_ptr<Stmt> exprNode);
 
   public:
     static ReturnStmtPtr Create(u_ptr<Stmt> E) {
-      assert(E->getKind() >= SK_EXPR && "Non expression in return statement!");
-      return std::make_unique<ReturnStmt>(std::move(E));
+      assert(E->getKind() >= SK_EXPR and E->getKind() < SK_DECL
+             and "Non expression in return statement!");
+      return ReturnStmtPtr(new ReturnStmt(std::move(E)));
     }
 
     static ReturnStmtPtr Naked() {
-      return std::make_unique<ReturnStmt>(nullptr);
+      return ReturnStmtPtr(new ReturnStmt(nullptr));
     }
 
     [[nodiscard]] Stmt *getExpr() const { return ReturnExpr.get(); }
@@ -188,9 +209,14 @@ export {
   };
 
   class BreakStmt : public Stmt {
-  public:
     BreakStmt(const llvm::SMLoc BreakLoc, const llvm::SMLoc EndOfBreakLoc)
         : Stmt(SK_BREAK, BreakLoc, EndOfBreakLoc) {}
+
+  public:
+    static u_ptr<BreakStmt> Create(const llvm::SMLoc BreakLoc,
+                                   const llvm::SMLoc EndOfBreakLoc) {
+      return u_ptr<BreakStmt>(new BreakStmt(BreakLoc, EndOfBreakLoc));
+    }
   };
 
   class NextStmt : public Stmt {

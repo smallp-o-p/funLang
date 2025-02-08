@@ -1,13 +1,11 @@
 //
 // Created by will on 12/23/24.
 //
-module;
-#include <memory>
 export module Basic:Constants;
+import std_modules;
 
 namespace funLang {
-export template<typename T>
-  using u_ptr = std::unique_ptr<T>;
+export template<typename T> using u_ptr = std::unique_ptr<T>;
 
 static constexpr char const *BuiltInTypes[] = {
 #define DATA(ID, SP) SP,
@@ -22,7 +20,6 @@ static constexpr char const *tokNames[] = {
 
     nullptr};
 
-
 export namespace Basic::tok {
 enum Tag : unsigned short {
 #define TOK(ID) ID,
@@ -35,9 +32,8 @@ const char *getTokenName(const Tag tag) { return tokNames[tag]; }
 
 const char *getPunctuatorSpelling(const Tag tag) {
   switch (tag) {
-#define PUNCTUATOR(ID, SP) \
-  case ID:                 \
-    return SP;
+#define PUNCTUATOR(ID, SP)                                                     \
+  case ID: return SP;
 #include "TokenTags.def"
 
   default: break;
@@ -54,9 +50,7 @@ enum Type : unsigned short {
   NUM_DATA_TYPES
 };
 
-const char *getBasicTypeSpelling(const Type T) {
-  return BuiltInTypes[T];
-}
+const char *getBasicTypeSpelling(const Type T) { return BuiltInTypes[T]; }
 };// namespace Basic::Data
 
 export namespace Basic::Op {
@@ -69,9 +63,10 @@ enum Binary : unsigned short {
 
 [[maybe_unused]] const char *getBinaryOpSpelling(const Binary BinOp) {
   switch (BinOp) {
-#define BINARY_OPERATION(ID, SP) \
+#define BINARY_OPERATION(ID, SP)                                               \
   case ID: return SP;
 #include "OperationKinds.def"
+
   default: break;
   }
   return nullptr;
@@ -85,7 +80,7 @@ enum Unary : unsigned short {
 };
 [[maybe_unused]] const char *getUnaryOpSpelling(const Unary UnaryOp) {
   switch (UnaryOp) {
-#define UNARY_OPERATION(ID, SP) \
+#define UNARY_OPERATION(ID, SP)                                                \
   case ID: return SP;
 #include "OperationKinds.def"
 

@@ -28,12 +28,11 @@ export {
   public:
     static TypeUsePtr Create(llvm::SMLoc QualLoc, llvm::SMLoc TypeNameLoc,
                              Type *Ty) {
-      return std::unique_ptr<TypeUse>(new TypeUse(Ty, QualLoc, TypeNameLoc));
+      return u_ptr<TypeUse>(new TypeUse(Ty, QualLoc, TypeNameLoc));
     }
     static TypeUsePtr InvalidTypeUse(const llvm::SMLoc QualLoc,
                                      const llvm::SMLoc TypeNameLoc) {
-      return std::unique_ptr<TypeUse>(
-          new TypeUse(nullptr, QualLoc, TypeNameLoc));
+      return u_ptr<TypeUse>(new TypeUse(nullptr, QualLoc, TypeNameLoc));
     }
     [[nodiscard]] Type *getTypePtr() const { return TypePtr; }
     [[nodiscard]] const llvm::SMLoc &getFirstQualifierLoc() const {
@@ -56,16 +55,16 @@ export {
 
   private:
     DeclKind Kind;
-    IDTableEntry *DeclName{};
+    const IDTableEntry *DeclName{};
     const llvm::SMLoc Start, End;
     u_ptr<Decl> Next{};
 
   public:
-    explicit Decl(const DeclKind Kind, IDTableEntry *DeclName,
+    explicit Decl(const DeclKind Kind, const IDTableEntry *DeclName,
                   const llvm::SMLoc Start, const llvm::SMLoc End)
         : Kind(Kind), DeclName(DeclName), Start(Start), End(End),
           Next(nullptr) {}
-    explicit Decl(const DeclKind Kind, IDTableEntry *DeclName,
+    explicit Decl(const DeclKind Kind, const IDTableEntry *DeclName,
                   const llvm::SMLoc Start, const llvm::SMLoc End,
                   u_ptr<Decl> Next)
         : Kind(Kind), DeclName(DeclName), Start(Start), End(End),
@@ -74,7 +73,7 @@ export {
     void setNext(u_ptr<Decl> N) { Next = std::move(N); }
     [[nodiscard]] Decl *getNext() const { return Next.get(); }
     [[nodiscard]] DeclKind getKind() const { return Kind; }
-    [[nodiscard]] IDTableEntry *getEntry() const { return DeclName; }
+    [[nodiscard]] const IDTableEntry *getEntry() const { return DeclName; }
     [[nodiscard]] llvm::StringRef getName() const { return DeclName->first(); }
     [[nodiscard]] llvm::SMLoc getStart() const { return Start; }
     [[nodiscard]] llvm::SMLoc getEnd() const { return End; }
@@ -167,7 +166,7 @@ export {
     ~FunctionDecl();
     [[nodiscard]] Type *getTypePtr() const { return ReturnType->getTypePtr(); }
     [[nodiscard]] ParamDecl &getParams() const { return *Params; }
-    llvm::SmallVector<ParamDecl *> getParamsVector() {
+    [[nodiscard]] llvm::SmallVector<ParamDecl *> getParamsVector() const {
       Decl *Temp = Params.get();
       llvm::SmallVector<ParamDecl *> ParamVec{};
       while (Temp) {
@@ -190,11 +189,11 @@ export {
 
   class RecordDecl : public Decl, public DeclContext {
     Type *TypePtr{};
-    Decl *implDecl{};
+    Decl *Impl{};
 
   public:
-    RecordDecl(IDTableEntry *name, Type *TypePtr, DeclContext *Parent)
-        : Decl(DK_TYPE, name, llvm::SMLoc(), llvm::SMLoc()),
+    RecordDecl(const IDTableEntry *Name, Type *TypePtr, DeclContext *Parent)
+        : Decl(DK_TYPE, Name, llvm::SMLoc(), llvm::SMLoc()),
           DeclContext(Parent), TypePtr(TypePtr) {}
     static bool classof(const Decl *D) { return D->getKind() == DK_TYPE; }
     void setTypePtr(Type *T) { TypePtr = T; }
@@ -205,8 +204,8 @@ export {
     u_ptr<TypeUse> UsedType{};
     // qualifiers and stuff would go here?
   public:
-    VarDecl(u_ptr<TypeUse> Type, IDTableEntry *Name, const llvm::SMLoc Left,
-            const llvm::SMLoc Right)
+    VarDecl(u_ptr<TypeUse> Type, const IDTableEntry *Name,
+            const llvm::SMLoc Left, const llvm::SMLoc Right)
         : Decl(DK_VAR, Name, Left, Right), UsedType(std::move(Type)) {}
     Type *getTypePtr() const { return UsedType->getTypePtr(); }
     static bool classof(const Decl *D) { return D->getKind() == DK_VAR; }

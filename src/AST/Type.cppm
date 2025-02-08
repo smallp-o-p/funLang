@@ -95,7 +95,7 @@ public:
   static bool classof(const Type *T) { return T->getClass() == TK_POINTER; }
 };
 
-class RecordType : public Type {
+export class RecordType : public Type {
   friend class Type;
 
 protected:
