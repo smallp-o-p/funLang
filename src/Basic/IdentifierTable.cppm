@@ -4,6 +4,9 @@
 export module Basic:IdentifierTable;
 import llvm;
 import std_modules;
+#include <llvm/ADT/StringMap.h>
+#include <optional>
+#include <tuple>
 
 namespace funLang {
 export {
@@ -14,8 +17,13 @@ export {
   public:
     IdentifierTable() = default;
     decltype(auto) insert(const llvm::StringRef Key) {
-      auto [First, Second] = SeenIdentifiers.insert(Key);
-      return &*First;
+      auto [Str, Inserted] = SeenIdentifiers.insert(Key);
+      return Inserted ? &*Str : nullptr;
+    }
+
+    decltype(auto) get(const llvm::StringRef Key) {
+      const auto Str = SeenIdentifiers.find(Key);
+      return Str != SeenIdentifiers.end() ? &*Str : nullptr;
     }
   };
 }
