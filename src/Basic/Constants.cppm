@@ -7,7 +7,7 @@ import llvm;
 
 namespace funLang {
 export template<typename T> using u_ptr = std::unique_ptr<T>;
-export using Loc = llvm::SMLoc;
+export using SourceLoc = llvm::SMLoc;
 static constexpr char const *BuiltInTypes[] = {
 #define DATA(ID, SP) SP,
 #include "BuiltInTypes.def"

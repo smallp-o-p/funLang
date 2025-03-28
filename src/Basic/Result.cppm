@@ -14,6 +14,10 @@ export {
   public:
     explicit ActionRes(u_ptr<Ty> Val)
         : Val(std::move(Val)) {}// valid and present
+    template<typename... Ts>
+    explicit ActionRes(Ts... Args)// valid and present
+        : Val(std::make_unique<Ty>(std::forward<Ts>(Args)...)) {}
+
     explicit ActionRes(const bool Invalid = false)
         : Val(nullptr), Invalid(Invalid) {}// valid and not present or invalid
 
@@ -22,6 +26,8 @@ export {
     [[nodiscard]] bool isUnset() const { return !Invalid && !Val; }
 
     [[nodiscard]] std::unique_ptr<Ty> move() { return std::move(Val); }
+
+    [[nodiscard]] Ty *get() { return Val.get(); }
 
     [[nodiscard]] static inline ActionRes InvalidRes() {
       return ActionRes(true);

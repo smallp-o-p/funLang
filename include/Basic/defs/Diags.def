@@ -5,6 +5,8 @@
 DIAG(err_unexpected_char, Error, "Unexpected character '{0}'.")
 DIAG(err_unterminated_char_or_string, Error, "Missing a terminating character.")
 DIAG(err_expected, Error, "Expected '{0}', but received '{1}'")
+DIAG(err_todo, Error, "Todo error")
+DIAG(err_expect_one_of, Error, "Expected {1:$[, ]}, but received {0}")
 DIAG(err_var_not_found, Error, "Name <{0}> could not be resolved.")
 DIAG(err_fn_not_found, Error, "Function <{0}> could not be resolved.")
 DIAG(err_name_not_fn, Error, "Name <{0}> is not a function.")
