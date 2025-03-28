@@ -5,7 +5,7 @@ target_sources(Basic PUBLIC
         FILES
         Basic.cppm
         Constants.cppm
-        IdentifierTable.cppm
+        SymbolTable.cppm
         Result.cppm
         Concepts.cppm
         Casting.cppm

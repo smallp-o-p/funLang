@@ -11,7 +11,7 @@ import Diag;
 namespace funLang {
 using namespace Basic;
 export class Lexer {
-  friend class IdentifierTable;
+  friend class SymbolTable;
   // keep track of old tokens for error messages
   std::vector<Token> Tokens{};
   // unconsumed tokens that are stored if we looked ahead.
@@ -21,7 +21,7 @@ export class Lexer {
   DiagEngine &Diagnostics;
   llvm::StringRef CurrentBuffer;
   llvm::StringRef::iterator BufferPtr;
-  IdentifierTable IdentTable{};
+  SymbolTable IdentTable{};
   std::size_t BufferID = 0;
 
   constexpr void addKeywords() {
@@ -35,8 +35,13 @@ export class Lexer {
         llvm::StringRef(Current, static_cast<std::size_t>(TokEnd - Current));
     BufferPtr = TokEnd;
     if (Kind == tok::identifier) {
-      const auto EntryPtr = IdentTable.insert(Lexed);
-      return {Kind, EntryPtr, llvm::SMLoc::getFromPointer(Current),
+      auto Key = IdentTable.get(Lexed);
+      if (!Key) {
+        Key = IdentTable.insert(Lexed);
+      }
+      assert(Key && "Couldn't insert into symbol table!");
+
+      return {Kind, Key, llvm::SMLoc::getFromPointer(Current),
               llvm::SMLoc::getFromPointer(TokEnd), Lexed.size()};
     }
     if (Token::isLiteral(Kind)) {

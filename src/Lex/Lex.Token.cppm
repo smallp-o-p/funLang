@@ -32,8 +32,7 @@ export class Token {
         const llvm::SMLoc LocEnd, const std::size_t Size = 1)
       : LexicalTag(Kind), DataSize(Size), LocStart(LocStart), LocEnd(LocEnd) {}
   // identifier
-  Token(const tok::Tag LexicalTag,
-        const llvm::StringMapEntry<std::nullopt_t> *IdentifierTableEntry,
+  Token(const tok::Tag LexicalTag, const Symbol *IdentifierTableEntry,
         const llvm::SMLoc LocStart, const llvm::SMLoc LocEnd,
         const std::size_t Size)
       : LexicalTag(LexicalTag),
@@ -59,16 +58,24 @@ public:
     assert(isLiteral() && "Not a literal!");
     return {static_cast<const char *>(TheData), DataSize};
   }
+  [[nodiscard]] const char *getIdentifierData() const {
+    assert(isIdentifier() && "Not an identifier!");
+    return static_cast<const Symbol *>(TheData)->getKeyData();
+  }
+
+  [[nodiscard]] std::size_t getIdentifierSize() const {
+    assert(isIdentifier() && "Not an identifier!");
+    return static_cast<const Symbol *>(TheData)->getKeyLength();
+  }
 
   [[nodiscard]] llvm::StringRef getIdentifier() const {
     assert(isIdentifier() && "Not an identifier!");
-    return static_cast<const llvm::StringMapEntry<std::nullopt_t> *>(TheData)
-        ->first();
+    return static_cast<const Symbol *>(TheData)->getKey();
   }
 
-  [[nodiscard]] const IDTableEntry *getIdentifierTableEntry() const {
+  [[nodiscard]] const Symbol *getIdentifierTableEntry() const {
     assert(isIdentifier() && "Not an identifier!");
-    return static_cast<const IDTableEntry *>(TheData);
+    return static_cast<const Symbol *>(TheData);
   }
 
   [[nodiscard]] bool isOneOf(const tok::Tag T1, const tok::Tag T2) const {
@@ -107,8 +114,8 @@ public:
         && LexicalTag > tok::Tag::last_punc;
   }
 
-  std::string_view prettyPrint() const {
-    std::string_view str = "unknown";
+  [[nodiscard]] std::string prettyPrint() const {
+    std::string str = "unknown";
     if (isIdentifier()) {
       str = getIdentifier();
     } else if (isLiteral()) {
@@ -116,7 +123,9 @@ public:
     } else if (isKeyword() || isPunctuator()) {
       str = getTokenName(LexicalTag);
     }
-    return llvm::formatv("<{}>: {}", getTokenName(LexicalTag), str).str();
+    std::string fmt =
+        llvm::formatv("<{}>: {}", getTokenName(LexicalTag), str).str();
+    return fmt;
   }
 
   [[nodiscard]] llvm::SMLoc getLoc() const { return LocStart; }

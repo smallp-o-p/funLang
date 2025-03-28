@@ -4,18 +4,15 @@
 export module Basic:IdentifierTable;
 import llvm;
 import std_modules;
-#include <llvm/ADT/StringMap.h>
-#include <optional>
-#include <tuple>
 
 namespace funLang {
 export {
-  using IDTableEntry = llvm::StringMapEntry<std::nullopt_t>;
-  class IdentifierTable {
+  using Symbol = llvm::StringMapEntry<std::nullopt_t>;
+  class SymbolTable {
     llvm::StringSet<llvm::BumpPtrAllocator> SeenIdentifiers{};
 
   public:
-    IdentifierTable() = default;
+    SymbolTable() = default;
     decltype(auto) insert(const llvm::StringRef Key) {
       auto [Str, Inserted] = SeenIdentifiers.insert(Key);
       return Inserted ? &*Str : nullptr;
