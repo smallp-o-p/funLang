@@ -14,6 +14,11 @@ To *dyn_cast(From &f) {
 
 template<typename To, typename From>
   requires llvm_dyn_castable<To, From>
+To *dyn_cast(From *f) {
+  return llvm::dyn_cast<To>(f);
+}
+template<typename To, typename From>
+  requires llvm_dyn_castable<To, From>
 bool isa(From *F) {
   return llvm::isa<To>(F);
 }
