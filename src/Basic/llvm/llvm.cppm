@@ -4,6 +4,7 @@
 module;
 #include <llvm/ADT/APFloat.h>
 #include <llvm/ADT/APInt.h>
+#include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
@@ -27,6 +28,7 @@ using llvm::ErrorOr;
 using llvm::formatv;
 using llvm::isa;
 using llvm::MemoryBuffer;
+using llvm::SmallDenseMap;
 using llvm::SmallVector;
 using llvm::SMLoc;
 using llvm::SMRange;
