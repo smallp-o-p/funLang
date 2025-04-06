@@ -5,9 +5,6 @@ module;
 
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/SMLoc.h"
-#include <llvm/ADT/StringMapEntry.h>
 #include <utility>
 
 export module AST:Expr;
@@ -24,8 +21,8 @@ export {
     enum ExprKind { Location, Value };
 
   protected:
-    Type *
-        resultType{};// nullptr as a poison value to indicate a bad type to suppress error messages
+    Type *resultType{};
+    // nullptr as a poison value to indicate a bad type to suppress error messages
     ExprKind ExpressionType;
 
     Expr(const StmtKind Kind, const llvm::SMLoc StartLoc,
@@ -53,7 +50,7 @@ export {
       return isLocationExpr() and (resultType->isI32() or resultType->isI64());
     }
     bool isCompatibleWith(Expr *RHS);
-    [[nodiscard]] bool isError() const { return llvm::isa<ErrorExpr>(this); }
+    [[nodiscard]] bool isError() const;
     static bool classof(const Stmt *S) {
       return S->getKind() >= SK_EXPR && S->getKind() <= SK_ERROREXPR;
     }
@@ -188,51 +185,40 @@ export {
   class FunctionCall : public Expr {
     union {
       Decl *CalledFunction;
-      const IDTableEntry *TableEntry{};
+      const Symbol *TableEntry{};
     };
     llvm::SmallVector<u_ptr<Expr>> PassedParameters{};
 
-    FunctionCall(const IDTableEntry *Name,
-                 llvm::SmallVector<u_ptr<Expr>> arguments,
+    FunctionCall(const Symbol *Name, llvm::SmallVector<u_ptr<Expr>> arguments,
                  const llvm::SMLoc NameLoc, const llvm::SMLoc RParen,
                  Type *Type = nullptr)
         : Expr(SK_FNCALLEXPR, Type, NameLoc, RParen, Value), TableEntry(Name),
           PassedParameters(std::move(arguments)) {}
 
-    FunctionCall(const IDTableEntry *Name, const llvm::SMLoc NameLoc,
+    FunctionCall(const Symbol *Name, const llvm::SMLoc NameLoc,
                  const llvm::SMLoc RParen, Type *T = nullptr)
         : Expr(SK_FNCALLEXPR, T, NameLoc, RParen, Value) {}
 
   public:
-    static u_ptr<FunctionCall> Create(const IDTableEntry *Name,
-                                      llvm::SmallVector<u_ptr<Expr>> arguments,
-                                      const llvm::SMLoc NameLoc,
-                                      const llvm::SMLoc RParen,
-                                      Type *Type = nullptr) {
-      return std::unique_ptr<FunctionCall>(
-          new FunctionCall(Name, std::move(arguments), NameLoc, RParen, Type));
+    static auto Create(const Symbol *Name,
+                       const llvm::SmallVector<u_ptr<Expr>> &Args,
+                       const SourceLoc NameLoc, const SourceLoc RParen,
+                       Type *Type = nullptr) {
+      return u_ptr(new FunctionCall(Name, Args, NameLoc, RParen, Type));
     }
 
-    static u_ptr<FunctionCall> CreateNoArgs(IDTableEntry *Name,
-                                            const llvm::SMLoc NameLoc,
-                                            const llvm::SMLoc RParen,
-                                            Type *Type = nullptr) {
-      return std::unique_ptr<FunctionCall>(
-          new FunctionCall(Name, NameLoc, RParen, Type));
+    static auto CreateNoArgs(const Symbol *Name, const SourceLoc NameLoc,
+                             const SourceLoc RParen, Type *Type = nullptr) {
+      return u_ptr(new FunctionCall(Name, NameLoc, RParen, Type));
     }
 
     [[nodiscard]] llvm::StringRef getName() const {
       return TableEntry->first();
     }
 
-    [[nodiscard]] auto getPassedArgs() const
-        -> const llvm::SmallVector<std::unique_ptr<Expr>> * {
-      return &PassedParameters;
-    }
+    [[nodiscard]] auto getPassedArgs() const { return &PassedParameters; }
 
-    [[nodiscard]] auto getNumArgs() const -> size_t {
-      return PassedParameters.size();
-    }
+    [[nodiscard]] size_t getNumArgs() { return PassedParameters.size(); }
 
     static bool classof(const Expr *E) { return E->getKind() == SK_FNCALLEXPR; }
   };
@@ -252,7 +238,7 @@ export {
                                  const Basic::Op::Unary OpCode,
                                  Type *ResultType, const llvm::SMLoc OpLoc,
                                  const llvm::SMLoc RLoc, const ExprKind Kind) {
-      return std::unique_ptr<UnaryOp>(
+      return u_ptr(
           new UnaryOp(std::move(Input), OpCode, ResultType, OpLoc, RLoc, Kind));
     }
 
@@ -270,6 +256,7 @@ export {
   };
 
   class BinaryOp : public Expr {
+    friend class ActionRes;
     using BinOpPtr = u_ptr<BinaryOp>;
     Basic::Op::Binary Operator;
     u_ptr<Expr> LHS;
@@ -320,4 +307,5 @@ export {
           MatchingOn(std::move(MatchingOn)) {}
   };
 }
+
 }// namespace funLang

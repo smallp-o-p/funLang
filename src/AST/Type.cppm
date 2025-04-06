@@ -16,6 +16,7 @@ export class Type {
   friend class TypeTestFixture;
 
 protected:
+  size_t MemSize;
   enum TypeClass {
     TK_BUILTIN,
     TK_POINTER,
@@ -43,6 +44,8 @@ public:
   bool isIntLiteral();
   bool isFloatLiteral();
   bool isNumeric() { return isIntType() || isFloatType(); }
+  bool isIntButNotLiteral();
+  bool isFloatButNotLiteral();
   bool isPointer();
   bool isArithmetic() { return isNumeric() || isPointer(); }
   [[nodiscard]] llvm::StringRef getName() const;
@@ -104,7 +107,7 @@ protected:
 public:
   explicit RecordType(RecordDecl *Record)
       : Type(this, TK_RECORD), Record(Record) {}
-  Decl *lookup(const IDTableEntry *MemberName) const;
+  Decl *lookup(const Symbol *MemberName) const;
   llvm::StringRef getName();
   static bool classof(const Type *T) { return T->getClass() == TK_RECORD; }
 };

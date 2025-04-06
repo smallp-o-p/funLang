@@ -2,9 +2,9 @@
 // Created by will on 10/27/24.
 //
 module;
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/SMLoc.h"
+#include <cassert>
+#include <llvm/Support/SMLoc.h>
+#include <memory>
 export module AST:Stmt;
 import Basic;
 
@@ -13,9 +13,11 @@ class VarDecl;
 
 export {
   class elifStmt;
+  class Expr;
   class Stmt {
   public:
     enum StmtKind {
+      SK_EMPTY,
       SK_VARDECL,
       SK_RETURN,
       SK_COMPOUND,
@@ -60,6 +62,7 @@ export {
   };
 
   class CompoundStmt : public Stmt {
+    friend class StmtResult;
     llvm::SmallVector<u_ptr<Stmt>> Statements{};
 
   public:
@@ -84,20 +87,19 @@ export {
   };
 
   class ifStmt : public Stmt {
-    u_ptr<Stmt> Condition{};
+    u_ptr<Expr> Condition{};
     u_ptr<CompoundStmt> Block{};
     u_ptr<elifStmt> elif{};
     u_ptr<CompoundStmt> ElseBlock{};
-    ifStmt(llvm::SMLoc IfLoc, u_ptr<Stmt> cond, u_ptr<CompoundStmt> block1,
+    ifStmt(llvm::SMLoc IfLoc, u_ptr<Expr> cond, u_ptr<CompoundStmt> block1,
            u_ptr<elifStmt> elif, u_ptr<CompoundStmt> block2);
 
   public:
-    static auto Create(llvm::SMLoc IfLoc, u_ptr<Stmt> cond,
+    static auto Create(llvm::SMLoc IfLoc, u_ptr<Expr> cond,
                        u_ptr<CompoundStmt> block1, u_ptr<elifStmt> elif,
                        u_ptr<CompoundStmt> block2) {
-      return std::unique_ptr<ifStmt>(
-          new ifStmt(IfLoc, std::move(cond), std::move(block1), std::move(elif),
-                     std::move(block2)));
+      return u_ptr<ifStmt>(new ifStmt(IfLoc, std::move(cond), std::move(block1),
+                                      std::move(elif), std::move(block2)));
     }
   };
 
@@ -114,6 +116,7 @@ export {
   };
 
   class loopStmt : public Stmt {
+    friend class ActionRes;
     u_ptr<CompoundStmt> Compound{};
 
     loopStmt(u_ptr<CompoundStmt> Compound, const llvm::SMLoc Left,
@@ -158,14 +161,16 @@ export {
   };
 
   class whileStmt : public loopStmt {
-    u_ptr<Stmt> Condition{};
+    u_ptr<Expr> Condition{};
 
-    whileStmt(llvm::SMLoc whileLoc, llvm::SMLoc endLoc, u_ptr<Stmt> Condition,
-              u_ptr<CompoundStmt> Compound);
+    whileStmt(llvm::SMLoc whileLoc, llvm::SMLoc endLoc, u_ptr<Expr> Condition,
+              u_ptr<CompoundStmt> Compound)
+        : loopStmt(SK_WHILE, std::move(Compound), whileLoc, endLoc),
+          Condition(std::move(Condition)) {};
 
   public:
     static auto Create(const llvm::SMLoc While, const llvm::SMLoc End,
-                       u_ptr<Stmt> Condition, u_ptr<CompoundStmt> Compound) {
+                       u_ptr<Expr> Condition, u_ptr<CompoundStmt> Compound) {
       return std::unique_ptr<whileStmt>(
           new whileStmt(While, End, std::move(Condition), std::move(Compound)));
     }
@@ -177,34 +182,32 @@ export {
     u_ptr<Stmt> Init;
 
   public:
-    DeclStmt(llvm::SMLoc NameStart, llvm::SMLoc SemiLoc, VarDecl *NamedDecl,
-             std::unique_ptr<Stmt> Expression);
+    DeclStmt(VarDecl *NamedDecl, u_ptr<Stmt> Expression);
 
     [[nodiscard]] llvm::StringRef getName() const;
     [[nodiscard]] VarDecl *getDecl() const { return NamedDecl; }
     [[nodiscard]] Stmt *getInit() const { return Init.get(); }
-    [[nodiscard]] bool isUnitialized() const { return Init == nullptr; }
+    [[nodiscard]] bool isUnitialized() const { return Init.get() == nullptr; }
     static bool classof(const Stmt *S) { return S->getKind() == SK_VARDECL; }
   };
 
   class ReturnStmt : public Stmt {
     using ReturnStmtPtr = std::unique_ptr<ReturnStmt>;
-    u_ptr<Stmt> ReturnExpr;
-    explicit ReturnStmt(std::unique_ptr<Stmt> exprNode);
+    u_ptr<Expr> ReturnExpr{};
+    explicit ReturnStmt(u_ptr<Expr> exprNode, llvm::SMLoc RetStart,
+                        llvm::SMLoc RetEnd);
 
   public:
-    static ReturnStmtPtr Create(u_ptr<Stmt> E) {
-      assert(E->getKind() >= SK_EXPR and E->getKind() < SK_DECL
-             and "Non expression in return statement!");
-      return ReturnStmtPtr(new ReturnStmt(std::move(E)));
+    static ReturnStmtPtr Create(u_ptr<Expr> E, SourceLoc RetStart,
+                                SourceLoc End);
+
+    static ReturnStmtPtr Naked(const SourceLoc RetStart,
+                               const SourceLoc RetEnd) {
+      return ReturnStmtPtr(new ReturnStmt(nullptr, RetStart, RetEnd));
     }
 
-    static ReturnStmtPtr Naked() {
-      return ReturnStmtPtr(new ReturnStmt(nullptr));
-    }
-
-    [[nodiscard]] Stmt *getExpr() const { return ReturnExpr.get(); }
-    [[nodiscard]] bool isNaked() const { return ReturnExpr == nullptr; }
+    [[nodiscard]] Expr *getExpr() const { return ReturnExpr.get(); }
+    [[nodiscard]] bool isNaked() const { return ReturnExpr.get() == nullptr; }
     static bool classof(const Stmt *S) { return S->getKind() == SK_RETURN; }
   };
 
@@ -220,9 +223,24 @@ export {
   };
 
   class NextStmt : public Stmt {
-  public:
     NextStmt(const llvm::SMLoc BreakLoc, const llvm::SMLoc EndOfBreakLoc)
         : Stmt(SK_NEXT, BreakLoc, EndOfBreakLoc) {}
+
+  public:
+    static u_ptr<NextStmt> Create(const llvm::SMLoc NextLoc,
+                                  const llvm::SMLoc NextLocEnd) {
+      return u_ptr<NextStmt>(new NextStmt(NextLoc, NextLocEnd));
+    }
+  };
+
+  class EmptyStmt : public Stmt {
+    explicit EmptyStmt(SourceLoc SemicolonLoc) : Stmt(SK_EMPTY, SemicolonLoc) {}
+
+  public:
+    static auto Create(SourceLoc SemicolonLoc) {
+      return u_ptr<EmptyStmt>(new EmptyStmt(SemicolonLoc));
+    }
   };
 }
+
 }// namespace funLang
