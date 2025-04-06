@@ -1,6 +1,4 @@
-add_library(Parse STATIC Parse.cpp ParseExpr.cpp ParseStmt.cpp
-        Parse.cppm
-)
+add_library(Parse STATIC ParseDecl.cpp ParseExpr.cpp ParseStmt.cpp)
 
 target_include_directories(Parse
         PUBLIC
